@@ -19,8 +19,8 @@ const statusBoxClasses: Record<FieldStatus, string> = {
   default:
     "text-grey-900 border-grey-200 hover:not-focus-within:bg-grey-200 hover:not-focus-within:border-grey-200 " +
     "focus-within:border-primary-300 focus-within:ring-1 focus-within:ring-primary-300",
-  success: "border-success-300 ring-1 ring-success-300 text-success-600",
-  error: "border-error-300 ring-1 ring-error-300 text-error-600",
+  success: "border-success-light ring-1 ring-success-light text-success",
+  error: "border-error-light ring-1 ring-error-light text-error",
 };
 
 const sizeBoxClasses: Record<FieldSize, string> = {
@@ -60,8 +60,8 @@ export const controlClasses =
   "w-full min-w-0 bg-transparent text-inherit outline-none placeholder:text-grey-400 disabled:cursor-not-allowed";
 
 export function StatusIcon({ status }: { status: FieldStatus }) {
-  if (status === "success") return <CheckCircleIcon className="shrink-0 text-success-600" />;
-  if (status === "error") return <ErrorCircleIcon className="shrink-0 text-error-600" />;
+  if (status === "success") return <CheckCircleIcon className="shrink-0 text-success" />;
+  if (status === "error") return <ErrorCircleIcon className="shrink-0 text-error" />;
   return null;
 }
 
@@ -110,7 +110,7 @@ export function Field({
           id={helperId(id)}
           className={cn(
             "text-body-sm leading-5",
-            disabled ? "text-grey-400" : status === "error" ? "text-error-600" : "text-grey-600",
+            disabled ? "text-grey-400" : status === "error" ? "text-error" : "text-grey-600",
           )}
         >
           {helperText}

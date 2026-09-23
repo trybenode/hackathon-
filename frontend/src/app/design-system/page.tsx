@@ -23,6 +23,52 @@ const options = ["Design", "Engineering", "Operations", "Support"].map((label) =
   icon: <MagicpenIcon />,
 }));
 
+
+const palette: { group: string; swatches: { name: string; className: string }[] }[] = [
+  {
+    group: "Primary — cyan",
+    // Class names are written in full: Tailwind only sees literal strings in source.
+    swatches: [
+      { name: "primary-50", className: "bg-primary-50" },
+      { name: "primary-100", className: "bg-primary-100" },
+      { name: "primary-300", className: "bg-primary-300" },
+      { name: "primary-400", className: "bg-primary-400" },
+      { name: "primary-500", className: "bg-primary-500" },
+    ],
+  },
+  {
+    group: "Secondary — navy",
+    swatches: [
+      { name: "navy-300", className: "bg-navy-300" },
+      { name: "navy-400", className: "bg-navy-400" },
+      { name: "navy-500", className: "bg-navy-500" },
+    ],
+  },
+  {
+    group: "Neutral",
+    swatches: [
+      { name: "grey-50", className: "bg-grey-50" },
+      { name: "grey-200", className: "bg-grey-200" },
+      { name: "grey-400", className: "bg-grey-400" },
+      { name: "grey-600", className: "bg-grey-600" },
+      { name: "grey-900", className: "bg-grey-900" },
+    ],
+  },
+  {
+    group: "Semantic",
+    swatches: [
+      { name: "error", className: "bg-error" },
+      { name: "warning", className: "bg-warning" },
+      { name: "info", className: "bg-info" },
+      { name: "success", className: "bg-success" },
+      { name: "error-light", className: "bg-error-light" },
+      { name: "warning-light", className: "bg-warning-light" },
+      { name: "info-light", className: "bg-info-light" },
+      { name: "success-light", className: "bg-success-light" },
+    ],
+  },
+];
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-6 border-t border-grey-200 pt-8">
@@ -40,6 +86,24 @@ export default function DesignSystemPage() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-12 sm:px-8">
       <h1 className="text-display text-navy-500">Design system</h1>
+
+      <Section title="Colors">
+        <div className="flex flex-col gap-6">
+          {palette.map(({ group, swatches }) => (
+            <div key={group} className="flex flex-col gap-3">
+              <h3 className="text-h3 text-grey-900">{group}</h3>
+              <div className="flex flex-wrap gap-4">
+                {swatches.map(({ name, className }) => (
+                  <div key={name} className="flex w-32 flex-col gap-2">
+                    <div className={`h-20 rounded-lg border border-grey-200 ${className}`} />
+                    <span className="text-body-sm text-grey-600">{name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
 
       <Section title="Buttons">
         <div className="flex flex-col gap-6">
