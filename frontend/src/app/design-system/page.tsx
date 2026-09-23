@@ -1,11 +1,17 @@
 import type { ReactNode } from "react";
+import { UploadDemo } from "./UploadDemo";
 import {
+  Badge,
   Button,
+  CheckIcon,
+  ExclamationIcon,
   Input,
   MagicStarIcon,
   MagicpenIcon,
+  ProgressBar,
   Select,
   Textarea,
+  CloseIcon,
   type ButtonSize,
   type ButtonVariant,
 } from "@/components/ui";
@@ -155,6 +161,42 @@ export default function DesignSystemPage() {
           <Textarea label="Bio" status="error" helperText="Invalid message" defaultValue="Too short" showCount maxLength={234} />
           <Textarea label="Bio" placeholder="Input text" helperText={helper} disabled showCount maxLength={234} />
         </Grid>
+      </Section>
+
+      <Section title="Badges and status">
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-wrap items-start gap-3">
+            <Badge tone="success" dot>
+              High
+            </Badge>
+            <Badge tone="warning" dot>
+              Medium
+            </Badge>
+            <Badge tone="error" dot>
+              Low
+            </Badge>
+          </div>
+          <div className="flex flex-wrap items-start gap-3">
+            <Badge tone="info" icon={<CheckIcon width={12} height={12} />}>
+              Verified
+            </Badge>
+            <Badge tone="warning" icon={<ExclamationIcon width={12} height={12} />}>
+              Pending
+            </Badge>
+            <Badge tone="error" icon={<CloseIcon width={12} height={12} />}>
+              Failed
+            </Badge>
+          </div>
+          <div className="flex max-w-xs flex-col gap-3">
+            <ProgressBar value={92} showValue label="Trust score" />
+            <ProgressBar value={62} tone="warning" showValue label="Completion" />
+            <ProgressBar value={30} tone="error" showValue label="Risk" />
+          </div>
+        </div>
+      </Section>
+
+      <Section title="File upload">
+        <UploadDemo />
       </Section>
 
       <Section title="Dropdown input">
