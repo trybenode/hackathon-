@@ -52,7 +52,7 @@ export function FileDropzone({
       onDragLeave={() => setDragging(false)}
       onDrop={handleDrop}
       className={cn(
-        "flex flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-8 text-center transition-colors",
+        "flex min-h-52 flex-col items-center justify-center gap-1 rounded-lg border border-dashed px-8 py-10 text-center transition-colors",
         disabled
           ? "border-grey-200 bg-grey-200 text-grey-400"
           : dragging
@@ -61,15 +61,15 @@ export function FileDropzone({
         className,
       )}
     >
-      <CloudUploadIcon className={cn("text-grey-600", disabled && "text-grey-400")} />
-      <p className={cn("text-body-sm font-semibold", !disabled && "text-grey-900")}>{title}</p>
+      <CloudUploadIcon className={cn("mb-3", disabled ? "text-grey-400" : "text-grey-900")} />
+      <p className={cn("text-body-md font-semibold", !disabled && "text-grey-900")}>{title}</p>
       {hint && <p className={cn("text-body-sm", !disabled && "text-grey-600")}>{hint}</p>}
       <Button
         size="sm"
         variant="outline"
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
-        className="mt-2 rounded-md"
+        className="mt-6 rounded-md"
       >
         {buttonLabel}
       </Button>

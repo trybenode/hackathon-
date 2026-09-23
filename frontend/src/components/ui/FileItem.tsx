@@ -3,7 +3,7 @@
 import { cn } from "@/lib/cn";
 import { formatBytes } from "@/lib/format";
 import { ProgressBar } from "./ProgressBar";
-import { CheckCircleIcon, CloseIcon, ErrorCircleIcon, SpinnerIcon, TrashIcon } from "./icons";
+import { AlertCircleIcon, CheckCircleIcon, CloseIcon, SpinnerIcon, TrashIcon } from "./icons";
 
 export type FileStatus = "uploading" | "completed" | "failed";
 
@@ -101,11 +101,11 @@ export function FileItem({
           <span aria-hidden>•</span>
           {status === "uploading" && <SpinnerIcon className="animate-spin text-primary-400" />}
           {status === "completed" && <CheckCircleIcon className="text-success" />}
-          {failed && <ErrorCircleIcon className="text-error" />}
+          {failed && <AlertCircleIcon className="text-error" />}
           <span className={cn(failed && "text-error")}>{statusLabels[status]}</span>
         </p>
 
-        {status === "uploading" && <ProgressBar value={percent} tone="success" label={`Uploading ${name}`} />}
+        {status === "uploading" && <ProgressBar value={percent} tone="success" segmented label={`Uploading ${name}`} />}
 
         {failed && onRetry && (
           <button
