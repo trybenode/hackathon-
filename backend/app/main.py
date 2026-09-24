@@ -1,3 +1,9 @@
+"""Purpose: Construct the FastAPI application and register middleware/routes.
+
+Dependencies: FastAPI, CORS middleware, app.core.config, and health endpoints.
+Used by: Uvicorn and ASGI test clients.
+"""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
