@@ -12,6 +12,9 @@ You are an expert full-stack engineer working on the **Dynamic Trust Infrastruct
 
 ## Project Summary
 We are building a Trust API + platform-independent system that provides:
+- B2B onboarding trust assessment for platform gatekeeping
+- Continuous worker monitoring, risk flags, investigation status, and status history
+- Portable worker trust credentials for platform mobility
 - Configurable trust scoring (boolean decision + confidence score)
 - Personal digital guarantor instruments with electronic signature
 - Portable worker credentials (import/export)
@@ -235,10 +238,14 @@ You **must** implement or leave clear extension points for:
 
 - Trust Scoring must return both `decision: bool` and `confidence: float`.
 - New workers with insufficient data → `"Building History"` status.
+- Trust bands are `High`, `Medium`, `Low`, or `Building History`.
+- Monitoring distinguishes `clear`, `flagged`, `under_investigation`, `malicious`, and `high_risk` states.
+- Monitoring state transitions and risk flags are historically retained and auditable.
 - Guarantor is always a **real person** (personal guarantor).
 - Escrow + micro-insurance exist **only** for platform-independent jobs.
 - Data from different platforms must pass through a normalisation layer before scoring.
 - Workers can import/export portable credentials.
+- New negative outcomes invalidate cached trust summaries and notify subscribed platforms where configured.
 - Job completion uses dual confirmation + auto-release + dispute hold.
 
 ---
