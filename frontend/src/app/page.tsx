@@ -1,3 +1,9 @@
+/**
+ * Purpose: Render the initial trust-infrastructure product shell and system status.
+ * Dependencies: Next.js App Router and Tailwind CSS classes.
+ * Used by: the root route at `/`.
+ */
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#f5f1e8] text-[#18211b]">

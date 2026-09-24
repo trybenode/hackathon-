@@ -1,3 +1,9 @@
+/**
+ * Purpose: Provide typed frontend access to the versioned FastAPI API.
+ * Dependencies: NEXT_PUBLIC_API_BASE_URL and the browser fetch API.
+ * Used by: frontend server/client components that call backend endpoints.
+ */
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
 export type HealthResponse = {

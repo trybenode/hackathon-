@@ -1,5 +1,12 @@
+"""Purpose: Load and normalize application configuration, including Neon URLs.
+
+Dependencies: pydantic-settings, pathlib, urllib.parse.
+Used by: app.db.session, app.main, and Alembic.
+"""
+
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -25,6 +32,23 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def async_database_url(self) -> str:
+        """Convert Neon CLI connection strings to SQLAlchemy asyncpg URLs."""
+
+        url = self.database_url
+        parts = urlsplit(url)
+        scheme = parts.scheme
+        if scheme == "postgresql":
+            scheme = "postgresql+asyncpg"
+
+        query = dict(parse_qsl(parts.query, keep_blank_values=True))
+        if "sslmode" in query:
+            query["ssl"] = query.pop("sslmode")
+        query.pop("channel_binding", None)
+
+        return urlunsplit((scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
 @lru_cache

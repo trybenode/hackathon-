@@ -1,6 +1,16 @@
 # Dynamic Trust Infrastructure
 
-A trust API and platform-independent worker verification MVP.
+A B2B trust API and platform-independent worker verification MVP.
+
+## Product scope
+
+The Platform API has three primary purposes:
+
+1. **Onboarding trust assessment**: decide whether a worker can start offering a service, with a decision, confidence, trust band, optional guarantor, credential import, and normalized history.
+2. **Continuous monitoring and risk flagging**: expose current standing, active flags, investigations, malicious/high-risk states, status history, and updates when new negative outcomes appear.
+3. **Portable credentials**: export verified work history and trust records, then import them when a worker joins another platform.
+
+Data normalization, configurable trust policies, outcome ingestion, guarantors, and audit trails support these three API purposes. Escrow and micro-insurance remain restricted to platform-independent jobs.
 
 ## Repository layout
 
@@ -19,6 +29,60 @@ A trust API and platform-independent worker verification MVP.
 - A shared Neon PostgreSQL database
 
 ## Configuration
+
+[github.com/trybenode/hackathon-.git](https://github.com/trybenode/hackathon-.git)
+
+**cd** hackathon-
+
+git checkout -b feature/featureName
+
+git add .
+git commit -m "Add product scanning feature"
+git push -u origin feature/product-scanner
+
+#### **Branch Naming**
+
+feature/trust-query-endpoint
+feature/guarantor-sign-flow
+fix/completion-auto-release
+chore/add-ruff-config
+docs/update-api-examples
+hotfix/escrow-status-bug
+
+**Rules**
+
+* Branch from main
+* Keep branches small and focused (ideally < 5 days of work)
+* Delete the branch after merge
+* Never commit directly to main
+* 
+
+**PR rules Required for every change:**
+
+* Create a Pull Request into main
+* Fill in a short description (what + why)
+* Link related issue/task if one exists
+* Ensure CI is green before merge
+* At least **1 approval** from another team member
+* Prefer squash merge (keeps main history clean)
+
+
+PR Checklist 
+
+## What
+
+## Why
+
+## How to Test
+
+## Checklist
+
+- [ ] Follows naming conventions and AGENT.md rules
+- [ ] Types are complete
+- [ ] No secrets committed
+- [ ] Critical demo path still works
+- [ ] Tests added/updated for business logic
+- [ ] Documentation updated if API contract changed
 
 Copy `.env.example` to `.env` and set the shared Neon `DATABASE_URL`. Do not commit `.env` or real credentials.
 

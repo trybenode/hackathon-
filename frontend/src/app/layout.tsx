@@ -1,3 +1,9 @@
+/**
+ * Purpose: Define the shared HTML shell, fonts, metadata, and global styles.
+ * Dependencies: Next.js metadata, next/font, and globals.css.
+ * Used by: every route in the App Router.
+ */
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
