@@ -1,5 +1,9 @@
 # Schema Spec
 
+*Note: Outcome Normalization (converting raw platform/import data into this
+schema) is owned by the same person/role as Trust Scoring for this project —
+not a separate team, as earlier drafts of this doc assumed.*
+
 Two separate schemas, not one shared one. Native jobs (done on our platform) and
 imported jobs (brought in from outside) are structurally different, because outside
 platforms can only realistically give us a fraction of what we can verify ourselves.
@@ -51,6 +55,13 @@ have an API for us to pull verified history automatically, so the realistic impo
 is a worker uploading their own exported file — which they could edit before handing it
 over. We're not solving that tampering risk with code; `starting_rating`'s cap and
 "unverified" label exist specifically to account for it, not eliminate it.
+
+Multiple imported files/sources are supported and combined into one unified
+`starting_rating` per worker — not tracked or scored separately per source.
+Every imported job, regardless of which file or platform it came from, feeds
+into the same pool that `starting_rating()` runs on. `source_platform` may
+still be stored per job for audit/context purposes, but scoring itself
+treats all imported jobs as one combined set.
 
 ## What's deliberately not in either schema
 
