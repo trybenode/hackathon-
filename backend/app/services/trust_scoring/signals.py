@@ -3,9 +3,9 @@ from collections import Counter
 CORE = {"completion_rate", "cancellation_rate", "dispute_rate"}
 
 # signal -> predicate over an eligible job; flags carry vertical-specific events.
-# No "late" predicate — that signal was removed from the design: without a
-# scheduled time captured at booking, there's no reliable way to know who was
-# late.
+# No "late" predicate — that signal was removed from the design (see
+# docs/signal_definitions.md and docs/flag_integrity.md): without a scheduled
+# time captured at booking, there's no reliable way to know who was late.
 SIGNAL_DEFS = {
     "completion_rate":      lambda j: j["status"] == "completed",
     "cancellation_rate":    lambda j: j["status"] == "cancelled",
@@ -22,11 +22,11 @@ def aggregate(jobs: list[dict], tracked: set[str]) -> tuple[dict, int]:
     Turn a worker's raw job records into signal rates.
 
     Client- and platform-caused cancellations are excluded before counting,
-    since they were never the worker's to complete. Only signals in `tracked`
-    are computed, so a platform that doesn't report a given signal never has
-    it silently default to a value that could be misread as "perfect" (the
-    original bug this fixed: an unreported safety_incident_rate defaulting
-    to 0, which the normalizer scores as 1.0).
+    since they were never the worker's to complete (see docs/schema_spec.md).
+    Only signals in `tracked` are computed, so a platform that doesn't report
+    a given signal never has it silently default to a value that could be
+    misread as "perfect" (the original bug this fixed: an unreported
+    safety_incident_rate defaulting to 0, which the normalizer scores as 1.0).
     """
     jobs = [j for j in jobs
             if not (j["status"] == "cancelled" and j.get("cancelled_by") in ("client", "platform"))]
@@ -41,14 +41,23 @@ def aggregate(jobs: list[dict], tracked: set[str]) -> tuple[dict, int]:
         clients = Counter(j["client_id"] for j in jobs)
         signals["repeat_hire_rate"] = sum(c >= 2 for c in clients.values()) / len(clients)
 
+    if "average_rating" in tracked:
+        # Every job has a rating (confirmed — not optional, unlike some other
+        # sources' data). average_rating is a mean of a 1-5 value, not a rate
+        # over a predicate, so it can't live in SIGNAL_DEFS like the others.
+        # Normalized to [0,1] here so NORMALIZERS can treat it as identity.
+        signals["average_rating"] = sum(j["rating"] for j in jobs) / n / 5.0
+
     return signals, n
 
 
 def validate_platform(tracked: set[str]) -> None:
     """
     A platform onboarding as a native/API source must supply all CORE signals.
-    This does NOT apply to csv_upload imports, which are held to a separate,
-    minimal schema and never go through this check.
+    This does NOT apply to csv_upload imports, which are held to the separate,
+    minimal schema in docs/schema_spec.md (job_id, date, status only) and never
+    go through this check — see design_decisions.md and starting_rating() in
+    scoring.py for how imported-only workers are handled instead.
     """
     missing = CORE - tracked
     if missing:

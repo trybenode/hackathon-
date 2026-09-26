@@ -17,8 +17,9 @@ class PlatformConfig:
 PRESETS = {
     "generic": PlatformConfig(),
     "domestic": PlatformConfig(
-        weights={"safety_incident_rate": 0.30, "completion_rate": 0.25,
-                 "dispute_rate": 0.20, "repeat_hire_rate": 0.15, "no_show_rate": 0.10},
+        weights={"safety_incident_rate": 0.25, "completion_rate": 0.20,
+                 "dispute_rate": 0.20, "repeat_hire_rate": 0.15,
+                 "no_show_rate": 0.10, "cancellation_rate": 0.10},
         required_signals=("completion_rate", "safety_incident_rate"),
         min_jobs=8, baseline=0.70),
     "ride_hailing": PlatformConfig(
@@ -36,6 +37,7 @@ NORMALIZERS = {  # all map to [0,1], higher = better
     "rework_rate":          lambda x: max(0.0, 1 - x / 0.15),
     "damage_report_rate":   lambda x: max(0.0, 1 - x / 0.05),
     "repeat_hire_rate":     lambda x: min(1.0, x / 0.30),  # placeholder, tune on seed data
+    "average_rating":       lambda x: x,  # already normalized to [0,1] in aggregate()
 }
 
 def score_worker(signals: dict, n_jobs: int, cfg: PlatformConfig) -> dict:
@@ -44,17 +46,16 @@ def score_worker(signals: dict, n_jobs: int, cfg: PlatformConfig) -> dict:
     evidence = n_jobs / (n_jobs + cfg.k)
 
     # Hard-fail check runs first and unconditionally, even under min_jobs.
-    # No preset currently has a hard_fail configured (permanent safety
-    # disqualification was deliberately removed as too harsh), but the
-    # mechanism stays in place in case one is reintroduced later.
+    # A confirmed safety incident (or other hard-fail) shouldn't be invisible
+    # just because the worker doesn't have much history yet.
     failed = [s for s, mx in cfg.hard_fail.items() if signals.get(s, 0) > mx]
     if failed:
         return {"decision": False, "confidence": round(evidence, 2),
                 "band": "Low", "status": "Disqualified", "signals_used": used,
                 "explanation_summary": f"Failed hard rule: {failed[0]}"}
 
-    # Guard: not enough history, missing required signals, OR no overlap at
-    # all between what this platform tracks and what this preset weighs.
+    # Guard: not enough history, missing required signals, OR no overlap at all
+    # between what this platform tracks and what this preset weighs.
     # Without this, total_w below would be 0 and the division would crash.
     if n_jobs < cfg.min_jobs or missing or not used:
         return {"decision": cfg.building_history_decision,
@@ -78,20 +79,3 @@ def score_worker(signals: dict, n_jobs: int, cfg: PlatformConfig) -> dict:
 
     return {"decision": decision, "confidence": confidence, "band": band,
             "status": "Scored", "signals_used": used, "explanation_summary": summary}
-
-
-def starting_rating(signals: dict, n_jobs: int) -> dict:
-    """
-    Separate, capped, unverified rating for imported-only workers who never
-    have enough data to go through score_worker. Uses only completion_rate
-    and cancellation_rate, since imports only ever supply job_id, date,
-    status. Capped at 0.65 so it can never read as the top tier. Does not
-    call score_worker and shares no state with it.
-    """
-    completion = signals.get("completion_rate", 0)
-    cancellation = signals.get("cancellation_rate", 0)
-    raw = (0.6 * NORMALIZERS["completion_rate"](completion)
-           + 0.4 * NORMALIZERS["cancellation_rate"](cancellation))
-    capped = min(raw, 0.65)
-    return {"starting_rating": round(capped, 2), "verified": False,
-            "label": "Building History (imported)"}
