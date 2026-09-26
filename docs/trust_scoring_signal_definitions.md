@@ -17,6 +17,12 @@ which tier it belongs to.
 | `safety_incident_rate` | ✓ | ~ | ✓ | ~ |
 | `rework_rate` | ✗ | ✓ | ✗ | ✗ |
 | `damage_report_rate` | ✗ | ~ | ✗ | ✓ |
+| `average_rating` | ✓ | ✓ | ✓ | ✓ |
+
+Every job carries a rating (confirmed — not optional the way some other fields are), so
+`average_rating` is available across all verticals. Unlike the other signals, it's a mean
+of a 1–5 value rather than a rate over a predicate — `aggregate()` computes it separately
+and normalizes it to [0,1] before it reaches `NORMALIZERS`.
 
 `late_rate` was removed from the design entirely — without a scheduled/agreed time
 captured at booking, there's no reliable way to know who was late (worker, client, or
@@ -28,15 +34,15 @@ about showing up is still captured indirectly through `cancellation_rate`.
 **Core** (`completion_rate`, `cancellation_rate`, `dispute_rate`) — every vertical can
 produce these. They're the portable currency for credentials. A native platform must
 supply all three to onboard (`validate_platform` enforces this). Imported (CSV) sources
-are held to a lower bar — see `trust_scoring_schema_spec.md`.
+are held to a lower bar — see `schema_spec.md`.
 
-**Common but optional** (`no_show_rate`, `repeat_hire_rate`) — most verticals can produce
-these, but not all, and their absence doesn't block scoring — the engine's coverage and
-confidence mechanism handles missing optional signals gracefully.
+**Common but optional** (`no_show_rate`, `repeat_hire_rate`, `average_rating`) — most
+verticals can produce these, but their absence doesn't block scoring — the engine's
+coverage and confidence mechanism handles missing optional signals gracefully.
 
 **Vertical-specific** (`safety_incident_rate`, `rework_rate`, `damage_report_rate`) —
 exist only where they mean something. Carried via the `flags` field on a job (see
-`trust_scoring_flag_integrity.md`), not their own dedicated columns.
+`flag_integrity.md`), not their own dedicated columns.
 
 The engine itself doesn't change per vertical — only the `PlatformConfig` (weights and
 required signals) and the vertical's own flag-to-signal mapping differ.
