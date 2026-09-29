@@ -74,8 +74,18 @@ class AssessmentStatus(StrEnum):
 
 
 class AgreementStatus(StrEnum):
+    """Guarantor instrument lifecycle.
+
+    Draft -> Pending Signature -> Active -> Triggered / Expired / Revoked.
+    Declined covers a guarantor refusing to sign; suspended is reserved for
+    administrative holds on an active instrument.
+    """
+
+    DRAFT = "draft"
     REQUESTED = "requested"
+    PENDING_SIGNATURE = "pending_signature"
     ACTIVE = "active"
+    TRIGGERED = "triggered"
     SUSPENDED = "suspended"
     REVOKED = "revoked"
     EXPIRED = "expired"
@@ -344,17 +354,27 @@ class GuarantorAgreement(UUIDTimestampMixin, Base):
     scope: Mapped[str] = mapped_column(Text)
     conditions: Mapped[str] = mapped_column(Text)
     relationship_type: Mapped[str] = mapped_column(String(40))
+    guarantor_phone: Mapped[str] = mapped_column(String(40), default="")
+    guarantor_address: Mapped[str] = mapped_column(String(500), default="")
     status: Mapped[AgreementStatus] = mapped_column(
-        Enum(AgreementStatus, name="agreement_status"), default=AgreementStatus.REQUESTED
+        Enum(AgreementStatus, name="agreement_status"), default=AgreementStatus.DRAFT
     )
     valid_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    signatures: Mapped[list["ElectronicSignature"]] = relationship(
+        back_populates="agreement", cascade="all, delete-orphan"
+    )
 
 
 class ElectronicSignature(UUIDTimestampMixin, Base):
     __tablename__ = "electronic_signatures"
 
     agreement_id: Mapped[UUID] = mapped_column(ForeignKey("guarantor_agreements.id", ondelete="CASCADE"))
+    agreement: Mapped[GuarantorAgreement] = relationship(back_populates="signatures")
     signer_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     signer_name: Mapped[str] = mapped_column(String(160))
     signer_phone: Mapped[str] = mapped_column(String(40))
