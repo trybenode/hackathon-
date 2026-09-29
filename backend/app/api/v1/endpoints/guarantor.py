@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
-from app.models.domain import AgreementStatus, GuarantorAgreement, User
+from app.models.domain import AgreementStatus, GuarantorAgreement, Job, User, Worker
 from app.schemas.api import (
     GuarantorInstrumentCreateRequest,
     GuarantorInstrumentCreateResponse,
@@ -22,6 +22,7 @@ from app.schemas.api import (
     GuarantorSummary,
     GuarantorTriggerRequest,
     GuarantorVerifyRequest,
+    WorkerProfileSummary,
 )
 from app.services import guarantor as guarantor_service
 from app.services.guarantor import (
@@ -36,6 +37,27 @@ from app.services.guarantor import (
 router = APIRouter(prefix="/guarantor-instruments", tags=["guarantor"])
 
 
+async def _worker_summary(
+    session: AsyncSession, agreement: GuarantorAgreement
+) -> WorkerProfileSummary | None:
+    """Build the worker card shown to a guarantor reviewing a request."""
+
+    worker = await session.get(Worker, agreement.worker_id)
+    if worker is None:
+        return None
+
+    person = await session.get(User, worker.user_id)
+    job = await session.get(Job, agreement.job_id) if agreement.job_id else None
+    return WorkerProfileSummary(
+        worker_id=worker.id,
+        full_name=person.display_name if person else "",
+        role=worker.role,
+        location=worker.location,
+        avatar_url=worker.avatar_url,
+        job_title=job.title if job else None,
+    )
+
+
 async def _to_response(
     session: AsyncSession, agreement: GuarantorAgreement
 ) -> GuarantorInstrumentResponse:
@@ -43,6 +65,7 @@ async def _to_response(
     return GuarantorInstrumentResponse(
         instrument_id=agreement.id,
         worker_id=agreement.worker_id,
+        worker=await _worker_summary(session, agreement),
         guarantor=GuarantorSummary(
             full_name=person.display_name if person else "",
             relationship=agreement.relationship_type,

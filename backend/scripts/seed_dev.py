@@ -11,6 +11,7 @@ Prints the worker id to use when creating guarantor instruments.
 """
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -23,13 +24,15 @@ from app.db.base import Base  # noqa: E402
 from app.models.domain import User, Worker  # noqa: E402
 
 DB_PATH = BACKEND_ROOT / "local_dev.db"
-# Four slashes: an absolute path, which survives the URL rewrite in core.config.
-DB_URL = f"sqlite+aiosqlite:///{DB_PATH}"
+# Defaults to a local SQLite file; set DATABASE_URL to seed Postgres or Neon.
+# The absolute path keeps the URL valid through the rewrite in core.config.
+DB_URL = os.environ.get("DATABASE_URL") or f"sqlite+aiosqlite:///{DB_PATH}"
 
 
 async def main() -> None:
     engine = create_async_engine(DB_URL)
     async with engine.begin() as connection:
+        # Harmless on a migrated database: existing tables are left alone.
         await connection.run_sync(Base.metadata.create_all)
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -42,7 +45,6 @@ async def main() -> None:
         session.add(worker)
         await session.commit()
 
-        print(f"Database: {DB_PATH}")
         print(f"DATABASE_URL={DB_URL}")
         print(f"WORKER_ID={worker.id}")
 

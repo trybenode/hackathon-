@@ -87,6 +87,25 @@ async def test_create_sign_and_fetch(session: AsyncSession, worker: Worker) -> N
     app.dependency_overrides.clear()
 
 
+async def test_response_carries_the_worker_card(session: AsyncSession, worker: Worker) -> None:
+    async with client_for(session) as client:
+        created = await client.post("/api/v1/guarantor-instruments", json=create_payload(worker))
+        instrument_id = created.json()["instrument_id"]
+
+        detail = (await client.get(f"/api/v1/guarantor-instruments/{instrument_id}")).json()
+
+    assert detail["worker"] == {
+        "worker_id": str(worker.id),
+        "full_name": "Jane A.",
+        "role": "Cleaner",
+        "location": "Lekki, Lagos",
+        "avatar_url": "https://example.com/jane.jpg",
+        # No job is linked to this instrument.
+        "job_title": None,
+    }
+    app.dependency_overrides.clear()
+
+
 async def test_draft_flow_and_listing(session: AsyncSession, worker: Worker) -> None:
     async with client_for(session) as client:
         created = await client.post(

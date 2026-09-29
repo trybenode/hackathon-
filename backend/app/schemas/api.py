@@ -214,6 +214,18 @@ class GuarantorRevokeRequest(ApiModel):
     reason: str = Field(min_length=1, max_length=500)
 
 
+class WorkerProfileSummary(ApiModel):
+    """The worker a guarantee stands behind, as shown on the review screen."""
+
+    worker_id: UUID
+    full_name: str
+    role: str | None = None
+    location: str | None = None
+    avatar_url: str | None = None
+    #: Title of the linked job, when the instrument covers one.
+    job_title: str | None = None
+
+
 class GuarantorSummary(ApiModel):
     full_name: str
     relationship: str
@@ -224,6 +236,7 @@ class GuarantorSummary(ApiModel):
 class GuarantorInstrumentResponse(ApiModel):
     instrument_id: UUID
     worker_id: UUID
+    worker: WorkerProfileSummary | None = None
     guarantor: GuarantorSummary
     scope: str
     conditions: str
