@@ -10,7 +10,13 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.domain import AgreementStatus, AuditEvent, ElectronicSignature, Worker
+from app.models.domain import (
+    AgreementStatus,
+    AuditEvent,
+    ElectronicSignature,
+    IdentityVerification,
+    Worker,
+)
 from app.schemas.api import (
     GuarantorDetails,
     GuarantorInstrumentCreateRequest,
@@ -49,6 +55,16 @@ def build_signature(*, accepted: bool = True, at: datetime | None = None) -> Gua
             user_agent="Mozilla/5.0 (iPhone)",
             timestamp=at or NOW + timedelta(hours=1),
         ),
+    )
+
+
+async def activate(session: AsyncSession, instrument_id, *, at: datetime | None = None):
+    """Accept the terms and pass identity verification."""
+
+    moment = at or NOW
+    await service.sign_instrument(session, instrument_id, build_signature(at=moment), now=moment)
+    return await service.verify_identity(
+        session, instrument_id, provider="smile_id", provider_reference="SID-123", now=moment
     )
 
 
@@ -93,7 +109,9 @@ async def test_create_rejects_unknown_worker(session: AsyncSession, worker: Work
         await service.create_instrument(session, request, now=NOW)
 
 
-async def test_sign_activates_and_stores_evidence(session: AsyncSession, worker: Worker) -> None:
+async def test_accept_waits_for_verification_and_stores_evidence(
+    session: AsyncSession, worker: Worker
+) -> None:
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
     signed_at = NOW + timedelta(hours=1)
 
@@ -101,8 +119,10 @@ async def test_sign_activates_and_stores_evidence(session: AsyncSession, worker:
         session, agreement.id, build_signature(at=signed_at), now=signed_at
     )
 
-    assert result.status is AgreementStatus.ACTIVE
+    # Accepting the terms does not make the guarantee live on its own.
+    assert result.status is AgreementStatus.PENDING_VERIFICATION
     assert result.signed_at == signed_at
+    assert result.verified_at is None
 
     signature = await session.scalar(
         select(ElectronicSignature).where(ElectronicSignature.agreement_id == agreement.id)
@@ -140,6 +160,44 @@ async def test_signature_hash_changes_with_evidence(session: AsyncSession, worke
     )
 
 
+async def test_verification_activates_the_guarantee(
+    session: AsyncSession, worker: Worker
+) -> None:
+    agreement = await service.create_instrument(session, build_request(worker), now=NOW)
+    await service.sign_instrument(session, agreement.id, build_signature(), now=NOW)
+
+    verified_at = NOW + timedelta(hours=2)
+    result = await service.verify_identity(
+        session,
+        agreement.id,
+        provider="smile_id",
+        provider_reference="SID-123",
+        now=verified_at,
+    )
+
+    assert result.status is AgreementStatus.ACTIVE
+    assert result.verified_at == verified_at
+
+    record = await session.scalar(
+        select(IdentityVerification).where(
+            IdentityVerification.user_id == agreement.guarantor_user_id
+        )
+    )
+    assert record is not None
+    assert record.provider == "smile_id"
+    assert record.provider_reference == "SID-123"
+    assert record.status == "verified"
+
+
+async def test_cannot_verify_before_acceptance(session: AsyncSession, worker: Worker) -> None:
+    agreement = await service.create_instrument(session, build_request(worker), now=NOW)
+
+    with pytest.raises(service.InvalidTransitionError):
+        await service.verify_identity(
+            session, agreement.id, provider="smile_id", provider_reference="SID-123", now=NOW
+        )
+
+
 async def test_decline_closes_the_instrument(session: AsyncSession, worker: Worker) -> None:
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
 
@@ -154,7 +212,7 @@ async def test_decline_closes_the_instrument(session: AsyncSession, worker: Work
 
 async def test_trigger_then_no_further_moves(session: AsyncSession, worker: Worker) -> None:
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
-    await service.sign_instrument(session, agreement.id, build_signature(), now=NOW)
+    await activate(session, agreement.id)
 
     triggered = await service.trigger_instrument(
         session, agreement.id, reason="Client reported a no-show.", now=NOW + timedelta(days=2)
@@ -166,9 +224,14 @@ async def test_trigger_then_no_further_moves(session: AsyncSession, worker: Work
         await service.revoke_instrument(session, agreement.id, reason="Too late.", now=NOW)
 
 
-async def test_cannot_trigger_before_signature(session: AsyncSession, worker: Worker) -> None:
+async def test_cannot_trigger_before_activation(session: AsyncSession, worker: Worker) -> None:
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
 
+    with pytest.raises(service.InvalidTransitionError):
+        await service.trigger_instrument(session, agreement.id, reason="Too early.", now=NOW)
+
+    # Still not live while waiting on identity verification.
+    await service.sign_instrument(session, agreement.id, build_signature(), now=NOW)
     with pytest.raises(service.InvalidTransitionError):
         await service.trigger_instrument(session, agreement.id, reason="Too early.", now=NOW)
 
@@ -182,7 +245,7 @@ async def test_revoke_from_pending_and_active(session: AsyncSession, worker: Wor
     assert revoked.status_reason == "Worker withdrew the request."
 
     active = await service.create_instrument(session, build_request(worker), now=NOW)
-    await service.sign_instrument(session, active.id, build_signature(), now=NOW)
+    await activate(session, active.id)
     assert (
         await service.revoke_instrument(session, active.id, reason="Fraud review.", now=NOW)
     ).status is AgreementStatus.REVOKED
@@ -232,7 +295,7 @@ async def test_missing_instrument_raises(session: AsyncSession, worker: Worker) 
 async def test_list_filters_by_worker_and_status(session: AsyncSession, worker: Worker) -> None:
     pending = await service.create_instrument(session, build_request(worker), now=NOW)
     signed = await service.create_instrument(session, build_request(worker), now=NOW)
-    await service.sign_instrument(session, signed.id, build_signature(), now=NOW)
+    await activate(session, signed.id)
 
     everything = await service.list_instruments(session, worker_id=worker.id)
     assert {record.id for record in everything} == {pending.id, signed.id}
@@ -248,7 +311,7 @@ async def test_lifecycle_writes_audit_trail(session: AsyncSession, worker: Worke
         session, build_request(worker), as_draft=True, now=NOW
     )
     await service.send_for_signature(session, agreement.id, now=NOW)
-    await service.sign_instrument(session, agreement.id, build_signature(), now=NOW)
+    await activate(session, agreement.id)
     await service.trigger_instrument(session, agreement.id, reason="Damage claim.", now=NOW)
     await session.flush()
 
@@ -261,5 +324,6 @@ async def test_lifecycle_writes_audit_trail(session: AsyncSession, worker: Worke
         "guarantor.created",
         "guarantor.sent_for_signature",
         "guarantor.signed",
+        "guarantor.identity_verified",
         "guarantor.triggered",
     }

@@ -195,8 +195,15 @@ class GuarantorSignRequest(ApiModel):
 
 class GuarantorSignResponse(ApiModel):
     instrument_id: UUID
-    status: str = "Active"
+    status: str = "Pending Verification"
     signed_at: datetime
+
+
+class GuarantorVerifyRequest(ApiModel):
+    """Result of the guarantor's identity check, from the provider."""
+
+    provider: str = Field(min_length=1, max_length=80)
+    provider_reference: str = Field(min_length=1, max_length=255)
 
 
 class GuarantorTriggerRequest(ApiModel):
@@ -224,6 +231,7 @@ class GuarantorInstrumentResponse(ApiModel):
     signed_at: datetime | None = None
     valid_until: datetime
     job_id: UUID | None = None
+    verified_at: datetime | None = None
     triggered_at: datetime | None = None
     status_reason: str | None = None
     created_at: datetime | None = None

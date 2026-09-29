@@ -76,7 +76,8 @@ class AssessmentStatus(StrEnum):
 class AgreementStatus(StrEnum):
     """Guarantor instrument lifecycle.
 
-    Draft -> Pending Signature -> Active -> Triggered / Expired / Revoked.
+    Draft -> Pending Signature -> Pending Verification -> Active ->
+    Triggered / Expired / Revoked.
     Declined covers a guarantor refusing to sign; suspended is reserved for
     administrative holds on an active instrument.
     """
@@ -84,6 +85,7 @@ class AgreementStatus(StrEnum):
     DRAFT = "draft"
     REQUESTED = "requested"
     PENDING_SIGNATURE = "pending_signature"
+    PENDING_VERIFICATION = "pending_verification"
     ACTIVE = "active"
     TRIGGERED = "triggered"
     SUSPENDED = "suspended"
@@ -361,6 +363,7 @@ class GuarantorAgreement(UUIDTimestampMixin, Base):
     )
     valid_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)

@@ -5,11 +5,17 @@ Used by: the guarantor API endpoints.
 
 Lifecycle
 ---------
-    Draft ──send──▶ Pending Signature ──sign(accepted)──▶ Active
-      │                    │                                 │
-      │                    ├──sign(declined)──▶ Declined      ├──trigger──▶ Triggered
-      │                    ├──expire──────────▶ Expired       ├──expire───▶ Expired
-      └──revoke───────────┴──revoke──────────▶ Revoked  ◀────┘ (revoke)
+    Draft ──send──▶ Pending Signature ──accept──▶ Pending Verification
+      │                    │                              │
+      │                    ├──decline──▶ Declined         │ identity verified
+      │                    │                              ▼
+      │                    │                           Active ──trigger──▶ Triggered
+      │                    │                              │
+      └──revoke────────────┴──────────────────────────────┴──▶ Revoked / Expired
+
+Accepting the terms records the guarantor's signature but does not make the
+guarantee live: the instrument waits in Pending Verification until identity
+verification passes.
 
 Triggered, Expired, Revoked, and Declined are terminal: nothing moves out of
 them. Suspended is an administrative hold on an Active instrument and can only
@@ -31,6 +37,7 @@ from app.models.domain import (
     AuditEvent,
     ElectronicSignature,
     GuarantorAgreement,
+    IdentityVerification,
     User,
     Worker,
 )
@@ -45,6 +52,14 @@ ALLOWED_TRANSITIONS: dict[AgreementStatus, frozenset[AgreementStatus]] = {
         {AgreementStatus.PENDING_SIGNATURE, AgreementStatus.REVOKED}
     ),
     AgreementStatus.PENDING_SIGNATURE: frozenset(
+        {
+            AgreementStatus.PENDING_VERIFICATION,
+            AgreementStatus.DECLINED,
+            AgreementStatus.EXPIRED,
+            AgreementStatus.REVOKED,
+        }
+    ),
+    AgreementStatus.PENDING_VERIFICATION: frozenset(
         {
             AgreementStatus.ACTIVE,
             AgreementStatus.DECLINED,
@@ -84,6 +99,7 @@ EXPIRABLE_STATUSES = frozenset(
         AgreementStatus.DRAFT,
         AgreementStatus.REQUESTED,
         AgreementStatus.PENDING_SIGNATURE,
+        AgreementStatus.PENDING_VERIFICATION,
         AgreementStatus.ACTIVE,
         AgreementStatus.SUSPENDED,
     }
@@ -94,6 +110,7 @@ STATUS_LABELS: dict[AgreementStatus, str] = {
     AgreementStatus.DRAFT: "Draft",
     AgreementStatus.REQUESTED: "Draft",
     AgreementStatus.PENDING_SIGNATURE: "Pending Signature",
+    AgreementStatus.PENDING_VERIFICATION: "Pending Verification",
     AgreementStatus.ACTIVE: "Active",
     AgreementStatus.TRIGGERED: "Triggered",
     AgreementStatus.SUSPENDED: "Suspended",
@@ -222,8 +239,10 @@ def apply_transition(
     if reason is not None:
         agreement.status_reason = reason
 
-    if target is AgreementStatus.ACTIVE and agreement.signed_at is None:
+    if target is AgreementStatus.PENDING_VERIFICATION and agreement.signed_at is None:
         agreement.signed_at = moment
+    elif target is AgreementStatus.ACTIVE:
+        agreement.verified_at = moment
     elif target is AgreementStatus.TRIGGERED:
         agreement.triggered_at = moment
 
@@ -330,10 +349,12 @@ async def sign_instrument(
     *,
     now: datetime | None = None,
 ) -> GuarantorAgreement:
-    """Record the guarantor's decision and activate or decline the instrument.
+    """Record the guarantor's decision on the terms.
 
-    Signing after `valid_until` expires the instrument instead of activating
-    it, so a stale signing link cannot bring a dead guarantee to life.
+    Accepting captures the signature and moves the instrument to Pending
+    Verification; it goes live only once identity verification passes.
+    Signing after `valid_until` expires the instrument instead, so a stale
+    link cannot revive a dead guarantee.
     """
 
     moment = now or _now()
@@ -350,9 +371,11 @@ async def sign_instrument(
             at=moment,
         )
         _record_audit(session, agreement=agreement, action="guarantor.expired")
-        raise InvalidTransitionError(AgreementStatus.EXPIRED, AgreementStatus.ACTIVE)
+        raise InvalidTransitionError(AgreementStatus.EXPIRED, AgreementStatus.PENDING_VERIFICATION)
 
-    target = AgreementStatus.ACTIVE if request.accepted else AgreementStatus.DECLINED
+    target = (
+        AgreementStatus.PENDING_VERIFICATION if request.accepted else AgreementStatus.DECLINED
+    )
     signed_at = _as_aware(request.signature_metadata.timestamp)
 
     apply_transition(agreement, target, at=signed_at)
@@ -383,6 +406,40 @@ async def sign_instrument(
         action="guarantor.signed" if request.accepted else "guarantor.declined",
         actor_id=agreement.guarantor_user_id,
         metadata={"accepted": request.accepted},
+    )
+    return agreement
+
+
+async def verify_identity(
+    session: AsyncSession,
+    instrument_id: UUID,
+    *,
+    provider: str,
+    provider_reference: str,
+    now: datetime | None = None,
+) -> GuarantorAgreement:
+    """Record the guarantor's identity check and bring the guarantee live.
+
+    Stores the provider's reference against the guarantor's user record so the
+    check is auditable, then moves Pending Verification to Active.
+    """
+
+    agreement = await _get_agreement(session, instrument_id)
+    apply_transition(agreement, AgreementStatus.ACTIVE, at=now)
+    session.add(
+        IdentityVerification(
+            user_id=agreement.guarantor_user_id,
+            provider=provider,
+            provider_reference=provider_reference,
+            status="verified",
+        )
+    )
+    _record_audit(
+        session,
+        agreement=agreement,
+        action="guarantor.identity_verified",
+        actor_id=agreement.guarantor_user_id,
+        metadata={"provider": provider, "provider_reference": provider_reference},
     )
     return agreement
 

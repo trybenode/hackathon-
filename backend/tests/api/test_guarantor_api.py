@@ -46,6 +46,9 @@ SIGN_PAYLOAD = {
 }
 
 
+VERIFY_PAYLOAD = {"provider": "smile_id", "provider_reference": "SID-123"}
+
+
 def client_for(session: AsyncSession) -> AsyncClient:
     async def _session_override():
         yield session
@@ -66,7 +69,13 @@ async def test_create_sign_and_fetch(session: AsyncSession, worker: Worker) -> N
             f"/api/v1/guarantor-instruments/{instrument_id}/sign", json=SIGN_PAYLOAD
         )
         assert signed.status_code == 200, signed.text
-        assert signed.json()["status"] == "Active"
+        assert signed.json()["status"] == "Pending Verification"
+
+        verified = await client.post(
+            f"/api/v1/guarantor-instruments/{instrument_id}/verify", json=VERIFY_PAYLOAD
+        )
+        assert verified.status_code == 200, verified.text
+        assert verified.json()["status"] == "Active"
 
         fetched = await client.get(f"/api/v1/guarantor-instruments/{instrument_id}")
         assert fetched.status_code == 200
@@ -110,6 +119,16 @@ async def test_trigger_requires_active_instrument(session: AsyncSession, worker:
         assert too_early.status_code == 409
 
         await client.post(f"/api/v1/guarantor-instruments/{instrument_id}/sign", json=SIGN_PAYLOAD)
+
+        still_pending = await client.post(
+            f"/api/v1/guarantor-instruments/{instrument_id}/trigger",
+            json={"reason": "Not verified yet."},
+        )
+        assert still_pending.status_code == 409
+
+        await client.post(
+            f"/api/v1/guarantor-instruments/{instrument_id}/verify", json=VERIFY_PAYLOAD
+        )
         triggered = await client.post(
             f"/api/v1/guarantor-instruments/{instrument_id}/trigger",
             json={"reason": "Client reported a no-show."},

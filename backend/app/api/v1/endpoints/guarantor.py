@@ -21,6 +21,7 @@ from app.schemas.api import (
     GuarantorSignResponse,
     GuarantorSummary,
     GuarantorTriggerRequest,
+    GuarantorVerifyRequest,
 )
 from app.services import guarantor as guarantor_service
 from app.services.guarantor import (
@@ -54,6 +55,7 @@ async def _to_response(
         signed_at=agreement.signed_at,
         valid_until=agreement.valid_until,
         job_id=agreement.job_id,
+        verified_at=agreement.verified_at,
         triggered_at=agreement.triggered_at,
         status_reason=agreement.status_reason,
         created_at=agreement.created_at,
@@ -176,6 +178,30 @@ async def sign_instrument(
         status=guarantor_service.status_label(agreement.status),
         signed_at=agreement.signed_at or agreement.closed_at,
     )
+
+
+@router.post(
+    "/{instrument_id}/verify",
+    response_model=GuarantorInstrumentResponse,
+    summary="Record identity verification and activate the guarantee",
+)
+async def verify_identity(
+    instrument_id: UUID,
+    payload: GuarantorVerifyRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> GuarantorInstrumentResponse:
+    try:
+        agreement = await guarantor_service.verify_identity(
+            session,
+            instrument_id,
+            provider=payload.provider,
+            provider_reference=payload.provider_reference,
+        )
+    except GuarantorError as error:
+        raise _http_error(error) from error
+
+    await session.commit()
+    return await _to_response(session, agreement)
 
 
 @router.post(

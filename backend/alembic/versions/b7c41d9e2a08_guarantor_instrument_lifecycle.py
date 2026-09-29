@@ -18,7 +18,7 @@ down_revision: Union[str, Sequence[str], None] = "f0282d29c035"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-NEW_STATUSES = ("draft", "pending_signature", "triggered")
+NEW_STATUSES = ("draft", "pending_signature", "pending_verification", "triggered")
 
 
 def upgrade() -> None:
@@ -34,6 +34,10 @@ def upgrade() -> None:
     op.add_column(
         "guarantor_agreements",
         sa.Column("guarantor_address", sa.String(length=500), nullable=False, server_default=""),
+    )
+    op.add_column(
+        "guarantor_agreements",
+        sa.Column("verified_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.add_column(
         "guarantor_agreements",
@@ -53,6 +57,7 @@ def downgrade() -> None:
     op.drop_column("guarantor_agreements", "status_reason")
     op.drop_column("guarantor_agreements", "closed_at")
     op.drop_column("guarantor_agreements", "triggered_at")
+    op.drop_column("guarantor_agreements", "verified_at")
     op.drop_column("guarantor_agreements", "guarantor_address")
     op.drop_column("guarantor_agreements", "guarantor_phone")
     # The added enum values are left in place: Postgres cannot remove them
