@@ -24,13 +24,42 @@ export function ReviewRequest({ instrumentId }: { instrumentId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /** What to tell a guarantor whose request is no longer open to a decision. */
+  function settledMessage(status: Instrument["status"]): string | null {
+    switch (status) {
+      case "Pending Signature":
+      case "Pending Verification":
+        return null;
+      case "Active":
+        return "You have already accepted this guarantee, and it is now active.";
+      case "Declined":
+        return "You declined this guarantee. Nothing further is needed.";
+      case "Revoked":
+        return "This request was withdrawn by the worker.";
+      case "Expired":
+        return "This request expired before it was signed.";
+      default:
+        return "This request is no longer awaiting your decision.";
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       try {
         const loaded = await getInstrument(instrumentId);
-        if (!cancelled) setInstrument(loaded);
+        if (cancelled) return;
+
+        // A guarantor who already accepted lands back here from their email
+        // link; send them on to the step they stopped at rather than offering
+        // an Accept that the API will refuse.
+        if (loaded.status === "Pending Verification") {
+          router.replace(`/guarantor/${instrumentId}/identity`);
+          return;
+        }
+
+        setInstrument(loaded);
       } catch (cause) {
         if (!cancelled) {
           setError(cause instanceof ApiError ? cause.message : "Could not load this request.");
@@ -42,7 +71,7 @@ export function ReviewRequest({ instrumentId }: { instrumentId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [instrumentId]);
+  }, [instrumentId, router]);
 
   async function respond(accepted: boolean) {
     if (!instrument) return;
@@ -62,13 +91,23 @@ export function ReviewRequest({ instrumentId }: { instrumentId: string }) {
       });
       router.push(accepted ? `/guarantor/${instrumentId}/identity` : `/guarantor/${instrumentId}/declined`);
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : "Could not record your response.");
+      // A 409 means the request moved on since this page loaded, most often
+      // because it was already answered elsewhere.
+      const stale = cause instanceof ApiError && cause.status === 409;
+      setError(
+        stale
+          ? "This request has already been answered. Refresh to see its current state."
+          : cause instanceof ApiError
+            ? cause.message
+            : "Could not record your response.",
+      );
       setSubmitting(false);
       setDecliningOpen(false);
     }
   }
 
   const workerName = instrument?.worker?.full_name ?? "this worker";
+  const settled = instrument ? settledMessage(instrument.status) : null;
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-col">
@@ -141,6 +180,10 @@ export function ReviewRequest({ instrumentId }: { instrumentId: string }) {
 
         <hr className="border-stroke" />
 
+        {settled ? (
+          <p className="text-body-md text-grey-900">{settled}</p>
+        ) : (
+          <>
         <Switch
           checked={agreed}
           onChange={setAgreed}
@@ -184,6 +227,8 @@ export function ReviewRequest({ instrumentId }: { instrumentId: string }) {
             Decline
           </Button>
         </div>
+          </>
+        )}
       </div>
 
       <Modal open={decliningOpen} onClose={() => setDecliningOpen(false)} title="Decline guarantee">

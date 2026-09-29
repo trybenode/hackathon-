@@ -2,10 +2,10 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button, Input, NigeriaFlagIcon, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { ApiError, submitIdentity } from "@/lib/guarantor";
+import { ApiError, getInstrument, submitIdentity } from "@/lib/guarantor";
 
 const RELATIONSHIPS = [
   { value: "sibling", label: "Sibling" },
@@ -26,6 +26,31 @@ export function IdentityForm({ instrumentId }: { instrumentId: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Keep the guarantor on the step their instrument is actually at, so a
+  // stale link cannot submit details the API will reject.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function guard() {
+      try {
+        const instrument = await getInstrument(instrumentId);
+        if (cancelled) return;
+        if (instrument.status === "Pending Signature") {
+          router.replace(`/guarantor/${instrumentId}/review`);
+        } else if (instrument.status !== "Pending Verification") {
+          setError("This request is no longer awaiting your identity details.");
+        }
+      } catch {
+        if (!cancelled) setError("Could not load this request.");
+      }
+    }
+
+    void guard();
+    return () => {
+      cancelled = true;
+    };
+  }, [instrumentId, router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
