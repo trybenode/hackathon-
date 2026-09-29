@@ -7,7 +7,6 @@
  *   text-display, text-h1 … text-body-sm, text-button
  *   rounded-sm … rounded-xl, rounded-pill
  *   shadow-1, shadow-2, shadow-3
- *   p-xs, gap-xs
  */
 @theme {
   /* Primary — cyan */
@@ -81,8 +80,9 @@
   --text-button--line-height: 24px;
   --text-button--font-weight: 600;
 
-  /* Spacing (Tailwind's base unit is already 4px, so p-1 === p-xs) */
-  --spacing-xs: 4px;
+  /* Spacing: Tailwind's base unit is already 4px (p-1 = 4px, p-2 = 8px, ...),
+     so the guide's XS step needs no token. Defining --spacing-xs would also
+     override built-in widths like max-w-xs. */
 
   /* Border radius */
   --radius-sm: 4px;
