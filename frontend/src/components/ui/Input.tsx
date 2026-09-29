@@ -60,7 +60,7 @@ export function Input({
         {lead && (
           <>
             <span className="shrink-0 group-has-[input:placeholder-shown]:text-grey-400">{lead}</span>
-            <span aria-hidden className="h-5 w-px shrink-0 bg-grey-200" />
+            <span aria-hidden className="h-5 w-px shrink-0 bg-stroke" />
           </>
         )}
         <div className={cn("relative flex flex-1 self-stretch", labelInside && "pt-4")}>

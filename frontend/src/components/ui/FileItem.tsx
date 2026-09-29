@@ -86,7 +86,7 @@ export function FileItem({
     <div
       className={cn(
         "flex w-full items-start gap-3 rounded-lg border px-3 py-3",
-        failed ? "border-error-light bg-error-light/40" : "border-grey-200 bg-white",
+        failed ? "border-error-light bg-error-light/40" : "border-stroke bg-white",
         className,
       )}
     >

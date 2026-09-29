@@ -34,6 +34,7 @@ const palette: { group: string; swatches: { name: string; className: string }[] 
     group: "Primary — cyan",
     // Class names are written in full: Tailwind only sees literal strings in source.
     swatches: [
+      { name: "primary-25", className: "bg-primary-25" },
       { name: "primary-50", className: "bg-primary-50" },
       { name: "primary-100", className: "bg-primary-100" },
       { name: "primary-300", className: "bg-primary-300" },
@@ -56,13 +57,16 @@ const palette: { group: string; swatches: { name: string; className: string }[] 
       { name: "grey-200", className: "bg-grey-200" },
       { name: "grey-400", className: "bg-grey-400" },
       { name: "grey-600", className: "bg-grey-600" },
+      { name: "grey-800", className: "bg-grey-800" },
       { name: "grey-900", className: "bg-grey-900" },
+      { name: "stroke", className: "bg-stroke" },
     ],
   },
   {
     group: "Semantic",
     swatches: [
       { name: "error", className: "bg-error" },
+      { name: "error-mid", className: "bg-error-mid" },
       { name: "warning", className: "bg-warning" },
       { name: "info", className: "bg-info" },
       { name: "success", className: "bg-success" },
@@ -78,7 +82,6 @@ const palette: { group: string; swatches: { name: string; className: string }[] 
       { name: "badge-pending", className: "bg-badge-pending" },
       { name: "badge-building", className: "bg-badge-building" },
       { name: "orange", className: "bg-orange" },
-      { name: "grey-800", className: "bg-grey-800" },
     ],
   },
 ];
