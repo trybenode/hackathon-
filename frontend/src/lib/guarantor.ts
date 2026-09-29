@@ -109,6 +109,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     cache: "no-store",
+    // The session is an HTTP-only cookie, so it has to ride along.
+    credentials: "include",
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
 
@@ -119,6 +121,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(detail, response.status);
   }
 
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -187,6 +190,7 @@ export async function submitIdentity(
     method: "POST",
     body: form,
     cache: "no-store",
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -210,6 +214,7 @@ export async function submitLiveness(instrumentId: string, frame: Blob) {
     method: "POST",
     body: form,
     cache: "no-store",
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -233,4 +238,38 @@ export function revokeInstrument(instrumentId: string, reason: string) {
     method: "POST",
     body: JSON.stringify({ reason }),
   });
+}
+
+export type SignedInUser = {
+  user_id: string;
+  email: string;
+  display_name: string;
+};
+
+/**
+ * Asks the API to email a login code.
+ *
+ * `debug_code` comes back only outside production, so the flow can be tested
+ * before the email provider is wired up.
+ */
+export function requestLoginCode(email: string) {
+  return request<{ sent: boolean; debug_code: string | null }>("/auth/code", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function verifyLoginCode(email: string, code: string) {
+  return request<SignedInUser>("/auth/verify", {
+    method: "POST",
+    body: JSON.stringify({ email, code }),
+  });
+}
+
+export function getSignedInUser() {
+  return request<SignedInUser>("/auth/me");
+}
+
+export function signOut() {
+  return request<void>("/auth/logout", { method: "POST" });
 }

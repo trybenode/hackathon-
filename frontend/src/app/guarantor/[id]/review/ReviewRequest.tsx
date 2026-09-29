@@ -55,7 +55,7 @@ export function ReviewRequest({ instrumentId }: { instrumentId: string }) {
         // link; send them on to the step they stopped at rather than offering
         // an Accept that the API will refuse.
         if (loaded.status === "Pending Verification") {
-          router.replace(`/guarantor/${instrumentId}/identity`);
+          router.replace(`/guarantor/${instrumentId}/sign-in`);
           return;
         }
 
@@ -89,7 +89,11 @@ export function ReviewRequest({ instrumentId }: { instrumentId: string }) {
           timestamp: new Date().toISOString(),
         },
       });
-      router.push(accepted ? `/guarantor/${instrumentId}/identity` : `/guarantor/${instrumentId}/declined`);
+      router.push(
+        accepted
+          ? `/guarantor/${instrumentId}/sign-in?email=${encodeURIComponent(instrument.guarantor.email ?? "")}`
+          : `/guarantor/${instrumentId}/declined`,
+      );
     } catch (cause) {
       // A 409 means the request moved on since this page loaded, most often
       // because it was already answered elsewhere.

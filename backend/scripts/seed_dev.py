@@ -5,9 +5,13 @@ Used by: developers running the API locally without Postgres/Neon.
 
 Usage:
     cd backend
-    .venv/bin/python scripts/seed_dev.py
+    .venv/bin/python scripts/seed_dev.py                # create schema + demo rows
+    .venv/bin/python scripts/seed_dev.py --schema-only   # create missing tables only
 
 Prints the worker and job ids to use when creating guarantor instruments.
+
+The local SQLite database is built by create_all rather than migrations, so
+run this with --schema-only after pulling a change that adds a table.
 """
 
 import asyncio
@@ -38,10 +42,18 @@ DB_URL = os.environ.get("DATABASE_URL") or f"sqlite+aiosqlite:///{DB_PATH}"
 
 
 async def main() -> None:
+    schema_only = "--schema-only" in sys.argv
+
     engine = create_async_engine(DB_URL)
     async with engine.begin() as connection:
         # Harmless on a migrated database: existing tables are left alone.
         await connection.run_sync(Base.metadata.create_all)
+
+    if schema_only:
+        print(f"DATABASE_URL={DB_URL}")
+        print("Schema is up to date.")
+        await engine.dispose()
+        return
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
