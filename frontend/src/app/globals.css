@@ -29,6 +29,12 @@
   --color-grey-600: #757575;
   --color-grey-900: #212121;
 
+  /* Status — sampled from the input field designs, not in the style guide */
+  --color-success-300: #a3dcae;
+  --color-success-600: #16a34a;
+  --color-error-300: #f1a7b5;
+  --color-error-600: #b4133a;
+
   /* Semantic aliases */
   --color-background: #ffffff;
   --color-foreground: var(--color-grey-900);
