@@ -31,3 +31,4 @@ htmlcov/
 *.tsbuildinfo
 .neon
 backend/local_dev.db
+frontend/public/mediapipe/

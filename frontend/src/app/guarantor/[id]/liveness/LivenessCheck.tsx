@@ -4,12 +4,20 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, CheckIcon, Modal } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import {
+  GUIDANCE_COPY,
+  loadFaceDetector,
+  readFrame,
+  type FaceGuidance,
+} from "@/lib/faceDetection";
 import { ApiError, getInstrument, submitLiveness } from "@/lib/guarantor";
 
 type Stage = "idle" | "capturing" | "checking" | "verified" | "error";
 
 /** JPEG quality for the captured frame: enough for a provider, small to send. */
 const FRAME_QUALITY = 0.85;
+/** How long the face must stay well framed before capture fires. */
+const HOLD_STILL_MS = 1500;
 
 export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
   const router = useRouter();
@@ -17,6 +25,11 @@ export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
   const streamRef = useRef<MediaStream | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [guidance, setGuidance] = useState<FaceGuidance>("searching");
+  /** False when detection is unavailable, so capture stays manual. */
+  const [autoCapture, setAutoCapture] = useState(true);
+  const [detectorReady, setDetectorReady] = useState(false);
+  const captureRef = useRef<() => Promise<void>>(null);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -51,6 +64,75 @@ export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
 
   useEffect(() => stopCamera, [stopCamera]);
 
+  // Warm the detector while the guarantor reads the instructions, so Begin is
+  // not followed by a model download. Failure just means manual capture.
+  useEffect(() => {
+    let cancelled = false;
+
+    loadFaceDetector()
+      .then(() => {
+        if (!cancelled) setDetectorReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setAutoCapture(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Watch the stream and fire capture once the face holds steady in frame.
+  useEffect(() => {
+    if (stage !== "capturing") return;
+
+    let frameId = 0;
+    let cancelled = false;
+    let steadySince: number | null = null;
+
+    async function watch() {
+      let detector;
+      try {
+        detector = await loadFaceDetector();
+      } catch {
+        // No detector: leave the guarantor with the manual Capture button.
+        if (!cancelled) setAutoCapture(false);
+        return;
+      }
+
+      const tick = () => {
+        if (cancelled) return;
+        const video = videoRef.current;
+
+        if (video && video.readyState >= 2) {
+          const reading = readFrame(detector, video, performance.now());
+          setGuidance(reading.guidance);
+
+          if (reading.guidance === "hold-still") {
+            steadySince ??= performance.now();
+            if (performance.now() - steadySince >= HOLD_STILL_MS) {
+              cancelled = true;
+              void captureRef.current?.();
+              return;
+            }
+          } else {
+            steadySince = null;
+          }
+        }
+
+        frameId = requestAnimationFrame(tick);
+      };
+
+      frameId = requestAnimationFrame(tick);
+    }
+
+    void watch();
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frameId);
+    };
+  }, [stage]);
+
   async function begin() {
     setError(null);
     try {
@@ -63,6 +145,7 @@ export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
+      setGuidance("searching");
       setStage("capturing");
     } catch {
       setStage("error");
@@ -70,7 +153,7 @@ export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
     }
   }
 
-  async function capture() {
+  const capture = useCallback(async function capture() {
     const video = videoRef.current;
     if (!video) return;
 
@@ -99,10 +182,20 @@ export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
         cause instanceof ApiError ? cause.message : "Could not complete the check. Try again.",
       );
     }
-  }
+  }, [instrumentId, stopCamera]);
+
+  // Keep the ref pointing at the latest capture so the detection loop can call
+  // it without listing capture as a dependency and restarting itself.
+  useEffect(() => {
+    captureRef.current = capture;
+  }, [capture]);
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-col">
+    <main
+      className="mx-auto flex w-full max-w-md flex-col"
+      // Surfaced so the capture path can be checked without a camera.
+      data-detector={detectorReady ? "ready" : autoCapture ? "loading" : "unavailable"}
+    >
       <div className="h-28 w-full rounded-b-xl bg-info-light" />
 
       <div className="flex flex-col gap-2 px-6 pt-8">
@@ -114,7 +207,7 @@ export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
 
       <div className="flex flex-col items-center gap-8 px-6 pt-10 pb-12">
         <p className="text-body-md text-grey-900">
-          {stage === "capturing" ? "Hold still" : "Move closer"}
+          {stage === "capturing" ? GUIDANCE_COPY[guidance] : "Move closer"}
         </p>
 
         <div
@@ -142,9 +235,15 @@ export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
         )}
 
         {stage === "capturing" ? (
-          <Button size="lg" className="rounded-pill px-12" onClick={capture}>
-            Capture
-          </Button>
+          autoCapture ? (
+            <p className="text-body-sm text-grey-600">
+              Capturing automatically once your face is steady
+            </p>
+          ) : (
+            <Button size="lg" className="rounded-pill px-12" onClick={capture}>
+              Capture
+            </Button>
+          )
         ) : (
           <Button
             size="lg"
