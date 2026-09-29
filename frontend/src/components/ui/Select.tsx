@@ -170,8 +170,8 @@ export function Select({
             onKeyDown={handleKeyDown}
             className="flex min-w-0 flex-1 items-center gap-2 self-stretch text-left outline-none disabled:cursor-not-allowed"
           >
-            {(selected?.icon ?? leadingIcon) && (
-              <span className="flex shrink-0">{selected?.icon ?? leadingIcon}</span>
+            {(leadingIcon ?? selected?.icon) && (
+              <span className="flex shrink-0">{leadingIcon ?? selected?.icon}</span>
             )}
             <span className={cn("truncate", !selected && "text-grey-400")}>
               {selected ? selected.label : placeholder}

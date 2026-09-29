@@ -1,5 +1,14 @@
 import type { ReactNode } from "react";
-import { Button, Input, Select, Textarea, type ButtonSize, type ButtonVariant } from "@/components/ui";
+import {
+  Button,
+  Input,
+  MagicStarIcon,
+  MagicpenIcon,
+  Select,
+  Textarea,
+  type ButtonSize,
+  type ButtonVariant,
+} from "@/components/ui";
 
 export const metadata = { title: "Design system" };
 
@@ -8,18 +17,10 @@ const buttonSizes: ButtonSize[] = ["xl", "lg", "md", "sm"];
 
 const helper = "We'll never share your details. See our Privacy Policy.";
 
-function StarIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden>
-      <path d="M8 1.5l1.9 4 4.4.5-3.3 3 .9 4.3L8 11.1l-3.9 2.2.9-4.3-3.3-3 4.4-.5z" />
-    </svg>
-  );
-}
-
 const options = ["Design", "Engineering", "Operations", "Support"].map((label) => ({
   value: label.toLowerCase(),
   label,
-  icon: <StarIcon />,
+  icon: <MagicpenIcon />,
 }));
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -60,13 +61,13 @@ export default function DesignSystemPage() {
 
       <Section title="Input fields">
         <Grid>
-          <Input label="First name" placeholder="Input text" helperText={helper} leadingIcon={<StarIcon />} trailingIcon={<StarIcon />} />
-          <Input size="lg" label="First name" placeholder="Input text" helperText={helper} leadingIcon={<StarIcon />} trailingIcon={<StarIcon />} />
-          <Input size="lg" labelPlacement="inside" label="First name" helperText={helper} leadingIcon={<StarIcon />} trailingIcon={<StarIcon />} />
-          <Input label="First name" defaultValue="Input text" status="success" helperText={helper} leadingIcon={<StarIcon />} />
-          <Input size="lg" label="First name" defaultValue="Input text" status="error" helperText="Invalid message" leadingIcon={<StarIcon />} />
-          <Input size="lg" labelPlacement="inside" label="First name" defaultValue="Input text" status="error" helperText="Invalid message" leadingIcon={<StarIcon />} />
-          <Input label="First name" placeholder="Input text" helperText={helper} leadingIcon={<StarIcon />} disabled />
+          <Input label="First name" placeholder="Input text" helperText={helper} leadingIcon={<MagicStarIcon />} trailingIcon={<MagicStarIcon />} />
+          <Input size="lg" label="First name" placeholder="Input text" helperText={helper} leadingIcon={<MagicStarIcon />} trailingIcon={<MagicStarIcon />} />
+          <Input size="lg" labelPlacement="inside" label="First name" helperText={helper} leadingIcon={<MagicStarIcon />} trailingIcon={<MagicStarIcon />} />
+          <Input label="First name" defaultValue="Input text" status="success" helperText={helper} leadingIcon={<MagicStarIcon />} />
+          <Input size="lg" label="First name" defaultValue="Input text" status="error" helperText="Invalid message" leadingIcon={<MagicStarIcon />} />
+          <Input size="lg" labelPlacement="inside" label="First name" defaultValue="Input text" status="error" helperText="Invalid message" leadingIcon={<MagicStarIcon />} />
+          <Input label="First name" placeholder="Input text" helperText={helper} leadingIcon={<MagicStarIcon />} disabled />
           <Input size="lg" label="First name" placeholder="Input text" helperText={helper} disabled />
           <Input size="lg" labelPlacement="inside" label="First name" helperText={helper} disabled />
         </Grid>
@@ -94,12 +95,12 @@ export default function DesignSystemPage() {
 
       <Section title="Dropdown input">
         <Grid>
-          <Select label="Team" placeholder="Input text" helperText={helper} options={options} leadingIcon={<StarIcon />} />
-          <Select size="lg" label="Team" placeholder="Input text" helperText={helper} options={options} leadingIcon={<StarIcon />} />
-          <Select label="Team" defaultValue="design" clearable helperText={helper} options={options} />
-          <Select size="lg" label="Team" defaultValue="design" clearable helperText={helper} options={options} />
+          <Select label="Team" placeholder="Input text" helperText={helper} options={options} leadingIcon={<MagicStarIcon />} />
+          <Select size="lg" label="Team" placeholder="Input text" helperText={helper} options={options} leadingIcon={<MagicStarIcon />} />
+          <Select label="Team" defaultValue="design" clearable helperText={helper} options={options} leadingIcon={<MagicStarIcon />} />
+          <Select size="lg" label="Team" defaultValue="design" clearable helperText={helper} options={options} leadingIcon={<MagicStarIcon />} />
           <Select label="Team" status="error" helperText="Invalid message" options={options} placeholder="Input text" />
-          <Select label="Team" placeholder="Input text" helperText={helper} options={options} leadingIcon={<StarIcon />} disabled />
+          <Select label="Team" placeholder="Input text" helperText={helper} options={options} leadingIcon={<MagicStarIcon />} disabled />
         </Grid>
       </Section>
     </main>
