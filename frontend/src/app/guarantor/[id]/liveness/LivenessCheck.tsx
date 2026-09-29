@@ -26,6 +26,10 @@ export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
   const [guidance, setGuidance] = useState<FaceGuidance>("searching");
+  /** Kept after a failed upload so the same shot can be retried. */
+  const capturedRef = useRef<Blob | null>(null);
+  /** Mirrors capturedRef for rendering, since refs cannot be read in render. */
+  const [hasCapture, setHasCapture] = useState(false);
   /** False when detection is unavailable, so capture stays manual. */
   const [autoCapture, setAutoCapture] = useState(true);
   const [detectorReady, setDetectorReady] = useState(false);
@@ -170,11 +174,15 @@ export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
       return;
     }
 
+    capturedRef.current = frame;
+    setHasCapture(true);
     setStage("checking");
     stopCamera();
 
     try {
       await submitLiveness(instrumentId, frame);
+      capturedRef.current = null;
+      setHasCapture(false);
       setStage("verified");
     } catch (cause) {
       setStage("error");
@@ -183,6 +191,27 @@ export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
       );
     }
   }, [instrumentId, stopCamera]);
+
+  /** Resend the frame already taken, so a dropped request costs no re-shoot. */
+  const retryUpload = useCallback(async () => {
+    const frame = capturedRef.current;
+    if (!frame) return;
+
+    setStage("checking");
+    setError(null);
+
+    try {
+      await submitLiveness(instrumentId, frame);
+      capturedRef.current = null;
+      setHasCapture(false);
+      setStage("verified");
+    } catch (cause) {
+      setStage("error");
+      setError(
+        cause instanceof ApiError ? cause.message : "Could not complete the check. Try again.",
+      );
+    }
+  }, [instrumentId]);
 
   // Keep the ref pointing at the latest capture so the detection loop can call
   // it without listing capture as a dependency and restarting itself.
@@ -244,6 +273,19 @@ export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
               Capture
             </Button>
           )
+        ) : stage === "error" && hasCapture ? (
+          <div className="flex flex-col items-center gap-3">
+            <Button size="lg" className="rounded-pill px-12" onClick={retryUpload}>
+              Retry
+            </Button>
+            <button
+              type="button"
+              onClick={begin}
+              className="text-body-sm text-grey-600 underline"
+            >
+              Take a new photo
+            </button>
+          </div>
         ) : (
           <Button
             size="lg"
@@ -275,7 +317,7 @@ export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
         <Button
           size="lg"
           className="mt-2 rounded-pill px-10"
-          onClick={() => router.push(`/guarantor/${instrumentId}`)}
+          onClick={() => router.push("/dashboard")}
         >
           Get started
         </Button>
