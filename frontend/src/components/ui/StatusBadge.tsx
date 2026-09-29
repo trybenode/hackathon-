@@ -17,8 +17,8 @@ const dotClasses: Record<Status, string> = {
   completed: "text-success",
   pending: "text-warning",
   cancelled: "text-grey-400",
-  failed: "text-error",
-  suspended: "text-error",
+  failed: "text-error-mid",
+  suspended: "text-error-mid",
   processing: "text-info",
   expired: "text-grey-800",
 };

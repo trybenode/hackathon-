@@ -191,7 +191,7 @@ export function Select({
               >
                 <CloseIcon />
               </button>
-              <span aria-hidden className="h-5 w-px shrink-0 bg-grey-200" />
+              <span aria-hidden className="h-5 w-px shrink-0 bg-stroke" />
             </>
           )}
 
@@ -211,7 +211,7 @@ export function Select({
             id={listboxId}
             role="listbox"
             aria-labelledby={id}
-            className="absolute inset-x-0 top-full z-20 mt-1 max-h-60 overflow-auto rounded-md border border-grey-200 bg-white py-2 shadow-2"
+            className="absolute inset-x-0 top-full z-20 mt-1 max-h-60 overflow-auto rounded-md border border-stroke bg-white py-2 shadow-2"
           >
             {options.map((option, index) => (
               <li

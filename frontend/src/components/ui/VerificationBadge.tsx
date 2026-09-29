@@ -7,7 +7,7 @@ export type VerificationStatus = "verified" | "pending" | "failed" | "needs-revi
 const icons: Record<VerificationStatus, ReactNode> = {
   verified: <CheckIcon className="text-success" />,
   pending: <ClockIcon className="text-warning" />,
-  failed: <CloseIcon className="text-error" strokeWidth="2" />,
+  failed: <CloseIcon className="text-error-mid" strokeWidth="2" />,
   "needs-review": <ExclamationIcon className="text-orange" />,
 };
 

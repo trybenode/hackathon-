@@ -10,6 +10,7 @@
  */
 @theme {
   /* Primary — cyan */
+  --color-primary-25: #faffff;
   --color-primary-50: #e6f8fe;
   --color-primary-100: #ccf1fc;
   --color-primary-300: #66d5f5;
@@ -24,36 +25,40 @@
   /* Neutral scale */
   --color-grey-50: #fafafa;
   --color-grey-200: #eeeeee;
-  --color-grey-400: #bdbdbd;
-  --color-grey-600: #757575;
-  --color-grey-800: #424242;
+  --color-grey-400: #bfbfbf;
+  --color-grey-600: #727272;
+  --color-grey-800: #3f3f3f;
   --color-grey-900: #212121;
+  /* Input field / stroke */
+  --color-stroke: #e7e5e4;
 
   /* Semantic colors */
-  --color-error: #f14d4d;
-  --color-error-light: #ffcdd2;
+  --color-error: #b20e2a;
+  --color-error-light: #ffe4e6;
+  /* Brighter red for status dots and icons */
+  --color-error-mid: #f14d4d;
   --color-warning: #ebc643;
   --color-warning-light: #fff9c4;
   --color-info: #2979d4;
   --color-info-light: #bbdefb;
-  --color-success: #429146;
-  --color-success-light: #c8e6c9;
-  /* Lighter green used by the upload progress bar. */
+  --color-success: #0bb02f;
+  --color-success-light: #dcfadd;
+  /* Lighter green used by the upload progress bar */
   --color-success-mid: #50cd89;
 
-  /* Badge backgrounds, taken from the badge designs */
+  /* Trust badges */
   --color-badge-high: #dcfce7;
   --color-badge-medium: #fef3c7;
+  --color-badge-medium-text: #b45309;
   --color-badge-low: #fff9c4;
+  --color-badge-low-text: #b91c1c;
+  --color-badge-building: #e6f8fe;
+  --color-badge-building-text: #7e22ce;
   --color-badge-verified: #e0f2fe;
   --color-badge-pending: #f3e8ff;
-  --color-badge-building: #e6f8fe;
+  --color-badge-pending-text: #9333ea;
   /* Orange for the "Needs review" badge — read off the designs, not in the guide */
   --color-orange: #f97316;
-
-  /* Badge label colors not in the guide — read off the designs */
-  --color-badge-medium-text: #b45309;
-  --color-badge-pending-text: #9333ea;
 
   /* Semantic aliases */
   --color-background: #ffffff;

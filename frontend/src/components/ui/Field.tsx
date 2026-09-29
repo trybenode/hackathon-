@@ -17,7 +17,7 @@ export type FieldBaseProps = {
 
 const statusBoxClasses: Record<FieldStatus, string> = {
   default:
-    "text-grey-900 border-grey-200 hover:not-focus-within:bg-grey-200 hover:not-focus-within:border-grey-200 " +
+    "text-grey-900 border-stroke hover:not-focus-within:bg-grey-200 hover:not-focus-within:border-grey-200 " +
     "focus-within:border-primary-300 focus-within:ring-1 focus-within:ring-primary-300",
   success: "border-success-light ring-1 ring-success-light text-success",
   error: "border-error-light ring-1 ring-error-light text-error",
