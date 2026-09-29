@@ -167,6 +167,8 @@ class GuarantorInstrumentCreateRequest(ApiModel):
     scope: str = Field(min_length=1, max_length=1000)
     conditions: str = Field(min_length=1, max_length=2000)
     valid_until: datetime
+    #: Keep the instrument in Draft instead of sending it for signature.
+    as_draft: bool = False
 
 
 class GuarantorInstrumentCreateResponse(ApiModel):
@@ -197,9 +199,19 @@ class GuarantorSignResponse(ApiModel):
     signed_at: datetime
 
 
+class GuarantorTriggerRequest(ApiModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class GuarantorRevokeRequest(ApiModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
 class GuarantorSummary(ApiModel):
     full_name: str
     relationship: str
+    phone: str | None = None
+    email: str | None = None
 
 
 class GuarantorInstrumentResponse(ApiModel):
@@ -211,6 +223,14 @@ class GuarantorInstrumentResponse(ApiModel):
     status: str
     signed_at: datetime | None = None
     valid_until: datetime
+    job_id: UUID | None = None
+    triggered_at: datetime | None = None
+    status_reason: str | None = None
+    created_at: datetime | None = None
+
+
+class GuarantorInstrumentListResponse(ApiModel):
+    items: list[GuarantorInstrumentResponse]
 
 
 class TrustSummary(ApiModel):
