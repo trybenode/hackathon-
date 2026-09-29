@@ -3,15 +3,14 @@ import { UploadDemo } from "./UploadDemo";
 import {
   Badge,
   Button,
-  CheckIcon,
-  ExclamationIcon,
   Input,
   MagicStarIcon,
   MagicpenIcon,
   ProgressBar,
+  StatusBadge,
+  VerificationBadge,
   Select,
   Textarea,
-  CloseIcon,
   type ButtonSize,
   type ButtonVariant,
 } from "@/components/ui";
@@ -77,6 +76,9 @@ const palette: { group: string; swatches: { name: string; className: string }[] 
       { name: "badge-low", className: "bg-badge-low" },
       { name: "badge-verified", className: "bg-badge-verified" },
       { name: "badge-pending", className: "bg-badge-pending" },
+      { name: "badge-building", className: "bg-badge-building" },
+      { name: "orange", className: "bg-orange" },
+      { name: "grey-800", className: "bg-grey-800" },
     ],
   },
 ];
@@ -181,17 +183,24 @@ export default function DesignSystemPage() {
             <Badge tone="low" dot>
               Low
             </Badge>
+            <Badge tone="building" dot>
+              Building history
+            </Badge>
+          </div>
+          <div className="flex flex-wrap items-center gap-6">
+            {(["active", "completed", "pending", "cancelled"] as const).map((status) => (
+              <StatusBadge key={status} status={status} />
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-6">
+            {(["failed", "suspended", "processing", "expired"] as const).map((status) => (
+              <StatusBadge key={status} status={status} />
+            ))}
           </div>
           <div className="flex flex-wrap items-start gap-3">
-            <Badge tone="verified" icon={<CheckIcon width={12} height={12} />}>
-              Verified
-            </Badge>
-            <Badge tone="pending" icon={<ExclamationIcon width={12} height={12} />}>
-              Pending
-            </Badge>
-            <Badge tone="failed" icon={<CloseIcon width={12} height={12} />}>
-              Failed
-            </Badge>
+            {(["verified", "pending", "failed", "needs-review"] as const).map((status) => (
+              <VerificationBadge key={status} status={status} />
+            ))}
           </div>
           <div className="flex max-w-xs flex-col gap-3">
             <ProgressBar value={92} showValue label="Trust score" />
