@@ -467,3 +467,35 @@ class AuditEvent(UUIDTimestampMixin, Base):
     event_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
 
     __table_args__ = (Index("ix_audit_events_entity", "entity_type", "entity_id", "created_at"),)
+
+
+class LoginCode(UUIDTimestampMixin, Base):
+    """A one-time code emailed to a guarantor so they can prove an address.
+
+    Only the hash is stored, so a database leak does not hand out valid codes.
+    """
+
+    __tablename__ = "login_codes"
+
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    code_hash: Mapped[str] = mapped_column(String(128))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    __table_args__ = (Index("ix_login_codes_email_created", "email", "created_at"),)
+
+
+class UserSession(UUIDTimestampMixin, Base):
+    """A signed-in session, referenced by an HTTP-only cookie.
+
+    The cookie carries a random token; only its hash lives here, so the table
+    cannot be used to mint sessions.
+    """
+
+    __tablename__ = "user_sessions"
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
