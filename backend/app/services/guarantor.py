@@ -156,6 +156,10 @@ class LivenessCheckFailedError(GuarantorError):
     """The provider could not confirm a live person from the capture."""
 
 
+class IdentityCheckMissingError(GuarantorError):
+    """The guarantor's identity details have not been verified yet."""
+
+
 class InvalidTransitionError(GuarantorError):
     """The requested lifecycle move is not allowed from the current status."""
 
@@ -480,14 +484,27 @@ async def complete_liveness_check(
 ) -> GuarantorAgreement:
     """Run the liveness capture past the provider and activate the guarantee.
 
-    Standalone by design: the capture is not compared against NIN or BVN
-    records, so this check does not depend on the identity details check. The
-    frame is passed to the provider and dropped; only the reference is kept.
+    The check itself is standalone — the capture is never compared against NIN
+    or BVN records — but a guarantee only goes live once both checks have
+    passed, so the identity details must be verified first. The frame is passed
+    to the provider and dropped; only the reference is kept.
     """
 
     agreement = await _get_agreement(session, instrument_id)
     if agreement.status is not AgreementStatus.PENDING_VERIFICATION:
         raise InvalidTransitionError(agreement.status, AgreementStatus.ACTIVE)
+
+    passed_identity = await session.scalar(
+        select(IdentityVerification).where(
+            IdentityVerification.user_id == agreement.guarantor_user_id,
+            IdentityVerification.check_type == "identity",
+            IdentityVerification.status == "verified",
+        )
+    )
+    if passed_identity is None:
+        raise IdentityCheckMissingError(
+            "Your identity details must be verified before the liveness check."
+        )
 
     result = await (provider or default_liveness_provider).check(submission)
     session.add(

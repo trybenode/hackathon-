@@ -206,6 +206,20 @@ async def test_identity_rejects_malformed_numbers(
     app.dependency_overrides.clear()
 
 
+async def test_liveness_without_identity_returns_409(
+    session: AsyncSession, worker: Worker
+) -> None:
+    async with client_for(session) as client:
+        created = await client.post("/api/v1/guarantor-instruments", json=create_payload(worker))
+        instrument_id = created.json()["instrument_id"]
+        await client.post(f"/api/v1/guarantor-instruments/{instrument_id}/sign", json=SIGN_PAYLOAD)
+
+        response = await pass_liveness(client, instrument_id)
+        assert response.status_code == 409
+
+    app.dependency_overrides.clear()
+
+
 async def test_liveness_rejects_an_empty_capture(
     session: AsyncSession, worker: Worker
 ) -> None:
@@ -213,6 +227,7 @@ async def test_liveness_rejects_an_empty_capture(
         created = await client.post("/api/v1/guarantor-instruments", json=create_payload(worker))
         instrument_id = created.json()["instrument_id"]
         await client.post(f"/api/v1/guarantor-instruments/{instrument_id}/sign", json=SIGN_PAYLOAD)
+        await pass_identity(client, instrument_id)
 
         response = await client.post(
             f"/api/v1/guarantor-instruments/{instrument_id}/liveness",

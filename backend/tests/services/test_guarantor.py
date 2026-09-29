@@ -226,13 +226,26 @@ async def test_identity_check_rejects_malformed_numbers(
     assert record.status == "failed"
 
 
-async def test_liveness_runs_independently_of_the_identity_check(
+async def test_liveness_requires_a_passed_identity_check(
     session: AsyncSession, worker: Worker
 ) -> None:
-    """Liveness does not compare against NIN or BVN, so it needs no prior check."""
+    """A guarantee needs both checks: a selfie alone cannot activate it."""
 
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
     await service.sign_instrument(session, agreement.id, build_signature(), now=NOW)
+
+    with pytest.raises(service.IdentityCheckMissingError):
+        await service.complete_liveness_check(session, agreement.id, build_frame(), now=NOW)
+
+    assert agreement.status is AgreementStatus.PENDING_VERIFICATION
+
+
+async def test_liveness_activates_once_identity_has_passed(
+    session: AsyncSession, worker: Worker
+) -> None:
+    agreement = await service.create_instrument(session, build_request(worker), now=NOW)
+    await service.sign_instrument(session, agreement.id, build_signature(), now=NOW)
+    await service.submit_identity_check(session, agreement.id, build_submission())
 
     result = await service.complete_liveness_check(session, agreement.id, build_frame(), now=NOW)
 
@@ -244,6 +257,7 @@ async def test_liveness_rejects_an_empty_capture(
 ) -> None:
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
     await service.sign_instrument(session, agreement.id, build_signature(), now=NOW)
+    await service.submit_identity_check(session, agreement.id, build_submission())
 
     with pytest.raises(service.LivenessCheckFailedError):
         await service.complete_liveness_check(

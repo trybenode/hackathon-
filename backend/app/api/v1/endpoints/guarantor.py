@@ -29,6 +29,7 @@ from app.services.identity_provider import IdentitySubmission, LivenessSubmissio
 from app.services.guarantor import (
     GuarantorError,
     IdentityCheckFailedError,
+    IdentityCheckMissingError,
     LivenessCheckFailedError,
     InstrumentNotFoundError,
     InvalidTransitionError,
@@ -103,6 +104,8 @@ def _http_error(error: GuarantorError) -> HTTPException:
         return HTTPException(status_code=422, detail=str(error))
     if isinstance(error, LivenessCheckFailedError):
         return HTTPException(status_code=422, detail=str(error))
+    if isinstance(error, IdentityCheckMissingError):
+        return HTTPException(status_code=409, detail=str(error))
     return HTTPException(status_code=400, detail=str(error))
 
 
