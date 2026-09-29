@@ -29,11 +29,15 @@
   --color-grey-600: #757575;
   --color-grey-900: #212121;
 
-  /* Status — sampled from the input field designs, not in the style guide */
-  --color-success-300: #a3dcae;
-  --color-success-600: #16a34a;
-  --color-error-300: #f1a7b5;
-  --color-error-600: #b4133a;
+  /* Semantic colors */
+  --color-error: #f14d4d;
+  --color-error-light: #ffcdd2;
+  --color-warning: #ebc643;
+  --color-warning-light: #fff9c4;
+  --color-info: #2979d4;
+  --color-info-light: #bbdefb;
+  --color-success: #429146;
+  --color-success-light: #c8e6c9;
 
   /* Semantic aliases */
   --color-background: #ffffff;
