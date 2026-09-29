@@ -153,6 +153,51 @@ export function signInstrument(instrumentId: string, payload: SignInstrumentRequ
   });
 }
 
+export type IdentityDetails = {
+  first_name: string;
+  last_name: string;
+  phone: string;
+  address: string;
+  nin: string;
+  bvn: string;
+};
+
+export type IdentityCheckResponse = {
+  instrument_id: string;
+  check_type: string;
+  status: string;
+  provider_reference: string;
+};
+
+/**
+ * Sends identity details to the API as multipart, matching the form on the
+ * identity screen. The values go straight to the KYC provider; only the
+ * provider's reference is stored.
+ */
+export async function submitIdentity(
+  instrumentId: string,
+  details: IdentityDetails,
+  utilityBill?: File | null,
+) {
+  const form = new FormData();
+  Object.entries(details).forEach(([key, value]) => form.append(key, value));
+  if (utilityBill) form.append("utility_bill", utilityBill);
+
+  const response = await fetch(`${apiBaseUrl}/guarantor-instruments/${instrumentId}/identity`, {
+    method: "POST",
+    body: form,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const detail = body && typeof body.detail === "string" ? body.detail : response.statusText;
+    throw new ApiError(detail, response.status);
+  }
+
+  return response.json() as Promise<IdentityCheckResponse>;
+}
+
 export function triggerInstrument(instrumentId: string, reason: string) {
   return request<Instrument>(`/guarantor-instruments/${instrumentId}/trigger`, {
     method: "POST",

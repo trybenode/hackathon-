@@ -201,3 +201,14 @@ export function LocationPinIcon(props: IconProps) {
     </svg>
   );
 }
+
+/** Nigerian flag, used beside the +234 dial code. */
+export function NigeriaFlagIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 18 12" width="20" height="14" aria-hidden {...props}>
+      <rect width="18" height="12" rx="1.5" fill="#fff" />
+      <path d="M0 1.5A1.5 1.5 0 0 1 1.5 0H6v12H1.5A1.5 1.5 0 0 1 0 10.5z" fill="#008751" />
+      <path d="M12 0h4.5A1.5 1.5 0 0 1 18 1.5v9a1.5 1.5 0 0 1-1.5 1.5H12z" fill="#008751" />
+    </svg>
+  );
+}
