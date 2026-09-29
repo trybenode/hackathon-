@@ -2,6 +2,8 @@ export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from ".
 export { Input, type InputProps } from "./Input";
 export { Textarea, type TextareaProps } from "./Textarea";
 export { Select, type SelectOption, type SelectProps } from "./Select";
+export { Modal, type ModalProps } from "./Modal";
+export { Switch, type SwitchProps } from "./Switch";
 export { Badge, type BadgeProps, type BadgeTone } from "./Badge";
 export { StatusBadge, type Status, type StatusBadgeProps } from "./StatusBadge";
 export {

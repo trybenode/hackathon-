@@ -193,3 +193,11 @@ export function ClockIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function LocationPinIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden {...props}>
+      <path d="M8 1.5a4.75 4.75 0 0 0-4.75 4.75c0 3.4 4.06 7.65 4.23 7.83a.75.75 0 0 0 1.04 0c.17-.18 4.23-4.43 4.23-7.83A4.75 4.75 0 0 0 8 1.5Zm0 6.6a1.85 1.85 0 1 1 0-3.7 1.85 1.85 0 0 1 0 3.7Z" />
+    </svg>
+  );
+}
