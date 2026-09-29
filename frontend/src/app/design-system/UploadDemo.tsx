@@ -10,7 +10,7 @@ export function UploadDemo() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid max-w-4xl gap-6 md:grid-cols-2">
         <FileDropzone multiple onFiles={(files) => setPicked(files.map((file) => file.name))} />
         <FileDropzone disabled />
       </div>

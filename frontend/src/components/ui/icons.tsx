@@ -165,3 +165,11 @@ export function DotIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function AlertCircleIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden {...props}>
+      <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.75 10.25a.75.75 0 0 1-1.5 0v-.5a.75.75 0 0 1 1.5 0zm0-3.5a.75.75 0 0 1-1.5 0v-3a.75.75 0 0 1 1.5 0z" />
+    </svg>
+  );
+}

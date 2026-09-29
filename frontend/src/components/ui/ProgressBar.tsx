@@ -24,7 +24,15 @@ export type ProgressBarProps = {
   showValue?: boolean;
   /** Describes what is progressing, for screen readers. */
   label?: string;
+  /** Break the filled part into segments, as the upload bar does. */
+  segmented?: boolean;
   className?: string;
+};
+
+/** Gaps punched out of the fill, so the track shows through. */
+const segmentStyle = {
+  maskImage: "repeating-linear-gradient(to right, black 0 36px, transparent 36px 40px)",
+  WebkitMaskImage: "repeating-linear-gradient(to right, black 0 36px, transparent 36px 40px)",
 };
 
 export function ProgressBar({
@@ -32,6 +40,7 @@ export function ProgressBar({
   tone = "primary",
   showValue = false,
   label,
+  segmented = false,
   className,
 }: ProgressBarProps) {
   const percent = Math.round(Math.min(100, Math.max(0, value)));
@@ -47,8 +56,8 @@ export function ProgressBar({
         className="h-1.5 flex-1 overflow-hidden rounded-pill bg-grey-200"
       >
         <div
-          className={cn("h-full rounded-pill transition-all", fillClasses[tone])}
-          style={{ width: `${percent}%` }}
+          className={cn("h-full transition-all", !segmented && "rounded-pill", fillClasses[tone])}
+          style={{ width: `${percent}%`, ...(segmented ? segmentStyle : null) }}
         />
       </div>
       {showValue && (
