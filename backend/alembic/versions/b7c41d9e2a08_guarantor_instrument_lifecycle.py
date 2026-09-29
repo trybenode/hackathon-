@@ -18,7 +18,10 @@ down_revision: Union[str, Sequence[str], None] = "f0282d29c035"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-NEW_STATUSES = ("draft", "pending_signature", "pending_verification", "triggered")
+# SQLAlchemy stores this enum by member NAME, so the Postgres labels are
+# upper-case (REQUESTED, ACTIVE, ...). New labels must match that casing or
+# inserts fail with "invalid input value for enum agreement_status".
+NEW_STATUSES = ("DRAFT", "PENDING_SIGNATURE", "PENDING_VERIFICATION", "TRIGGERED")
 
 
 def upgrade() -> None:

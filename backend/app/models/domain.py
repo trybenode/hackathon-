@@ -145,6 +145,11 @@ class Worker(UUIDTimestampMixin, Base):
     history_status: Mapped[HistoryStatus] = mapped_column(
         Enum(HistoryStatus, name="history_status"), default=HistoryStatus.BUILDING_HISTORY
     )
+    #: What the worker does, e.g. "Cleaner". Shown to guarantors and clients.
+    role: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    #: Where the worker operates, e.g. "Lekki, Lagos".
+    location: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     user: Mapped[User] = relationship(back_populates="worker")
     outcomes: Mapped[list["NormalizedOutcome"]] = relationship(back_populates="worker")
