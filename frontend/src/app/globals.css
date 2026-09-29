@@ -37,6 +37,18 @@
   --color-info-light: #bbdefb;
   --color-success: #429146;
   --color-success-light: #c8e6c9;
+  /* Lighter green used by the upload progress bar. */
+  --color-success-mid: #50cd89;
+
+  /* Badge backgrounds, taken from the badge designs */
+  --color-badge-high: #dcfce7;
+  --color-badge-medium: #fef3c7;
+  --color-badge-low: #fff9c4;
+  --color-badge-verified: #e0f2fe;
+  --color-badge-pending: #f3e8ff;
+  /* Badge label colors not in the guide — read off the designs */
+  --color-badge-medium-text: #b45309;
+  --color-badge-pending-text: #9333ea;
 
   /* Semantic aliases */
   --color-background: #ffffff;

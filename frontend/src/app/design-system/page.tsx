@@ -71,6 +71,12 @@ const palette: { group: string; swatches: { name: string; className: string }[] 
       { name: "warning-light", className: "bg-warning-light" },
       { name: "info-light", className: "bg-info-light" },
       { name: "success-light", className: "bg-success-light" },
+      { name: "success-mid", className: "bg-success-mid" },
+      { name: "badge-high", className: "bg-badge-high" },
+      { name: "badge-medium", className: "bg-badge-medium" },
+      { name: "badge-low", className: "bg-badge-low" },
+      { name: "badge-verified", className: "bg-badge-verified" },
+      { name: "badge-pending", className: "bg-badge-pending" },
     ],
   },
 ];
@@ -166,24 +172,24 @@ export default function DesignSystemPage() {
       <Section title="Badges and status">
         <div className="flex flex-col gap-6">
           <div className="flex flex-wrap items-start gap-3">
-            <Badge tone="success" dot>
+            <Badge tone="high" dot>
               High
             </Badge>
-            <Badge tone="warning" dot>
+            <Badge tone="medium" dot>
               Medium
             </Badge>
-            <Badge tone="error" dot>
+            <Badge tone="low" dot>
               Low
             </Badge>
           </div>
           <div className="flex flex-wrap items-start gap-3">
-            <Badge tone="info" icon={<CheckIcon width={12} height={12} />}>
+            <Badge tone="verified" icon={<CheckIcon width={12} height={12} />}>
               Verified
             </Badge>
-            <Badge tone="warning" icon={<ExclamationIcon width={12} height={12} />}>
+            <Badge tone="pending" icon={<ExclamationIcon width={12} height={12} />}>
               Pending
             </Badge>
-            <Badge tone="error" icon={<CloseIcon width={12} height={12} />}>
+            <Badge tone="failed" icon={<CloseIcon width={12} height={12} />}>
               Failed
             </Badge>
           </div>

@@ -4,7 +4,7 @@ export type ProgressTone = "primary" | "success" | "warning" | "error";
 
 const fillClasses: Record<ProgressTone, string> = {
   primary: "bg-primary-400",
-  success: "bg-success",
+  success: "bg-success-mid",
   warning: "bg-warning",
   error: "bg-error",
 };
@@ -31,8 +31,8 @@ export type ProgressBarProps = {
 
 /** Gaps punched out of the fill, so the track shows through. */
 const segmentStyle = {
-  maskImage: "repeating-linear-gradient(to right, black 0 36px, transparent 36px 40px)",
-  WebkitMaskImage: "repeating-linear-gradient(to right, black 0 36px, transparent 36px 40px)",
+  maskImage: "repeating-linear-gradient(to right, black 0 34px, transparent 34px 35px)",
+  WebkitMaskImage: "repeating-linear-gradient(to right, black 0 34px, transparent 34px 35px)",
 };
 
 export function ProgressBar({

@@ -2,13 +2,32 @@ import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { DotIcon } from "./icons";
 
-export type BadgeTone = "success" | "warning" | "error" | "info" | "neutral";
+export type BadgeTone =
+  /* Named after the designs */
+  | "high"
+  | "medium"
+  | "low"
+  | "verified"
+  | "pending"
+  | "failed"
+  /* Generic fallbacks */
+  | "success"
+  | "warning"
+  | "error"
+  | "info"
+  | "neutral";
 
 const toneClasses: Record<BadgeTone, string> = {
+  high: "bg-badge-high text-success",
+  medium: "bg-badge-medium text-badge-medium-text",
+  low: "bg-badge-low text-error",
+  verified: "bg-badge-verified text-info",
+  pending: "bg-badge-pending text-badge-pending-text",
+  failed: "bg-error-light text-error",
   success: "bg-success-light text-success",
-  warning: "bg-warning-light text-warning",
+  warning: "bg-warning-light text-badge-medium-text",
   error: "bg-error-light text-error",
-  info: "bg-primary-100 text-primary-500",
+  info: "bg-info-light text-info",
   neutral: "bg-grey-200 text-grey-600",
 };
 
