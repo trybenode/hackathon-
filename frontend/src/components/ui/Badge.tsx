@@ -7,6 +7,7 @@ export type BadgeTone =
   | "high"
   | "medium"
   | "low"
+  | "building"
   | "verified"
   | "pending"
   | "failed"
@@ -21,6 +22,7 @@ const toneClasses: Record<BadgeTone, string> = {
   high: "bg-badge-high text-success",
   medium: "bg-badge-medium text-badge-medium-text",
   low: "bg-badge-low text-error",
+  building: "bg-badge-building text-primary-500",
   verified: "bg-badge-verified text-info",
   pending: "bg-badge-pending text-badge-pending-text",
   failed: "bg-error-light text-error",
