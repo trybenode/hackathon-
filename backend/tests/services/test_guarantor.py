@@ -25,7 +25,7 @@ from app.schemas.api import (
     SignatureMetadata,
 )
 from app.services import guarantor as service
-from app.services.identity_provider import IdentitySubmission
+from app.services.identity_provider import IdentitySubmission, LivenessSubmission
 
 NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 
@@ -72,6 +72,12 @@ def build_submission(**overrides) -> IdentitySubmission:
     return IdentitySubmission(**fields)
 
 
+def build_frame(size: int = 512) -> LivenessSubmission:
+    """A capture large enough for the stub provider to accept."""
+
+    return LivenessSubmission(image=b"\xff\xd8" + b"x" * size)
+
+
 async def activate(session: AsyncSession, instrument_id, *, at: datetime | None = None):
     """Accept the terms, pass the identity check, then pass liveness."""
 
@@ -79,7 +85,7 @@ async def activate(session: AsyncSession, instrument_id, *, at: datetime | None 
     await service.sign_instrument(session, instrument_id, build_signature(at=moment), now=moment)
     await service.submit_identity_check(session, instrument_id, build_submission())
     return await service.complete_liveness_check(
-        session, instrument_id, provider="smile_id", provider_reference="SID-123", now=moment
+        session, instrument_id, build_frame(), now=moment
     )
 
 
@@ -220,18 +226,35 @@ async def test_identity_check_rejects_malformed_numbers(
     assert record.status == "failed"
 
 
-async def test_liveness_requires_a_passed_identity_check(
+async def test_liveness_runs_independently_of_the_identity_check(
+    session: AsyncSession, worker: Worker
+) -> None:
+    """Liveness does not compare against NIN or BVN, so it needs no prior check."""
+
+    agreement = await service.create_instrument(session, build_request(worker), now=NOW)
+    await service.sign_instrument(session, agreement.id, build_signature(), now=NOW)
+
+    result = await service.complete_liveness_check(session, agreement.id, build_frame(), now=NOW)
+
+    assert result.status is AgreementStatus.ACTIVE
+
+
+async def test_liveness_rejects_an_empty_capture(
     session: AsyncSession, worker: Worker
 ) -> None:
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
     await service.sign_instrument(session, agreement.id, build_signature(), now=NOW)
 
-    with pytest.raises(service.IdentityCheckMissingError):
+    with pytest.raises(service.LivenessCheckFailedError):
         await service.complete_liveness_check(
-            session, agreement.id, provider="smile_id", provider_reference="SID-1", now=NOW
+            session, agreement.id, LivenessSubmission(image=b""), now=NOW
         )
 
     assert agreement.status is AgreementStatus.PENDING_VERIFICATION
+    failed = await session.scalar(
+        select(IdentityVerification).where(IdentityVerification.check_type == "liveness")
+    )
+    assert failed is not None and failed.status == "failed"
 
 
 async def test_verification_activates_the_guarantee(
@@ -243,11 +266,7 @@ async def test_verification_activates_the_guarantee(
 
     verified_at = NOW + timedelta(hours=2)
     result = await service.complete_liveness_check(
-        session,
-        agreement.id,
-        provider="smile_id",
-        provider_reference="SID-123",
-        now=verified_at,
+        session, agreement.id, build_frame(), now=verified_at
     )
 
     assert result.status is AgreementStatus.ACTIVE
@@ -260,8 +279,8 @@ async def test_verification_activates_the_guarantee(
         )
     )
     assert liveness is not None
-    assert liveness.provider == "smile_id"
-    assert liveness.provider_reference == "SID-123"
+    assert liveness.provider == "stub"
+    assert liveness.provider_reference.startswith("STUB-LIVE-")
     assert liveness.status == "verified"
 
 

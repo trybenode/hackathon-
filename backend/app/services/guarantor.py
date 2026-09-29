@@ -45,6 +45,9 @@ from app.schemas.api import GuarantorInstrumentCreateRequest, GuarantorSignReque
 from app.services.identity_provider import (
     IdentityProvider,
     IdentitySubmission,
+    LivenessProvider,
+    LivenessSubmission,
+    default_liveness_provider,
     default_provider,
 )
 
@@ -149,8 +152,8 @@ class IdentityCheckFailedError(GuarantorError):
     """The provider could not verify the guarantor's identity details."""
 
 
-class IdentityCheckMissingError(GuarantorError):
-    """Liveness cannot complete before the identity details check passes."""
+class LivenessCheckFailedError(GuarantorError):
+    """The provider could not confirm a live person from the capture."""
 
 
 class InvalidTransitionError(GuarantorError):
@@ -470,47 +473,52 @@ async def submit_identity_check(
 async def complete_liveness_check(
     session: AsyncSession,
     instrument_id: UUID,
+    submission: LivenessSubmission,
     *,
-    provider: str,
-    provider_reference: str,
+    provider: LivenessProvider | None = None,
     now: datetime | None = None,
 ) -> GuarantorAgreement:
-    """Record the liveness result and bring the guarantee live.
+    """Run the liveness capture past the provider and activate the guarantee.
 
-    Requires a passed identity check first, so a guarantee cannot go active on
-    a face scan alone.
+    Standalone by design: the capture is not compared against NIN or BVN
+    records, so this check does not depend on the identity details check. The
+    frame is passed to the provider and dropped; only the reference is kept.
     """
 
     agreement = await _get_agreement(session, instrument_id)
+    if agreement.status is not AgreementStatus.PENDING_VERIFICATION:
+        raise InvalidTransitionError(agreement.status, AgreementStatus.ACTIVE)
 
-    passed_identity = await session.scalar(
-        select(IdentityVerification).where(
-            IdentityVerification.user_id == agreement.guarantor_user_id,
-            IdentityVerification.check_type == "identity",
-            IdentityVerification.status == "verified",
-        )
-    )
-    if passed_identity is None:
-        raise IdentityCheckMissingError(
-            "Identity details must be verified before the liveness check."
-        )
-
-    apply_transition(agreement, AgreementStatus.ACTIVE, at=now)
+    result = await (provider or default_liveness_provider).check(submission)
     session.add(
         IdentityVerification(
             user_id=agreement.guarantor_user_id,
-            provider=provider,
-            provider_reference=provider_reference,
-            status="verified",
+            provider=result.provider,
+            provider_reference=result.reference,
+            status=result.status,
             check_type="liveness",
         )
     )
+
+    if not result.verified:
+        _record_audit(
+            session,
+            agreement=agreement,
+            action="guarantor.liveness_failed",
+            actor_id=agreement.guarantor_user_id,
+            metadata={"provider": result.provider},
+        )
+        raise LivenessCheckFailedError(
+            "We could not confirm a live capture. Try again in better lighting."
+        )
+
+    apply_transition(agreement, AgreementStatus.ACTIVE, at=now)
     _record_audit(
         session,
         agreement=agreement,
         action="guarantor.identity_verified",
         actor_id=agreement.guarantor_user_id,
-        metadata={"provider": provider, "provider_reference": provider_reference},
+        metadata={"provider": result.provider, "provider_reference": result.reference},
     )
     return agreement
 

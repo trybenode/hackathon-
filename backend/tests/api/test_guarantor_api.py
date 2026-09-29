@@ -46,7 +46,13 @@ SIGN_PAYLOAD = {
 }
 
 
-VERIFY_PAYLOAD = {"provider": "smile_id", "provider_reference": "SID-123"}
+LIVENESS_FRAME = {"frame": ("selfie.jpg", b"\xff\xd8" + b"x" * 512, "image/jpeg")}
+
+
+async def pass_liveness(client: AsyncClient, instrument_id: str):
+    return await client.post(
+        f"/api/v1/guarantor-instruments/{instrument_id}/liveness", files=LIVENESS_FRAME
+    )
 
 IDENTITY_FORM = {
     "first_name": "Grace",
@@ -99,9 +105,7 @@ async def test_create_sign_and_fetch(session: AsyncSession, worker: Worker) -> N
         assert "12345678901" not in identity.text
         assert "10987654321" not in identity.text
 
-        verified = await client.post(
-            f"/api/v1/guarantor-instruments/{instrument_id}/verify", json=VERIFY_PAYLOAD
-        )
+        verified = await pass_liveness(client, instrument_id)
         assert verified.status_code == 200, verified.text
         assert verified.json()["status"] == "Active"
 
@@ -174,9 +178,7 @@ async def test_trigger_requires_active_instrument(session: AsyncSession, worker:
         assert still_pending.status_code == 409
 
         await pass_identity(client, instrument_id)
-        await client.post(
-            f"/api/v1/guarantor-instruments/{instrument_id}/verify", json=VERIFY_PAYLOAD
-        )
+        await pass_liveness(client, instrument_id)
         triggered = await client.post(
             f"/api/v1/guarantor-instruments/{instrument_id}/trigger",
             json={"reason": "Client reported a no-show."},
@@ -204,7 +206,7 @@ async def test_identity_rejects_malformed_numbers(
     app.dependency_overrides.clear()
 
 
-async def test_liveness_without_identity_returns_409(
+async def test_liveness_rejects_an_empty_capture(
     session: AsyncSession, worker: Worker
 ) -> None:
     async with client_for(session) as client:
@@ -213,9 +215,10 @@ async def test_liveness_without_identity_returns_409(
         await client.post(f"/api/v1/guarantor-instruments/{instrument_id}/sign", json=SIGN_PAYLOAD)
 
         response = await client.post(
-            f"/api/v1/guarantor-instruments/{instrument_id}/verify", json=VERIFY_PAYLOAD
+            f"/api/v1/guarantor-instruments/{instrument_id}/liveness",
+            files={"frame": ("empty.jpg", b"", "image/jpeg")},
         )
-        assert response.status_code == 409
+        assert response.status_code == 422
 
     app.dependency_overrides.clear()
 

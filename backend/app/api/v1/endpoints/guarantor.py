@@ -22,15 +22,14 @@ from app.schemas.api import (
     GuarantorSignResponse,
     GuarantorSummary,
     GuarantorTriggerRequest,
-    GuarantorVerifyRequest,
     WorkerProfileSummary,
 )
 from app.services import guarantor as guarantor_service
-from app.services.identity_provider import IdentitySubmission
+from app.services.identity_provider import IdentitySubmission, LivenessSubmission
 from app.services.guarantor import (
     GuarantorError,
     IdentityCheckFailedError,
-    IdentityCheckMissingError,
+    LivenessCheckFailedError,
     InstrumentNotFoundError,
     InvalidTransitionError,
     SelfGuaranteeError,
@@ -102,8 +101,8 @@ def _http_error(error: GuarantorError) -> HTTPException:
         return HTTPException(status_code=422, detail=str(error))
     if isinstance(error, IdentityCheckFailedError):
         return HTTPException(status_code=422, detail=str(error))
-    if isinstance(error, IdentityCheckMissingError):
-        return HTTPException(status_code=409, detail=str(error))
+    if isinstance(error, LivenessCheckFailedError):
+        return HTTPException(status_code=422, detail=str(error))
     return HTTPException(status_code=400, detail=str(error))
 
 
@@ -268,23 +267,33 @@ async def submit_identity(
 
 
 @router.post(
-    "/{instrument_id}/verify",
+    "/{instrument_id}/liveness",
     response_model=GuarantorInstrumentResponse,
-    summary="Record the liveness result and activate the guarantee",
+    summary="Check the liveness capture and activate the guarantee",
 )
-async def verify_identity(
+async def complete_liveness(
     instrument_id: UUID,
-    payload: GuarantorVerifyRequest,
+    frame: UploadFile = File(...),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentResponse:
+    """Pass the captured frame to the liveness provider and drop it.
+
+    The image is never stored: only the provider's reference and outcome are
+    written against the guarantor.
+    """
+
+    image = await frame.read()
+    await frame.close()
+
     try:
         agreement = await guarantor_service.complete_liveness_check(
             session,
             instrument_id,
-            provider=payload.provider,
-            provider_reference=payload.provider_reference,
+            LivenessSubmission(image=image, content_type=frame.content_type or "image/jpeg"),
         )
     except GuarantorError as error:
+        # A failed attempt is still recorded.
+        await session.commit()
         raise _http_error(error) from error
 
     await session.commit()

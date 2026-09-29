@@ -198,6 +198,29 @@ export async function submitIdentity(
   return response.json() as Promise<IdentityCheckResponse>;
 }
 
+/**
+ * Posts a captured selfie frame for the liveness check. The frame goes to the
+ * provider and is dropped; only the provider's reference is stored.
+ */
+export async function submitLiveness(instrumentId: string, frame: Blob) {
+  const form = new FormData();
+  form.append("frame", frame, "selfie.jpg");
+
+  const response = await fetch(`${apiBaseUrl}/guarantor-instruments/${instrumentId}/liveness`, {
+    method: "POST",
+    body: form,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const detail = body && typeof body.detail === "string" ? body.detail : response.statusText;
+    throw new ApiError(detail, response.status);
+  }
+
+  return response.json() as Promise<Instrument>;
+}
+
 export function triggerInstrument(instrumentId: string, reason: string) {
   return request<Instrument>(`/guarantor-instruments/${instrumentId}/trigger`, {
     method: "POST",

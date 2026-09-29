@@ -47,12 +47,32 @@ class IdentityResult:
         return self.status == "verified"
 
 
+@dataclass(frozen=True)
+class LivenessSubmission:
+    """A captured selfie frame, passed to the provider and then dropped."""
+
+    image: bytes
+    content_type: str = "image/jpeg"
+
+
 class IdentityProvider(Protocol):
     """A KYC provider that checks identity details and returns a reference."""
 
     name: str
 
     async def verify(self, submission: IdentitySubmission) -> IdentityResult: ...
+
+
+class LivenessProvider(Protocol):
+    """A provider that decides whether a live person is present.
+
+    Standalone: it does not compare against NIN or BVN records, so it can run
+    independently of the identity details check.
+    """
+
+    name: str
+
+    async def check(self, submission: LivenessSubmission) -> IdentityResult: ...
 
 
 class StubIdentityProvider:
@@ -82,6 +102,47 @@ class StubIdentityProvider:
         )
 
 
+class StubLivenessProvider:
+    """Stands in for Dojah until credentials exist.
+
+    Approves any frame that carries image data, so the flow can be exercised
+    without a provider account. The frame is never stored.
+    """
+
+    name = "stub"
+
+    #: Anything smaller than this is not a real capture.
+    MIN_FRAME_BYTES = 128
+
+    async def check(self, submission: LivenessSubmission) -> IdentityResult:
+        return IdentityResult(
+            provider=self.name,
+            reference=f"STUB-LIVE-{uuid.uuid4().hex[:12].upper()}",
+            status="verified" if len(submission.image) >= self.MIN_FRAME_BYTES else "failed",
+        )
+
+
+class DojahLivenessProvider:
+    """Dojah selfie/liveness check.
+
+    Written against the interface but not wired up: it needs DOJAH_APP_ID and
+    DOJAH_SECRET_KEY, and a decision on Dojah's sandbox base URL. Swap it for
+    the stub in `default_liveness_provider` once those exist.
+    """
+
+    name = "dojah"
+
+    def __init__(self, app_id: str, secret_key: str, base_url: str) -> None:
+        self.app_id = app_id
+        self.secret_key = secret_key
+        self.base_url = base_url
+
+    async def check(self, submission: LivenessSubmission) -> IdentityResult:
+        raise NotImplementedError(
+            "Dojah liveness is not wired up yet: add credentials and implement the call."
+        )
+
+
 def fingerprint(value: str) -> str:
     """Hash an identity number so duplicates can be spotted without storing it.
 
@@ -93,3 +154,4 @@ def fingerprint(value: str) -> str:
 
 
 default_provider: IdentityProvider = StubIdentityProvider()
+default_liveness_provider: LivenessProvider = StubLivenessProvider()

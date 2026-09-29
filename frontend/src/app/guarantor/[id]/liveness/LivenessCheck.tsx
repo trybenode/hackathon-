@@ -1,0 +1,186 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Button, CheckIcon, Modal } from "@/components/ui";
+import { cn } from "@/lib/cn";
+import { ApiError, getInstrument, submitLiveness } from "@/lib/guarantor";
+
+type Stage = "idle" | "capturing" | "checking" | "verified" | "error";
+
+/** JPEG quality for the captured frame: enough for a provider, small to send. */
+const FRAME_QUALITY = 0.85;
+
+export function LivenessCheck({ instrumentId }: { instrumentId: string }) {
+  const router = useRouter();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [stage, setStage] = useState<Stage>("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }, []);
+
+  // Send the guarantor back if the instrument is not awaiting verification.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function guard() {
+      try {
+        const instrument = await getInstrument(instrumentId);
+        if (cancelled) return;
+        if (instrument.status === "Pending Signature") {
+          router.replace(`/guarantor/${instrumentId}/review`);
+        } else if (instrument.status === "Active") {
+          setStage("verified");
+        } else if (instrument.status !== "Pending Verification") {
+          setError("This request is no longer awaiting verification.");
+        }
+      } catch {
+        if (!cancelled) setError("Could not load this request.");
+      }
+    }
+
+    void guard();
+    return () => {
+      cancelled = true;
+    };
+  }, [instrumentId, router]);
+
+  useEffect(() => stopCamera, [stopCamera]);
+
+  async function begin() {
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setStage("capturing");
+    } catch {
+      setStage("error");
+      setError("We could not reach your camera. Allow camera access and try again.");
+    }
+  }
+
+  async function capture() {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 480;
+    canvas.height = video.videoHeight || 640;
+    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const frame = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", FRAME_QUALITY),
+    );
+    if (!frame) {
+      setError("Could not read the camera frame. Try again.");
+      return;
+    }
+
+    setStage("checking");
+    stopCamera();
+
+    try {
+      await submitLiveness(instrumentId, frame);
+      setStage("verified");
+    } catch (cause) {
+      setStage("error");
+      setError(
+        cause instanceof ApiError ? cause.message : "Could not complete the check. Try again.",
+      );
+    }
+  }
+
+  return (
+    <main className="mx-auto flex w-full max-w-md flex-col">
+      <div className="h-28 w-full rounded-b-xl bg-info-light" />
+
+      <div className="flex flex-col gap-2 px-6 pt-8">
+        <h1 className="text-body-lg font-semibold text-grey-900">Liveness check</h1>
+        <p className="text-body-sm text-grey-600">
+          Position your face inside the frame, Follow the instructions on the screen
+        </p>
+      </div>
+
+      <div className="flex flex-col items-center gap-8 px-6 pt-10 pb-12">
+        <p className="text-body-md text-grey-900">
+          {stage === "capturing" ? "Hold still" : "Move closer"}
+        </p>
+
+        <div
+          className={cn(
+            "flex h-48 w-40 items-center justify-center overflow-hidden bg-info-light",
+            // The design frames the face in an oval.
+            "rounded-[50%]",
+          )}
+        >
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            className={cn("h-full w-full object-cover", stage !== "capturing" && "hidden")}
+          />
+          {stage !== "capturing" && (
+            <span className="text-body-sm text-grey-600">Camera off</span>
+          )}
+        </div>
+
+        {error && (
+          <p role="alert" className="text-center text-body-sm text-error">
+            {error}
+          </p>
+        )}
+
+        {stage === "capturing" ? (
+          <Button size="lg" className="rounded-pill px-12" onClick={capture}>
+            Capture
+          </Button>
+        ) : (
+          <Button
+            size="lg"
+            className="rounded-pill px-12"
+            disabled={stage === "checking" || stage === "verified"}
+            onClick={begin}
+          >
+            {stage === "error" ? "Try again" : "Begin"}
+          </Button>
+        )}
+      </div>
+
+      <Modal open={stage === "checking"} title="Verifying your identity…">
+        <span className="h-12 w-12 animate-spin rounded-pill border-4 border-primary-100 border-t-primary-400" />
+        <h2 className="text-h3 text-grey-900">Verifying your identity...</h2>
+        <p className="text-body-md text-grey-600">
+          We&rsquo;re securely checking your details. This should only take a moment
+        </p>
+      </Modal>
+
+      <Modal open={stage === "verified"} title="Verified" hideTitle>
+        <span className="flex h-14 w-14 items-center justify-center rounded-pill bg-primary-400">
+          <CheckIcon className="text-white" width={28} height={28} />
+        </span>
+        <h2 className="text-h3 text-grey-900">Verified</h2>
+        <p className="text-body-md text-grey-600">
+          Your identity has been verified successfully!
+        </p>
+        <Button
+          size="lg"
+          className="mt-2 rounded-pill px-10"
+          onClick={() => router.push(`/guarantor/${instrumentId}`)}
+        >
+          Get started
+        </Button>
+      </Modal>
+    </main>
+  );
+}
