@@ -9,6 +9,7 @@ import { apiBaseUrl } from "./api";
 export type InstrumentStatus =
   | "Draft"
   | "Pending Signature"
+  | "Pending Verification"
   | "Active"
   | "Triggered"
   | "Suspended"
@@ -45,9 +46,19 @@ export type CreateInstrumentResponse = {
   sign_url: string | null;
 };
 
+export type WorkerProfile = {
+  worker_id: string;
+  full_name: string;
+  role: string | null;
+  location: string | null;
+  avatar_url: string | null;
+  job_title: string | null;
+};
+
 export type Instrument = {
   instrument_id: string;
   worker_id: string;
+  worker: WorkerProfile | null;
   guarantor: {
     full_name: string;
     relationship: string;
@@ -60,6 +71,7 @@ export type Instrument = {
   signed_at: string | null;
   valid_until: string;
   job_id: string | null;
+  verified_at: string | null;
   triggered_at: string | null;
   status_reason: string | null;
   created_at: string | null;
