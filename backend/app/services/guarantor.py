@@ -42,6 +42,11 @@ from app.models.domain import (
     Worker,
 )
 from app.schemas.api import GuarantorInstrumentCreateRequest, GuarantorSignRequest
+from app.services.identity_provider import (
+    IdentityProvider,
+    IdentitySubmission,
+    default_provider,
+)
 
 ALLOWED_TRANSITIONS: dict[AgreementStatus, frozenset[AgreementStatus]] = {
     AgreementStatus.DRAFT: frozenset(
@@ -138,6 +143,14 @@ class SelfGuaranteeError(GuarantorError):
 
 class ValidityWindowError(GuarantorError):
     """valid_until must be in the future when the instrument is created."""
+
+
+class IdentityCheckFailedError(GuarantorError):
+    """The provider could not verify the guarantor's identity details."""
+
+
+class IdentityCheckMissingError(GuarantorError):
+    """Liveness cannot complete before the identity details check passes."""
 
 
 class InvalidTransitionError(GuarantorError):
@@ -410,7 +423,51 @@ async def sign_instrument(
     return agreement
 
 
-async def verify_identity(
+async def submit_identity_check(
+    session: AsyncSession,
+    instrument_id: UUID,
+    submission: IdentitySubmission,
+    *,
+    provider: IdentityProvider | None = None,
+) -> IdentityVerification:
+    """Send the guarantor's identity details to the provider and keep the result.
+
+    The submission is handed to the provider and then dropped: only the
+    provider's reference and outcome are written, never the NIN, BVN, or
+    document. The instrument stays in Pending Verification until the liveness
+    check completes.
+    """
+
+    agreement = await _get_agreement(session, instrument_id)
+    if agreement.status is not AgreementStatus.PENDING_VERIFICATION:
+        raise InvalidTransitionError(agreement.status, AgreementStatus.ACTIVE)
+
+    result = await (provider or default_provider).verify(submission)
+    record = IdentityVerification(
+        user_id=agreement.guarantor_user_id,
+        provider=result.provider,
+        provider_reference=result.reference,
+        status=result.status,
+        check_type="identity",
+    )
+    session.add(record)
+    _record_audit(
+        session,
+        agreement=agreement,
+        action="guarantor.identity_submitted",
+        actor_id=agreement.guarantor_user_id,
+        metadata={"provider": result.provider, "status": result.status},
+    )
+
+    if not result.verified:
+        raise IdentityCheckFailedError(
+            "We could not verify those identity details. Check them and try again."
+        )
+
+    return record
+
+
+async def complete_liveness_check(
     session: AsyncSession,
     instrument_id: UUID,
     *,
@@ -418,13 +475,26 @@ async def verify_identity(
     provider_reference: str,
     now: datetime | None = None,
 ) -> GuarantorAgreement:
-    """Record the guarantor's identity check and bring the guarantee live.
+    """Record the liveness result and bring the guarantee live.
 
-    Stores the provider's reference against the guarantor's user record so the
-    check is auditable, then moves Pending Verification to Active.
+    Requires a passed identity check first, so a guarantee cannot go active on
+    a face scan alone.
     """
 
     agreement = await _get_agreement(session, instrument_id)
+
+    passed_identity = await session.scalar(
+        select(IdentityVerification).where(
+            IdentityVerification.user_id == agreement.guarantor_user_id,
+            IdentityVerification.check_type == "identity",
+            IdentityVerification.status == "verified",
+        )
+    )
+    if passed_identity is None:
+        raise IdentityCheckMissingError(
+            "Identity details must be verified before the liveness check."
+        )
+
     apply_transition(agreement, AgreementStatus.ACTIVE, at=now)
     session.add(
         IdentityVerification(
@@ -432,6 +502,7 @@ async def verify_identity(
             provider=provider,
             provider_reference=provider_reference,
             status="verified",
+            check_type="liveness",
         )
     )
     _record_audit(

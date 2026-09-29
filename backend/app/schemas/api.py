@@ -199,6 +199,15 @@ class GuarantorSignResponse(ApiModel):
     signed_at: datetime
 
 
+class GuarantorIdentityResponse(ApiModel):
+    """Outcome of an identity check. Never carries the submitted numbers."""
+
+    instrument_id: UUID
+    check_type: str
+    status: str
+    provider_reference: str
+
+
 class GuarantorVerifyRequest(ApiModel):
     """Result of the guarantor's identity check, from the provider."""
 

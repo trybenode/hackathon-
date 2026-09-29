@@ -48,6 +48,25 @@ SIGN_PAYLOAD = {
 
 VERIFY_PAYLOAD = {"provider": "smile_id", "provider_reference": "SID-123"}
 
+IDENTITY_FORM = {
+    "first_name": "Grace",
+    "last_name": "Guarantor",
+    "phone": "+2348012345678",
+    "address": "12 Trust Street, Lagos",
+    "nin": "12345678901",
+    "bvn": "10987654321",
+}
+
+
+async def pass_identity(client: AsyncClient, instrument_id: str):
+    """Submit the identity form the way the screen does, with a utility bill."""
+
+    return await client.post(
+        f"/api/v1/guarantor-instruments/{instrument_id}/identity",
+        data=IDENTITY_FORM,
+        files={"utility_bill": ("bill.pdf", b"%PDF-1.4 fake", "application/pdf")},
+    )
+
 
 def client_for(session: AsyncSession) -> AsyncClient:
     async def _session_override():
@@ -70,6 +89,15 @@ async def test_create_sign_and_fetch(session: AsyncSession, worker: Worker) -> N
         )
         assert signed.status_code == 200, signed.text
         assert signed.json()["status"] == "Pending Verification"
+
+        identity = await pass_identity(client, instrument_id)
+        assert identity.status_code == 200, identity.text
+        body = identity.json()
+        assert body["status"] == "verified"
+        assert body["check_type"] == "identity"
+        # The response must not echo the submitted identity numbers.
+        assert "12345678901" not in identity.text
+        assert "10987654321" not in identity.text
 
         verified = await client.post(
             f"/api/v1/guarantor-instruments/{instrument_id}/verify", json=VERIFY_PAYLOAD
@@ -145,6 +173,7 @@ async def test_trigger_requires_active_instrument(session: AsyncSession, worker:
         )
         assert still_pending.status_code == 409
 
+        await pass_identity(client, instrument_id)
         await client.post(
             f"/api/v1/guarantor-instruments/{instrument_id}/verify", json=VERIFY_PAYLOAD
         )
@@ -154,6 +183,39 @@ async def test_trigger_requires_active_instrument(session: AsyncSession, worker:
         )
         assert triggered.status_code == 200
         assert triggered.json()["status"] == "Triggered"
+
+    app.dependency_overrides.clear()
+
+
+async def test_identity_rejects_malformed_numbers(
+    session: AsyncSession, worker: Worker
+) -> None:
+    async with client_for(session) as client:
+        created = await client.post("/api/v1/guarantor-instruments", json=create_payload(worker))
+        instrument_id = created.json()["instrument_id"]
+        await client.post(f"/api/v1/guarantor-instruments/{instrument_id}/sign", json=SIGN_PAYLOAD)
+
+        response = await client.post(
+            f"/api/v1/guarantor-instruments/{instrument_id}/identity",
+            data={**IDENTITY_FORM, "nin": "123"},
+        )
+        assert response.status_code == 422
+
+    app.dependency_overrides.clear()
+
+
+async def test_liveness_without_identity_returns_409(
+    session: AsyncSession, worker: Worker
+) -> None:
+    async with client_for(session) as client:
+        created = await client.post("/api/v1/guarantor-instruments", json=create_payload(worker))
+        instrument_id = created.json()["instrument_id"]
+        await client.post(f"/api/v1/guarantor-instruments/{instrument_id}/sign", json=SIGN_PAYLOAD)
+
+        response = await client.post(
+            f"/api/v1/guarantor-instruments/{instrument_id}/verify", json=VERIFY_PAYLOAD
+        )
+        assert response.status_code == 409
 
     app.dependency_overrides.clear()
 

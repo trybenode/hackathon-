@@ -6,7 +6,7 @@ Used by: the guarantor flow UI and platform integrations.
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
@@ -14,6 +14,7 @@ from app.models.domain import AgreementStatus, GuarantorAgreement, Job, User, Wo
 from app.schemas.api import (
     GuarantorInstrumentCreateRequest,
     GuarantorInstrumentCreateResponse,
+    GuarantorIdentityResponse,
     GuarantorInstrumentListResponse,
     GuarantorInstrumentResponse,
     GuarantorRevokeRequest,
@@ -25,8 +26,11 @@ from app.schemas.api import (
     WorkerProfileSummary,
 )
 from app.services import guarantor as guarantor_service
+from app.services.identity_provider import IdentitySubmission
 from app.services.guarantor import (
     GuarantorError,
+    IdentityCheckFailedError,
+    IdentityCheckMissingError,
     InstrumentNotFoundError,
     InvalidTransitionError,
     SelfGuaranteeError,
@@ -96,6 +100,10 @@ def _http_error(error: GuarantorError) -> HTTPException:
         return HTTPException(status_code=409, detail=str(error))
     if isinstance(error, (SelfGuaranteeError, ValidityWindowError)):
         return HTTPException(status_code=422, detail=str(error))
+    if isinstance(error, IdentityCheckFailedError):
+        return HTTPException(status_code=422, detail=str(error))
+    if isinstance(error, IdentityCheckMissingError):
+        return HTTPException(status_code=409, detail=str(error))
     return HTTPException(status_code=400, detail=str(error))
 
 
@@ -204,9 +212,65 @@ async def sign_instrument(
 
 
 @router.post(
+    "/{instrument_id}/identity",
+    response_model=GuarantorIdentityResponse,
+    summary="Submit the guarantor's identity details for verification",
+)
+async def submit_identity(
+    instrument_id: UUID,
+    first_name: str = Form(..., max_length=160),
+    last_name: str = Form(..., max_length=160),
+    phone: str = Form(..., max_length=40),
+    address: str = Form(..., max_length=500),
+    nin: str = Form(..., max_length=20),
+    bvn: str = Form(..., max_length=20),
+    utility_bill: UploadFile | None = File(default=None),
+    session: AsyncSession = Depends(get_db_session),
+) -> GuarantorIdentityResponse:
+    """Forward identity details to the provider and keep only the reference.
+
+    The uploaded document is read for its size and then discarded; nothing
+    sensitive reaches the database.
+    """
+
+    document_size: int | None = None
+    if utility_bill is not None:
+        document_size = len(await utility_bill.read())
+        await utility_bill.close()
+
+    submission = IdentitySubmission(
+        first_name=first_name.strip(),
+        last_name=last_name.strip(),
+        phone=phone.strip(),
+        address=address.strip(),
+        nin=nin.strip(),
+        bvn=bvn.strip(),
+        document_filename=utility_bill.filename if utility_bill else None,
+        document_size=document_size,
+    )
+
+    try:
+        record = await guarantor_service.submit_identity_check(
+            session, instrument_id, submission
+        )
+    except GuarantorError as error:
+        # The failed attempt is still worth recording.
+        await session.commit()
+        raise _http_error(error) from error
+
+    await session.commit()
+    return GuarantorIdentityResponse(
+        instrument_id=instrument_id,
+        check_type=record.check_type,
+        status=record.status,
+        provider_reference=record.provider_reference,
+    )
+
+
+@router.post(
     "/{instrument_id}/verify",
     response_model=GuarantorInstrumentResponse,
-    summary="Record identity verification and activate the guarantee",
+    summary="Record the liveness result and activate the guarantee",
 )
 async def verify_identity(
     instrument_id: UUID,
@@ -214,7 +278,7 @@ async def verify_identity(
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentResponse:
     try:
-        agreement = await guarantor_service.verify_identity(
+        agreement = await guarantor_service.complete_liveness_check(
             session,
             instrument_id,
             provider=payload.provider,

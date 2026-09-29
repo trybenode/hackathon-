@@ -180,12 +180,20 @@ class PlatformConnection(UUIDTimestampMixin, Base):
 
 
 class IdentityVerification(UUIDTimestampMixin, Base):
+    """A completed check against a KYC provider.
+
+    Holds the provider's reference and outcome only. Identity numbers and
+    documents are never stored: they are passed to the provider and dropped.
+    """
+
     __tablename__ = "identity_verifications"
 
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     provider: Mapped[str] = mapped_column(String(80))
     provider_reference: Mapped[str] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(40))
+    #: "identity" for the details check, "liveness" for the face check.
+    check_type: Mapped[str] = mapped_column(String(40), default="identity")
 
 
 class OutcomeSource(UUIDTimestampMixin, Base):

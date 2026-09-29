@@ -25,6 +25,7 @@ from app.schemas.api import (
     SignatureMetadata,
 )
 from app.services import guarantor as service
+from app.services.identity_provider import IdentitySubmission
 
 NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 
@@ -58,12 +59,26 @@ def build_signature(*, accepted: bool = True, at: datetime | None = None) -> Gua
     )
 
 
+def build_submission(**overrides) -> IdentitySubmission:
+    fields = {
+        "first_name": "Grace",
+        "last_name": "Guarantor",
+        "phone": "+2348012345678",
+        "address": "12 Trust Street, Lagos",
+        "nin": "12345678901",
+        "bvn": "10987654321",
+    }
+    fields.update(overrides)
+    return IdentitySubmission(**fields)
+
+
 async def activate(session: AsyncSession, instrument_id, *, at: datetime | None = None):
-    """Accept the terms and pass identity verification."""
+    """Accept the terms, pass the identity check, then pass liveness."""
 
     moment = at or NOW
     await service.sign_instrument(session, instrument_id, build_signature(at=moment), now=moment)
-    return await service.verify_identity(
+    await service.submit_identity_check(session, instrument_id, build_submission())
+    return await service.complete_liveness_check(
         session, instrument_id, provider="smile_id", provider_reference="SID-123", now=moment
     )
 
@@ -160,14 +175,74 @@ async def test_signature_hash_changes_with_evidence(session: AsyncSession, worke
     )
 
 
-async def test_verification_activates_the_guarantee(
+async def test_identity_check_stores_only_the_reference(
     session: AsyncSession, worker: Worker
 ) -> None:
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
     await service.sign_instrument(session, agreement.id, build_signature(), now=NOW)
 
+    record = await service.submit_identity_check(session, agreement.id, build_submission())
+    await session.flush()
+
+    assert record.status == "verified"
+    assert record.check_type == "identity"
+    assert record.provider_reference.startswith("STUB-")
+
+    # The identity numbers must appear nowhere in the stored row.
+    stored = " ".join(
+        str(value) for value in (record.provider, record.provider_reference, record.status)
+    )
+    assert "12345678901" not in stored
+    assert "10987654321" not in stored
+
+    # Submitting alone does not activate the guarantee.
+    assert agreement.status is AgreementStatus.PENDING_VERIFICATION
+
+
+async def test_identity_check_rejects_malformed_numbers(
+    session: AsyncSession, worker: Worker
+) -> None:
+    agreement = await service.create_instrument(session, build_request(worker), now=NOW)
+    await service.sign_instrument(session, agreement.id, build_signature(), now=NOW)
+
+    with pytest.raises(service.IdentityCheckFailedError):
+        await service.submit_identity_check(
+            session, agreement.id, build_submission(nin="123")
+        )
+
+    # The failed attempt is still recorded for audit.
+    record = await session.scalar(
+        select(IdentityVerification).where(
+            IdentityVerification.user_id == agreement.guarantor_user_id
+        )
+    )
+    assert record is not None
+    assert record.status == "failed"
+
+
+async def test_liveness_requires_a_passed_identity_check(
+    session: AsyncSession, worker: Worker
+) -> None:
+    agreement = await service.create_instrument(session, build_request(worker), now=NOW)
+    await service.sign_instrument(session, agreement.id, build_signature(), now=NOW)
+
+    with pytest.raises(service.IdentityCheckMissingError):
+        await service.complete_liveness_check(
+            session, agreement.id, provider="smile_id", provider_reference="SID-1", now=NOW
+        )
+
+    assert agreement.status is AgreementStatus.PENDING_VERIFICATION
+
+
+async def test_verification_activates_the_guarantee(
+    session: AsyncSession, worker: Worker
+) -> None:
+    agreement = await service.create_instrument(session, build_request(worker), now=NOW)
+    await service.sign_instrument(session, agreement.id, build_signature(), now=NOW)
+    await service.submit_identity_check(session, agreement.id, build_submission())
+
     verified_at = NOW + timedelta(hours=2)
-    result = await service.verify_identity(
+    result = await service.complete_liveness_check(
         session,
         agreement.id,
         provider="smile_id",
@@ -178,24 +253,25 @@ async def test_verification_activates_the_guarantee(
     assert result.status is AgreementStatus.ACTIVE
     assert result.verified_at == verified_at
 
-    record = await session.scalar(
+    liveness = await session.scalar(
         select(IdentityVerification).where(
-            IdentityVerification.user_id == agreement.guarantor_user_id
+            IdentityVerification.user_id == agreement.guarantor_user_id,
+            IdentityVerification.check_type == "liveness",
         )
     )
-    assert record is not None
-    assert record.provider == "smile_id"
-    assert record.provider_reference == "SID-123"
-    assert record.status == "verified"
+    assert liveness is not None
+    assert liveness.provider == "smile_id"
+    assert liveness.provider_reference == "SID-123"
+    assert liveness.status == "verified"
 
 
-async def test_cannot_verify_before_acceptance(session: AsyncSession, worker: Worker) -> None:
+async def test_cannot_submit_identity_before_acceptance(
+    session: AsyncSession, worker: Worker
+) -> None:
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
 
     with pytest.raises(service.InvalidTransitionError):
-        await service.verify_identity(
-            session, agreement.id, provider="smile_id", provider_reference="SID-123", now=NOW
-        )
+        await service.submit_identity_check(session, agreement.id, build_submission())
 
 
 async def test_decline_closes_the_instrument(session: AsyncSession, worker: Worker) -> None:
@@ -324,6 +400,7 @@ async def test_lifecycle_writes_audit_trail(session: AsyncSession, worker: Worke
         "guarantor.created",
         "guarantor.sent_for_signature",
         "guarantor.signed",
+        "guarantor.identity_submitted",
         "guarantor.identity_verified",
         "guarantor.triggered",
     }
