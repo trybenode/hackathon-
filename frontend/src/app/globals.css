@@ -26,6 +26,7 @@
   --color-grey-200: #eeeeee;
   --color-grey-400: #bdbdbd;
   --color-grey-600: #757575;
+  --color-grey-800: #424242;
   --color-grey-900: #212121;
 
   /* Semantic colors */
@@ -46,6 +47,10 @@
   --color-badge-low: #fff9c4;
   --color-badge-verified: #e0f2fe;
   --color-badge-pending: #f3e8ff;
+  --color-badge-building: #e6f8fe;
+  /* Orange for the "Needs review" badge — read off the designs, not in the guide */
+  --color-orange: #f97316;
+
   /* Badge label colors not in the guide — read off the designs */
   --color-badge-medium-text: #b45309;
   --color-badge-pending-text: #9333ea;
