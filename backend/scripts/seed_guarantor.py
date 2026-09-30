@@ -7,13 +7,14 @@ Usage:
     cd backend
     .venv/bin/python scripts/seed_guarantor.py trybenode@gmail.com
 
+Targets whatever DATABASE_URL resolves to; run `alembic upgrade head` first.
+
 Creates two workers with jobs, one active guarantee and one whose job has
 finished, plus a pending request so the "Action required" banner has something
 to show. Re-running replaces that guarantor's seeded instruments.
 """
 
 import asyncio
-import os
 import sys
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -25,7 +26,7 @@ sys.path.insert(0, str(BACKEND_ROOT))
 from sqlalchemy import delete, select  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
-from app.db.base import Base  # noqa: E402
+from app.core.config import get_settings  # noqa: E402
 from app.models.domain import (  # noqa: E402
     AgreementStatus,
     AuditEvent,
@@ -40,8 +41,7 @@ from app.models.domain import (  # noqa: E402
     Worker,
 )
 
-DB_PATH = BACKEND_ROOT / "local_dev.db"
-DB_URL = os.environ.get("DATABASE_URL") or f"sqlite+aiosqlite:///{DB_PATH}"
+DB_URL = get_settings().async_database_url
 
 NOW = datetime.now(tz=UTC)
 
@@ -77,9 +77,6 @@ async def main() -> None:
     guarantor_email = sys.argv[1].strip().casefold()
 
     engine = create_async_engine(DB_URL)
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         guarantor = await get_or_create_user(session, guarantor_email, "Daniel Peters")

@@ -15,8 +15,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables."""
 
+    #: `.env` holds the shared settings; `.env.local` overrides them per
+    #: machine, which is how local development points at a local Postgres
+    #: instead of Neon. Later files win.
+    _REPO_ROOT = Path(__file__).resolve().parents[3]
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).resolve().parents[3] / ".env",
+        env_file=(_REPO_ROOT / ".env", _REPO_ROOT / ".env.local"),
         extra="ignore",
     )
 

@@ -1,58 +1,75 @@
-# Local development and database parity
+# Local development
 
-The deployed database is Postgres (Neon). Local work can use SQLite for speed,
-but SQLite is not a substitute for Postgres when it comes to migrations.
+Local development runs against **Postgres**, the same engine as Neon, so
+migrations and types behave exactly as they will in production.
 
-## Two local setups
-
-| | SQLite | Local Postgres |
-| --- | --- | --- |
-| Speed | fast (~5s suite) | slower (~22s suite) |
-| Schema built by | `Base.metadata.create_all` | Alembic migrations |
-| Catches migration bugs | **no** | yes |
-| Enum handling | plain text | real enum types |
-
-SQLite builds the schema straight from the models, so the migration files are
-never executed. A migration can be wrong while every test passes — this is not
-hypothetical: an early version of `b7c41d9e2a08` added lower-case
-`agreement_status` labels while SQLAlchemy stores this enum by member *name*
-(`ACTIVE`, `DRAFT`). Every SQLite test passed; the first Postgres insert would
-have failed.
-
-## Day to day (SQLite)
-
-```bash
-cd backend
-.venv/bin/python scripts/seed_dev.py          # prints DATABASE_URL and WORKER_ID
-DATABASE_URL=<printed url> .venv/bin/uvicorn app.main:app --port 8000
-.venv/bin/pytest
-```
-
-## Before opening a PR (Postgres)
+## One-time setup
 
 ```bash
 brew install postgresql@16 && brew services start postgresql@16
 export PATH="/usr/local/opt/postgresql@16/bin:$PATH"
-
 createdb trust_dev
+```
+
+Point the backend at it with a `.env.local` beside `.env` (gitignored, one per
+machine — `.env` keeps the shared/Neon settings):
+
+```
+DATABASE_URL=postgresql+asyncpg://YOUR_USER@localhost:5432/trust_dev
+```
+
+`.env.local` wins over `.env`, so nothing in the shared file needs editing.
+
+## Day to day
+
+```bash
 cd backend
-DATABASE_URL="postgresql+asyncpg://$(whoami)@localhost:5432/trust_dev" .venv/bin/alembic upgrade head
+.venv/bin/alembic upgrade head          # schema comes from migrations
+.venv/bin/python scripts/seed_dev.py    # a worker, organisation and job
+.venv/bin/python scripts/seed_guarantor.py you@example.com
+.venv/bin/uvicorn app.main:app --port 8000 --reload
+```
+
+The seed scripts follow the same `DATABASE_URL` as the app, so they always
+target whichever database the API is using.
+
+## Tests
+
+```bash
+cd backend
+.venv/bin/pytest                        # in-memory SQLite, fast
 
 createdb trust_test
 TEST_DATABASE_URL="postgresql+asyncpg://$(whoami)@localhost:5432/trust_test" .venv/bin/pytest
 ```
 
-The first command proves the migrations apply from scratch; the second runs the
-whole suite against Postgres semantics.
+The default suite uses in-memory SQLite because it is quick (about 8s versus
+22s). Run it against Postgres before opening a PR: SQLite differs in ways that
+have bitten us more than once.
+
+## Why Postgres locally
+
+SQLite built its schema from `create_all`, which meant:
+
+- **Migrations never ran**, so a broken migration passed every test. An early
+  version of `b7c41d9e2a08` added lower-case `agreement_status` labels while
+  SQLAlchemy stores this enum by member *name* (`ACTIVE`, `DRAFT`). Every
+  SQLite test passed; the first Postgres insert would have failed.
+- **New columns never appeared** in an existing local database, because
+  `create_all` adds missing tables but never alters existing ones. Adding a
+  column meant deleting the database and reseeding.
+- **Timestamps came back naive** where Postgres returns aware ones, which
+  crashed the notifications endpoint on a sort.
+
+With Postgres locally, `alembic upgrade head` handles all of this.
 
 ## Moving to Neon
 
-With the above green, switching is only a URL change: point `DATABASE_URL` at
-Neon, run `alembic upgrade head`, and seed if the database is empty.
+Remove or edit `.env.local` so `DATABASE_URL` resolves to Neon, run
+`alembic upgrade head`, and seed if the database is empty.
 
-## Rules that keep the two in step
+## Rules that keep environments in step
 
 - Every schema change ships as a migration. Never model-only.
 - Enum labels are the member **name** (upper-case), matching SQLAlchemy's default.
 - Additive changes where possible: Postgres cannot drop an enum label.
-- No SQLite-specific assumptions in application code.
