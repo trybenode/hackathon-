@@ -22,7 +22,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.domain import LoginCode, User, UserSession
-from app.services.email_sender import EmailMessage, EmailSender, default_email_sender
+from app.services import email_sender as email_sender_module
+from app.services.email_sender import EmailMessage, EmailSender
+from app.services.email_templates import login_code_html, login_code_subject, login_code_text
 
 #: Matches the six boxes on the sign-in screen.
 CODE_LENGTH = 6
@@ -114,11 +116,14 @@ async def request_login_code(
         )
     )
 
-    await (sender or default_email_sender).send(
+    minutes = int(CODE_TTL.total_seconds() // 60)
+    # Resolved at call time so tests (and a later config change) can swap it.
+    await (sender or email_sender_module.default_email_sender).send(
         EmailMessage(
             to=address,
-            subject="Your verification code",
-            body=f"Your code is {code}. It expires in {int(CODE_TTL.total_seconds() // 60)} minutes.",
+            subject=login_code_subject(code),
+            body=login_code_text(code, minutes=minutes),
+            html=login_code_html(code, minutes=minutes),
         )
     )
     return code

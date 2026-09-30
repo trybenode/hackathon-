@@ -14,12 +14,24 @@ deployed database is:
 import os
 from collections.abc import AsyncGenerator
 
+import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.models.domain import User, Worker
+from app.services import email_sender as email_sender_module
+from app.services.email_sender import LoggingEmailSender
+
+
+@pytest.fixture(autouse=True)
+def never_send_real_email(monkeypatch: pytest.MonkeyPatch) -> LoggingEmailSender:
+    """Keep the suite offline even when RESEND_API_KEY is set in .env."""
+
+    stub = LoggingEmailSender()
+    monkeypatch.setattr(email_sender_module, "default_email_sender", stub)
+    return stub
 
 
 @pytest_asyncio.fixture

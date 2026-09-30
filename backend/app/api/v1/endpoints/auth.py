@@ -22,6 +22,7 @@ from app.services.auth import (
     ResendTooSoonError,
     UnknownAccountError,
 )
+from app.services.email_sender import EmailDeliveryError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -89,6 +90,11 @@ async def request_code(
         code = await auth_service.request_login_code(session, payload.email)
     except AuthError as error:
         raise _http_error(error) from error
+    except EmailDeliveryError as error:
+        # The provider refused it; the code was never stored, so retrying is safe.
+        raise HTTPException(
+            status_code=502, detail="We could not send the code. Try again in a moment."
+        ) from error
 
     await session.commit()
     # Never leak the code outside development.

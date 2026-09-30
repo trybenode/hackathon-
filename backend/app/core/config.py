@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: str = "http://localhost:3000"
 
+    #: Transactional email. Without a key, login codes are logged instead.
+    resend_api_key: str = Field("", alias="RESEND_API_KEY")
+    #: Resend only accepts a verified domain, or its shared onboarding sender.
+    resend_from: str = Field("Trust Infrastructure <onboarding@resend.dev>", alias="RESEND_FROM")
+
+    @property
+    def email_enabled(self) -> bool:
+        return bool(self.resend_api_key.strip())
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
