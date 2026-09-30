@@ -41,6 +41,8 @@ EXPIRING_WINDOW = timedelta(days=14)
 #: purpose: a called-in guarantee is a live obligation for the guarantor, not
 #: a finished one, so it belongs with the active guarantees.
 CLOSED_STATUSES = {
+    AgreementStatus.PAID,
+    AgreementStatus.DISMISSED,
     AgreementStatus.REVOKED,
     AgreementStatus.EXPIRED,
     AgreementStatus.DECLINED,
@@ -50,6 +52,7 @@ CLOSED_STATUSES = {
 LIVE_STATUSES = {
     AgreementStatus.ACTIVE,
     AgreementStatus.TRIGGERED,
+    AgreementStatus.DISPUTED,
     AgreementStatus.SUSPENDED,
 }
 
@@ -70,6 +73,9 @@ ACTIVITY_LABELS = {
     "guarantor.identity_submitted": "Identity details submitted",
     "guarantor.identity_verified": "Identity verified",
     "guarantor.triggered": "Guarantee triggered",
+    "guarantor.claim_disputed": "Claim disputed",
+    "guarantor.claim_paid": "Claim paid",
+    "guarantor.claim_dismissed": "Claim dismissed",
     "guarantor.revoked": "Guarantee revoked",
     "guarantor.expired": "Guarantee expired",
 }
@@ -134,9 +140,9 @@ def _bucket(agreement: GuarantorAgreement, job: Job | None) -> str:
         return "pending"
     if agreement.status in CLOSED_STATUSES:
         return "completed"
-    # A triggered guarantee stays active even if the job itself finished: the
-    # claim outlives the work.
-    if agreement.status is AgreementStatus.TRIGGERED:
+    # A running claim stays active even if the job itself finished: the claim
+    # outlives the work.
+    if agreement.status in {AgreementStatus.TRIGGERED, AgreementStatus.DISPUTED}:
         return "active"
     if job is not None and job.status in FINISHED_JOB_STATUSES:
         return "completed"

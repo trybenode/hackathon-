@@ -168,6 +168,38 @@ async def test_pending_requests_are_their_own_bucket(
     assert summary.completed_count == 0
 
 
+async def test_resolved_claims_move_to_completed(
+    session: AsyncSession, worker: Worker
+) -> None:
+    """Disputed stays active; paid and dismissed are done."""
+
+    guarantor = User(email="grace@example.com", display_name="Grace G")
+    session.add(guarantor)
+    await session.flush()
+
+    disputed = await build_guarantee(
+        session, worker, guarantor, job_status=JobStatus.IN_PROGRESS,
+        agreement_status=AgreementStatus.DISPUTED,
+    )
+    paid = await build_guarantee(
+        session, worker, guarantor, job_status=JobStatus.IN_PROGRESS,
+        agreement_status=AgreementStatus.PAID,
+    )
+    dismissed = await build_guarantee(
+        session, worker, guarantor, job_status=JobStatus.IN_PROGRESS,
+        agreement_status=AgreementStatus.DISMISSED,
+    )
+
+    summary = await service.load_summary(session, guarantor.id)
+    by_id = {card.instrument_id: card for card in summary.guarantees}
+
+    assert by_id[disputed.id].bucket == "active"
+    assert by_id[paid.id].bucket == "completed"
+    assert by_id[dismissed.id].bucket == "completed"
+    assert by_id[paid.id].status == "Paid"
+    assert by_id[dismissed.id].status == "Dismissed"
+
+
 async def test_summary_is_scoped_to_one_guarantor(
     session: AsyncSession, worker: Worker
 ) -> None:

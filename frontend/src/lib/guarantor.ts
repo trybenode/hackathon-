@@ -10,6 +10,9 @@ export type InstrumentStatus =
   | "Draft"
   | "Pending Signature"
   | "Pending Verification"
+  | "Disputed"
+  | "Paid"
+  | "Dismissed"
   | "Active"
   | "Triggered"
   | "Suspended"
@@ -224,6 +227,16 @@ export async function submitLiveness(instrumentId: string, frame: Blob) {
   }
 
   return response.json() as Promise<Instrument>;
+}
+
+export type ClaimOutcome = "disputed" | "paid" | "dismissed";
+
+/** Records how a triggered claim ended. */
+export function resolveClaim(instrumentId: string, outcome: ClaimOutcome, reason: string) {
+  return request<Instrument>(`/guarantor-instruments/${instrumentId}/resolve`, {
+    method: "POST",
+    body: JSON.stringify({ outcome, reason }),
+  });
 }
 
 export function triggerInstrument(instrumentId: string, reason: string) {

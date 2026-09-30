@@ -333,6 +333,75 @@ async def test_trigger_then_no_further_moves(session: AsyncSession, worker: Work
         await service.revoke_instrument(session, agreement.id, reason="Too late.", now=NOW)
 
 
+async def test_claim_resolves_through_dispute_to_paid(
+    session: AsyncSession, worker: Worker
+) -> None:
+    """A disputed claim is a waypoint: it still has to be paid or dismissed."""
+
+    agreement = await service.create_instrument(session, build_request(worker), now=NOW)
+    await activate(session, agreement.id)
+    await service.trigger_instrument(session, agreement.id, reason="No-show.", now=NOW)
+
+    disputed = await service.resolve_claim(
+        session, agreement.id, outcome="disputed", reason="Worker contests it.", now=NOW
+    )
+    assert disputed.status is AgreementStatus.DISPUTED
+    assert disputed.resolved_at is None
+
+    paid = await service.resolve_claim(
+        session,
+        agreement.id,
+        outcome="paid",
+        reason="Settled with the client.",
+        now=NOW + timedelta(days=1),
+    )
+    assert paid.status is AgreementStatus.PAID
+    assert paid.resolved_at == NOW + timedelta(days=1)
+    assert paid.status_reason == "Settled with the client."
+
+
+async def test_claim_can_be_dismissed_outright(
+    session: AsyncSession, worker: Worker
+) -> None:
+    agreement = await service.create_instrument(session, build_request(worker), now=NOW)
+    await activate(session, agreement.id)
+    await service.trigger_instrument(session, agreement.id, reason="No-show.", now=NOW)
+
+    dismissed = await service.resolve_claim(
+        session, agreement.id, outcome="dismissed", reason="Client withdrew.", now=NOW
+    )
+
+    assert dismissed.status is AgreementStatus.DISMISSED
+    # Nothing moves out of a resolved claim.
+    with pytest.raises(service.InvalidTransitionError):
+        await service.resolve_claim(
+            session, agreement.id, outcome="paid", reason="Too late.", now=NOW
+        )
+
+
+async def test_cannot_resolve_a_guarantee_that_was_never_triggered(
+    session: AsyncSession, worker: Worker
+) -> None:
+    agreement = await service.create_instrument(session, build_request(worker), now=NOW)
+    await activate(session, agreement.id)
+
+    with pytest.raises(service.InvalidTransitionError):
+        await service.resolve_claim(
+            session, agreement.id, outcome="paid", reason="Nothing to pay.", now=NOW
+        )
+
+
+async def test_unknown_outcome_is_refused(session: AsyncSession, worker: Worker) -> None:
+    agreement = await service.create_instrument(session, build_request(worker), now=NOW)
+    await activate(session, agreement.id)
+    await service.trigger_instrument(session, agreement.id, reason="No-show.", now=NOW)
+
+    with pytest.raises(service.UnknownOutcomeError):
+        await service.resolve_claim(
+            session, agreement.id, outcome="ignored", reason="?", now=NOW
+        )
+
+
 async def test_cannot_trigger_before_activation(session: AsyncSession, worker: Worker) -> None:
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
 

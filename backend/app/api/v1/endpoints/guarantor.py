@@ -17,6 +17,7 @@ from app.schemas.api import (
     GuarantorIdentityResponse,
     GuarantorInstrumentListResponse,
     GuarantorInstrumentResponse,
+    GuarantorResolveRequest,
     GuarantorRevokeRequest,
     GuarantorSignRequest,
     GuarantorSignResponse,
@@ -28,6 +29,7 @@ from app.services import guarantor as guarantor_service
 from app.services.identity_provider import IdentitySubmission, LivenessSubmission
 from app.services.guarantor import (
     GuarantorError,
+    UnknownOutcomeError,
     IdentityCheckFailedError,
     IdentityCheckMissingError,
     LivenessCheckFailedError,
@@ -84,6 +86,7 @@ async def _to_response(
         job_id=agreement.job_id,
         verified_at=agreement.verified_at,
         triggered_at=agreement.triggered_at,
+        resolved_at=agreement.resolved_at,
         status_reason=agreement.status_reason,
         created_at=agreement.created_at,
     )
@@ -98,7 +101,7 @@ def _http_error(error: GuarantorError) -> HTTPException:
         return HTTPException(status_code=404, detail=str(error))
     if isinstance(error, InvalidTransitionError):
         return HTTPException(status_code=409, detail=str(error))
-    if isinstance(error, (SelfGuaranteeError, ValidityWindowError)):
+    if isinstance(error, (SelfGuaranteeError, ValidityWindowError, UnknownOutcomeError)):
         return HTTPException(status_code=422, detail=str(error))
     if isinstance(error, IdentityCheckFailedError):
         return HTTPException(status_code=422, detail=str(error))
@@ -316,6 +319,27 @@ async def trigger_instrument(
     try:
         agreement = await guarantor_service.trigger_instrument(
             session, instrument_id, reason=payload.reason
+        )
+    except GuarantorError as error:
+        raise _http_error(error) from error
+
+    await session.commit()
+    return await _to_response(session, agreement)
+
+
+@router.post(
+    "/{instrument_id}/resolve",
+    response_model=GuarantorInstrumentResponse,
+    summary="Record how a triggered claim ended",
+)
+async def resolve_claim(
+    instrument_id: UUID,
+    payload: GuarantorResolveRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> GuarantorInstrumentResponse:
+    try:
+        agreement = await guarantor_service.resolve_claim(
+            session, instrument_id, outcome=payload.outcome, reason=payload.reason
         )
     except GuarantorError as error:
         raise _http_error(error) from error

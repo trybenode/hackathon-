@@ -5,6 +5,7 @@ Used by: FastAPI route handlers and generated OpenAPI documentation.
 """
 
 from datetime import datetime
+from typing import Literal
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
@@ -219,6 +220,13 @@ class GuarantorTriggerRequest(ApiModel):
     reason: str = Field(min_length=1, max_length=500)
 
 
+class GuarantorResolveRequest(ApiModel):
+    """How a triggered claim ended."""
+
+    outcome: Literal["disputed", "paid", "dismissed"]
+    reason: str = Field(min_length=1, max_length=500)
+
+
 class GuarantorRevokeRequest(ApiModel):
     reason: str = Field(min_length=1, max_length=500)
 
@@ -254,6 +262,7 @@ class GuarantorInstrumentResponse(ApiModel):
     valid_until: datetime
     job_id: UUID | None = None
     verified_at: datetime | None = None
+    resolved_at: datetime | None = None
     triggered_at: datetime | None = None
     status_reason: str | None = None
     created_at: datetime | None = None

@@ -13,6 +13,9 @@ Lifecycle
       │                    │                              │
       └──revoke────────────┴──────────────────────────────┴──▶ Revoked / Expired
 
+A triggered claim is not the end: it is disputed, paid, or dismissed. Paid and
+Dismissed are terminal; Disputed still needs the guarantor.
+
 Accepting the terms records the guarantor's signature but does not make the
 guarantee live: the instrument waits in Pending Verification until identity
 verification passes.
@@ -86,7 +89,14 @@ ALLOWED_TRANSITIONS: dict[AgreementStatus, frozenset[AgreementStatus]] = {
     AgreementStatus.SUSPENDED: frozenset(
         {AgreementStatus.ACTIVE, AgreementStatus.REVOKED, AgreementStatus.EXPIRED}
     ),
-    AgreementStatus.TRIGGERED: frozenset(),
+    AgreementStatus.TRIGGERED: frozenset(
+        {AgreementStatus.DISPUTED, AgreementStatus.PAID, AgreementStatus.DISMISSED}
+    ),
+    AgreementStatus.DISPUTED: frozenset(
+        {AgreementStatus.PAID, AgreementStatus.DISMISSED}
+    ),
+    AgreementStatus.PAID: frozenset(),
+    AgreementStatus.DISMISSED: frozenset(),
     AgreementStatus.EXPIRED: frozenset(),
     AgreementStatus.REVOKED: frozenset(),
     AgreementStatus.DECLINED: frozenset(),
@@ -94,12 +104,20 @@ ALLOWED_TRANSITIONS: dict[AgreementStatus, frozenset[AgreementStatus]] = {
 
 TERMINAL_STATUSES = frozenset(
     {
-        AgreementStatus.TRIGGERED,
+        AgreementStatus.PAID,
+        AgreementStatus.DISMISSED,
         AgreementStatus.EXPIRED,
         AgreementStatus.REVOKED,
         AgreementStatus.DECLINED,
     }
 )
+
+#: Outcomes a triggered claim can be resolved to.
+CLAIM_OUTCOMES = {
+    "disputed": AgreementStatus.DISPUTED,
+    "paid": AgreementStatus.PAID,
+    "dismissed": AgreementStatus.DISMISSED,
+}
 
 #: Statuses an unsigned or live instrument can sit in while the clock runs.
 EXPIRABLE_STATUSES = frozenset(
@@ -121,6 +139,9 @@ STATUS_LABELS: dict[AgreementStatus, str] = {
     AgreementStatus.PENDING_VERIFICATION: "Pending Verification",
     AgreementStatus.ACTIVE: "Active",
     AgreementStatus.TRIGGERED: "Triggered",
+    AgreementStatus.DISPUTED: "Disputed",
+    AgreementStatus.PAID: "Paid",
+    AgreementStatus.DISMISSED: "Dismissed",
     AgreementStatus.SUSPENDED: "Suspended",
     AgreementStatus.REVOKED: "Revoked",
     AgreementStatus.EXPIRED: "Expired",
@@ -265,6 +286,8 @@ def apply_transition(
         agreement.verified_at = moment
     elif target is AgreementStatus.TRIGGERED:
         agreement.triggered_at = moment
+    elif target in {AgreementStatus.PAID, AgreementStatus.DISMISSED}:
+        agreement.resolved_at = moment
 
     if target in TERMINAL_STATUSES:
         agreement.closed_at = moment
@@ -555,6 +578,41 @@ async def trigger_instrument(
         session,
         agreement=agreement,
         action="guarantor.triggered",
+        metadata={"reason": reason},
+    )
+    return agreement
+
+
+class UnknownOutcomeError(GuarantorError):
+    """The claim outcome is not one the lifecycle knows."""
+
+
+async def resolve_claim(
+    session: AsyncSession,
+    instrument_id: UUID,
+    *,
+    outcome: str,
+    reason: str,
+    now: datetime | None = None,
+) -> GuarantorAgreement:
+    """Move a triggered claim on: disputed, paid, or dismissed.
+
+    Disputed is a waypoint rather than an ending, so a disputed claim still
+    has to be paid or dismissed before the guarantee is finished.
+    """
+
+    target = CLAIM_OUTCOMES.get(outcome.strip().casefold())
+    if target is None:
+        raise UnknownOutcomeError(
+            f"Unknown outcome '{outcome}'. Expected one of: {', '.join(CLAIM_OUTCOMES)}."
+        )
+
+    agreement = await _get_agreement(session, instrument_id)
+    apply_transition(agreement, target, reason=reason, at=now)
+    _record_audit(
+        session,
+        agreement=agreement,
+        action=f"guarantor.claim_{target.value}",
         metadata={"reason": reason},
     )
     return agreement

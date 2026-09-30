@@ -77,7 +77,10 @@ class AgreementStatus(StrEnum):
     """Guarantor instrument lifecycle.
 
     Draft -> Pending Signature -> Pending Verification -> Active ->
-    Triggered / Expired / Revoked.
+    Triggered -> (Disputed) -> Paid / Dismissed, or Expired / Revoked.
+
+    A triggered claim is still live work for the guarantor; it ends only when
+    it is paid or dismissed.
     Declined covers a guarantor refusing to sign; suspended is reserved for
     administrative holds on an active instrument.
     """
@@ -88,6 +91,9 @@ class AgreementStatus(StrEnum):
     PENDING_VERIFICATION = "pending_verification"
     ACTIVE = "active"
     TRIGGERED = "triggered"
+    DISPUTED = "disputed"
+    PAID = "paid"
+    DISMISSED = "dismissed"
     SUSPENDED = "suspended"
     REVOKED = "revoked"
     EXPIRED = "expired"
@@ -378,6 +384,8 @@ class GuarantorAgreement(UUIDTimestampMixin, Base):
     signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: When a triggered claim was paid or dismissed.
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 

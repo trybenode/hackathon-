@@ -16,12 +16,21 @@ function initialsOf(name: string) {
     .toUpperCase();
 }
 
+/**
+ * Each outcome gets its own colour so a claim that was paid out does not read
+ * the same as one that was dismissed.
+ */
 const statusDot: Record<string, string> = {
   Active: "text-success",
   Completed: "text-success",
   "Pending Signature": "text-warning",
   "Pending Verification": "text-warning",
+  // A claim is running: red while open, orange while contested.
   Triggered: "text-error-mid",
+  Disputed: "text-orange",
+  // Resolved claims: paid cost the guarantor money, dismissed did not.
+  Paid: "text-grey-800",
+  Dismissed: "text-success",
   Declined: "text-error-mid",
   Revoked: "text-error-mid",
   Expired: "text-grey-800",
