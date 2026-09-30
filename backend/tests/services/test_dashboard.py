@@ -86,10 +86,10 @@ async def test_summary_counts_active_and_completed(
     assert summary.guarantees[0].amount == Decimal("25000.00")
 
 
-async def test_closed_guarantees_group_with_completed(
+async def test_triggered_stays_active_and_revoked_closes(
     session: AsyncSession, worker: Worker
 ) -> None:
-    """A triggered or revoked guarantee is over, so the Completed tab shows it."""
+    """A called-in guarantee is a live obligation; a revoked one is over."""
 
     guarantor = User(email="grace@example.com", display_name="Grace G")
     session.add(guarantor)
@@ -113,12 +113,37 @@ async def test_closed_guarantees_group_with_completed(
     summary = await service.load_summary(session, guarantor.id)
     by_id = {card.instrument_id: card for card in summary.guarantees}
 
-    assert by_id[triggered.id].bucket == "completed"
+    # A claim is running, so the guarantor still has something to answer.
+    assert by_id[triggered.id].bucket == "active"
     assert by_id[revoked.id].bucket == "completed"
     # The card still says what actually happened.
     assert by_id[triggered.id].status == "Triggered"
     assert by_id[revoked.id].status == "Revoked"
-    assert summary.active_count == 0
+    assert summary.active_count == 1
+    assert summary.completed_count == 1
+
+
+async def test_triggered_outranks_a_finished_job(
+    session: AsyncSession, worker: Worker
+) -> None:
+    """The claim outlives the work: a finished job does not close a claim."""
+
+    guarantor = User(email="grace@example.com", display_name="Grace G")
+    session.add(guarantor)
+    await session.flush()
+
+    await build_guarantee(
+        session,
+        worker,
+        guarantor,
+        job_status=JobStatus.COMPLETED,
+        agreement_status=AgreementStatus.TRIGGERED,
+    )
+
+    summary = await service.load_summary(session, guarantor.id)
+
+    assert summary.guarantees[0].bucket == "active"
+    assert summary.active_count == 1
 
 
 async def test_pending_requests_are_their_own_bucket(

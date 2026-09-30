@@ -37,14 +37,20 @@ FINISHED_JOB_STATUSES = {JobStatus.COMPLETED, JobStatus.RELEASED}
 #: How close to expiry counts as "expires soon" in the alerts list.
 EXPIRING_WINDOW = timedelta(days=14)
 
-#: Instrument states that mean the guarantee is over, however it ended. They
-#: keep their own label on the card; the bucket only decides which tab shows
-#: them.
+#: Instrument states that mean the guarantee is over. Triggered is absent on
+#: purpose: a called-in guarantee is a live obligation for the guarantor, not
+#: a finished one, so it belongs with the active guarantees.
 CLOSED_STATUSES = {
-    AgreementStatus.TRIGGERED,
     AgreementStatus.REVOKED,
     AgreementStatus.EXPIRED,
     AgreementStatus.DECLINED,
+}
+
+#: A claim is running against these, so they still need the guarantor.
+LIVE_STATUSES = {
+    AgreementStatus.ACTIVE,
+    AgreementStatus.TRIGGERED,
+    AgreementStatus.SUSPENDED,
 }
 
 #: Waiting on the guarantor, so not yet a live guarantee.
@@ -128,9 +134,13 @@ def _bucket(agreement: GuarantorAgreement, job: Job | None) -> str:
         return "pending"
     if agreement.status in CLOSED_STATUSES:
         return "completed"
+    # A triggered guarantee stays active even if the job itself finished: the
+    # claim outlives the work.
+    if agreement.status is AgreementStatus.TRIGGERED:
+        return "active"
     if job is not None and job.status in FINISHED_JOB_STATUSES:
         return "completed"
-    return "active"
+    return "active" if agreement.status in LIVE_STATUSES else "completed"
 
 
 async def _load_guarantees(
