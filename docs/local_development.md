@@ -44,8 +44,19 @@ TEST_DATABASE_URL="postgresql+asyncpg://$(whoami)@localhost:5432/trust_test" .ve
 ```
 
 The default suite uses in-memory SQLite because it is quick (about 8s versus
-22s). Run it against Postgres before opening a PR: SQLite differs in ways that
-have bitten us more than once.
+22s), which keeps the coding loop tight.
+
+**The Postgres run is not optional before merging — CI enforces it.**
+`.github/workflows/ci.yml` applies the migrations to a real Postgres, checks
+that they match the models, then runs the whole suite against it. Running the
+commands above locally just means finding out before the PR rather than after.
+
+To check migration drift yourself:
+
+```bash
+cd backend
+.venv/bin/python scripts/check_migrations.py
+```
 
 ## Why Postgres locally
 
