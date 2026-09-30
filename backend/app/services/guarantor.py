@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -45,6 +46,8 @@ from app.models.domain import (
     Worker,
 )
 from app.schemas.api import GuarantorInstrumentCreateRequest, GuarantorSignRequest
+from app.services import document_store as document_store_module
+from app.services.document_store import DocumentStore
 from app.services.identity_provider import (
     IdentityProvider,
     IdentitySubmission,
@@ -459,18 +462,34 @@ async def submit_identity_check(
     submission: IdentitySubmission,
     *,
     provider: IdentityProvider | None = None,
+    document: tuple[str, bytes] | None = None,
+    document_store: DocumentStore | None = None,
 ) -> IdentityVerification:
     """Send the guarantor's identity details to the provider and keep the result.
 
     The submission is handed to the provider and then dropped: only the
-    provider's reference and outcome are written, never the NIN, BVN, or
-    document. The instrument stays in Pending Verification until the liveness
-    check completes.
+    provider's reference and outcome are written, never the NIN or BVN. A
+    supporting document goes to object storage and the row keeps its key. The
+    instrument stays in Pending Verification until liveness completes.
     """
 
     agreement = await _get_agreement(session, instrument_id)
     if agreement.status is not AgreementStatus.PENDING_VERIFICATION:
         raise InvalidTransitionError(agreement.status, AgreementStatus.ACTIVE)
+
+    document_reference: str | None = None
+    if document is not None:
+        filename, content = document
+        # Resolved at call time so tests can swap the bucket out.
+        stored = await (document_store or document_store_module.default_document_store).store(
+            filename=filename,
+            content=content,
+            prefix=f"guarantor-documents/{agreement.id}",
+        )
+        document_reference = stored.reference or None
+        submission = replace(
+            submission, document_filename=filename, document_size=stored.size
+        )
 
     result = await (provider or default_provider).verify(submission)
     record = IdentityVerification(
@@ -479,6 +498,7 @@ async def submit_identity_check(
         provider_reference=result.reference,
         status=result.status,
         check_type="identity",
+        document_reference=document_reference,
     )
     session.add(record)
     _record_audit(

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { Button, Input, NigeriaFlagIcon, PencilIcon } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { ApiError, getSignedInUser, type SignedInUser } from "@/lib/guarantor";
+import { ApiError, getProfile, updateProfile, type Profile } from "@/lib/guarantor";
 
 /** Initials for the avatar, e.g. "Daniel Peters" becomes DP. */
 function initialsOf(name: string) {
@@ -17,23 +17,36 @@ function initialsOf(name: string) {
     .toUpperCase();
 }
 
+/** The API stores the full number; the field shows it without the dial code. */
+const DIAL_CODE = "+234";
+
+function withoutDialCode(phone: string | null) {
+  if (!phone) return "";
+  return phone.startsWith(DIAL_CODE) ? phone.slice(DIAL_CODE.length) : phone;
+}
+
 export function EditProfile() {
   const router = useRouter();
-  const [user, setUser] = useState<SignedInUser | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       try {
-        const loaded = await getSignedInUser();
-        if (!cancelled) setUser(loaded);
+        const loaded = await getProfile();
+        if (!cancelled) setProfile(loaded);
       } catch (cause) {
-        if (!cancelled && cause instanceof ApiError && cause.status === 401) {
+        if (cancelled) return;
+        if (cause instanceof ApiError && cause.status === 401) {
           router.replace("/sign-in");
+          return;
         }
+        setError("Could not load your profile.");
       }
     }
 
@@ -43,12 +56,28 @@ export function EditProfile() {
     };
   }, [router]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    // No account model yet, so there is nowhere to save to; the screen shows
-    // the interaction and waits for the email/OTP work.
-    setSaved(true);
-    setDirty(false);
+    setSaving(true);
+    setError(null);
+
+    const data = new FormData(event.currentTarget);
+    const localPhone = String(data.get("phone") ?? "").trim();
+
+    try {
+      const updated = await updateProfile({
+        display_name: String(data.get("name") ?? "").trim(),
+        phone: localPhone ? `${DIAL_CODE}${localPhone.replace(/^0+/, "")}` : null,
+        address: String(data.get("address") ?? "").trim() || null,
+      });
+      setProfile(updated);
+      setSaved(true);
+      setDirty(false);
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : "Could not save your changes.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -68,7 +97,7 @@ export function EditProfile() {
         <div className="flex justify-center">
           <span className="relative">
             <span className="flex h-24 w-24 items-center justify-center rounded-pill bg-primary-500 text-h2 font-medium text-white">
-              {user ? initialsOf(user.display_name) : "—"}
+              {profile ? initialsOf(profile.display_name) : "—"}
             </span>
             <button
               type="button"
@@ -80,45 +109,68 @@ export function EditProfile() {
           </span>
         </div>
 
-        <Input key={user?.display_name} name="name" label="Name" defaultValue={user?.display_name ?? ""} />
+        {/* Keyed on the loaded value so the field picks it up once it arrives. */}
+        <Input
+          key={`name-${profile?.display_name}`}
+          name="name"
+          label="Name"
+          defaultValue={profile?.display_name ?? ""}
+          required
+        />
 
         <Input
+          key={`email-${profile?.email}`}
           name="email"
           type="email"
           label="Email"
-          key={user?.email}
-          defaultValue={user?.email ?? ""}
-          // The email identifies the account, so it is shown but not editable
-          // here; changing it will belong to the sign-in flow.
+          defaultValue={profile?.email ?? ""}
+          // The email identifies the account, so it changes through sign-in,
+          // not here.
           readOnly
           className="text-grey-600"
         />
 
         <Input
+          key={`phone-${profile?.phone}`}
           name="phone"
           type="tel"
           inputMode="tel"
           label="Phone Number"
           placeholder="Input your phone"
-          lead="+234"
+          defaultValue={withoutDialCode(profile?.phone ?? null)}
+          lead={DIAL_CODE}
           trailingIcon={<NigeriaFlagIcon />}
         />
 
-        <Input name="address" label="Address" placeholder="Input text" />
+        <Input
+          key={`address-${profile?.address}`}
+          name="address"
+          label="Address"
+          placeholder="Input text"
+          defaultValue={profile?.address ?? ""}
+        />
 
+        {error && (
+          <p role="alert" className="text-body-sm text-error">
+            {error}
+          </p>
+        )}
         {saved && (
           <p role="status" className="text-body-sm text-success">
-            Saved. This screen is not connected to an account yet.
+            Saved.
           </p>
         )}
 
         <Button
           type="submit"
           size="lg"
-          disabled={!dirty}
-          className={cn("mt-4 self-center rounded-lg px-16", !dirty && "bg-grey-600! text-white! opacity-100!")}
+          disabled={!dirty || saving || !profile}
+          className={cn(
+            "mt-4 self-center rounded-lg px-16",
+            (!dirty || saving) && "bg-grey-600! text-white! opacity-100!",
+          )}
         >
-          Save Changes
+          {saving ? "Saving…" : "Save Changes"}
         </Button>
       </form>
     </main>

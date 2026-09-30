@@ -279,6 +279,29 @@ export function verifyLoginCode(email: string, code: string) {
   });
 }
 
+export type Profile = {
+  user_id: string;
+  email: string;
+  display_name: string;
+  phone: string | null;
+  address: string | null;
+};
+
+export function getProfile() {
+  return request<Profile>("/me/profile");
+}
+
+export function updateProfile(update: {
+  display_name: string;
+  phone?: string | null;
+  address?: string | null;
+}) {
+  return request<Profile>("/me/profile", {
+    method: "PATCH",
+    body: JSON.stringify(update),
+  });
+}
+
 export function getSignedInUser() {
   return request<SignedInUser>("/auth/me");
 }

@@ -21,7 +21,9 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.models.domain import User, Worker
+from app.services import document_store as document_store_module
 from app.services import email_sender as email_sender_module
+from app.services.document_store import NullDocumentStore
 from app.services.email_sender import LoggingEmailSender
 
 
@@ -31,6 +33,15 @@ def never_send_real_email(monkeypatch: pytest.MonkeyPatch) -> LoggingEmailSender
 
     stub = LoggingEmailSender()
     monkeypatch.setattr(email_sender_module, "default_email_sender", stub)
+    return stub
+
+
+@pytest.fixture(autouse=True)
+def never_upload_to_a_real_bucket(monkeypatch: pytest.MonkeyPatch) -> NullDocumentStore:
+    """Keep the suite offline even when S3_BUCKET is set in .env."""
+
+    stub = NullDocumentStore()
+    monkeypatch.setattr(document_store_module, "default_document_store", stub)
     return stub
 
 

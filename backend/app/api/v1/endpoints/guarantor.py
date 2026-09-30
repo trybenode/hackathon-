@@ -26,6 +26,7 @@ from app.schemas.api import (
     WorkerProfileSummary,
 )
 from app.services import guarantor as guarantor_service
+from app.services.document_store import DocumentTooLargeError, UnsupportedDocumentError
 from app.services.identity_provider import IdentitySubmission, LivenessSubmission
 from app.services.guarantor import (
     GuarantorError,
@@ -232,15 +233,15 @@ async def submit_identity(
     utility_bill: UploadFile | None = File(default=None),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorIdentityResponse:
-    """Forward identity details to the provider and keep only the reference.
+    """Forward identity details to the provider and keep only references.
 
-    The uploaded document is read for its size and then discarded; nothing
-    sensitive reaches the database.
+    The utility bill goes to object storage; the database keeps its key. The
+    identity numbers are passed to the provider and dropped.
     """
 
-    document_size: int | None = None
-    if utility_bill is not None:
-        document_size = len(await utility_bill.read())
+    document: tuple[str, bytes] | None = None
+    if utility_bill is not None and utility_bill.filename:
+        document = (utility_bill.filename, await utility_bill.read())
         await utility_bill.close()
 
     submission = IdentitySubmission(
@@ -250,14 +251,14 @@ async def submit_identity(
         address=address.strip(),
         nin=nin.strip(),
         bvn=bvn.strip(),
-        document_filename=utility_bill.filename if utility_bill else None,
-        document_size=document_size,
     )
 
     try:
         record = await guarantor_service.submit_identity_check(
-            session, instrument_id, submission
+            session, instrument_id, submission, document=document
         )
+    except (UnsupportedDocumentError, DocumentTooLargeError) as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
     except GuarantorError as error:
         # The failed attempt is still worth recording.
         await session.commit()

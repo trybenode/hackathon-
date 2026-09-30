@@ -123,3 +123,48 @@ async def test_expired_code_is_refused(session: AsyncSession) -> None:
         assert "expired" in str(error)
     else:  # pragma: no cover - the call must raise
         raise AssertionError("an expired code was accepted")
+
+
+async def test_profile_can_be_read_and_updated(session: AsyncSession) -> None:
+    session.add(User(email="grace@example.com", display_name="Grace"))
+    await session.flush()
+
+    async with client_for(session) as client:
+        requested = await client.post("/api/v1/auth/code", json={"email": "grace@example.com"})
+        await client.post(
+            "/api/v1/auth/verify",
+            json={"email": "grace@example.com", "code": requested.json()["debug_code"]},
+        )
+
+        before = await client.get("/api/v1/me/profile")
+        assert before.status_code == 200
+        assert before.json()["phone"] is None
+
+        updated = await client.patch(
+            "/api/v1/me/profile",
+            json={
+                "display_name": "Grace Guarantor",
+                "phone": "+2348012345678",
+                "address": "12 Trust Street, Lagos",
+            },
+        )
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["display_name"] == "Grace Guarantor"
+        assert updated.json()["phone"] == "+2348012345678"
+
+        # The change sticks, and the email is untouched.
+        again = await client.get("/api/v1/me/profile")
+        assert again.json()["address"] == "12 Trust Street, Lagos"
+        assert again.json()["email"] == "grace@example.com"
+
+    app.dependency_overrides.clear()
+
+
+async def test_profile_needs_a_session(session: AsyncSession) -> None:
+    async with client_for(session) as client:
+        assert (await client.get("/api/v1/me/profile")).status_code == 401
+        assert (
+            await client.patch("/api/v1/me/profile", json={"display_name": "Nobody"})
+        ).status_code == 401
+
+    app.dependency_overrides.clear()

@@ -12,6 +12,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import current_user
@@ -49,6 +50,26 @@ class DashboardResponse(ApiModel):
     guarantees: list[GuaranteeCard]
     recent_activity: list[ActivityItem]
     action_required: GuaranteeCard | None = None
+
+
+class ProfileUpdateRequest(ApiModel):
+    """What a guarantor may change about themselves.
+
+    The email is left out on purpose: it identifies the account, so changing
+    it belongs to the sign-in flow rather than a profile form.
+    """
+
+    display_name: str = Field(min_length=1, max_length=160)
+    phone: str | None = Field(default=None, max_length=40)
+    address: str | None = Field(default=None, max_length=500)
+
+
+class ProfileResponse(ApiModel):
+    user_id: UUID
+    email: str
+    display_name: str
+    phone: str | None = None
+    address: str | None = None
 
 
 class NotificationItem(ApiModel):
@@ -91,6 +112,38 @@ async def dashboard(
             for entry in summary.recent_activity
         ],
         action_required=_card(summary.action_required) if summary.action_required else None,
+    )
+
+
+@router.get("/profile", response_model=ProfileResponse, summary="The guarantor's profile")
+async def profile(user: User = Depends(current_user)) -> ProfileResponse:
+    return ProfileResponse(
+        user_id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        phone=user.phone,
+        address=user.address,
+    )
+
+
+@router.patch("/profile", response_model=ProfileResponse, summary="Update the profile")
+async def update_profile(
+    payload: ProfileUpdateRequest,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> ProfileResponse:
+    user.display_name = payload.display_name.strip()
+    # Empty strings from the form mean "cleared", not "unchanged".
+    user.phone = (payload.phone or "").strip() or None
+    user.address = (payload.address or "").strip() or None
+
+    await session.commit()
+    return ProfileResponse(
+        user_id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        phone=user.phone,
+        address=user.address,
     )
 
 

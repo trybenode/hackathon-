@@ -140,6 +140,9 @@ class User(UUIDTimestampMixin, Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(160))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    #: Contact details a guarantor maintains on their profile.
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     worker: Mapped["Worker | None"] = relationship(back_populates="user")
 
@@ -200,6 +203,8 @@ class IdentityVerification(UUIDTimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(40))
     #: "identity" for the details check, "liveness" for the face check.
     check_type: Mapped[str] = mapped_column(String(40), default="identity")
+    #: Object storage key for a supporting document, never the document itself.
+    document_reference: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class OutcomeSource(UUIDTimestampMixin, Base):

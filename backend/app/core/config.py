@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: str = "http://localhost:3000"
 
+    #: S3-compatible object storage for KYC documents. Without a bucket the
+    #: document is validated and dropped.
+    s3_bucket: str = Field("", alias="S3_BUCKET")
+    aws_endpoint_url_s3: str = Field("", alias="AWS_ENDPOINT_URL_S3")
+    aws_region: str = Field("", alias="AWS_REGION")
+    #: boto3 reads the process environment, which does not see .env, so the
+    #: credentials are passed to the client explicitly.
+    aws_access_key_id: str = Field("", alias="AWS_ACCESS_KEY_ID")
+    aws_secret_access_key: str = Field("", alias="AWS_SECRET_ACCESS_KEY")
+
     #: Transactional email. Without a key, login codes are logged instead.
     resend_api_key: str = Field("", alias="RESEND_API_KEY")
     #: Resend only accepts a verified domain, or its shared onboarding sender.
