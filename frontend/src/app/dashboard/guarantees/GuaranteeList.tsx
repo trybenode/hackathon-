@@ -3,13 +3,16 @@
 import { useState } from "react";
 import { GuaranteeCard } from "@/components/dashboard/GuaranteeCard";
 import { cn } from "@/lib/cn";
-import { guarantees } from "@/lib/dashboardMock";
+import { useDashboard } from "../useDashboard";
 
 const TABS = ["All", "Active", "Completed"] as const;
 type Tab = (typeof TABS)[number];
 
 export function GuaranteeList() {
+  const { data, error, loading } = useDashboard();
   const [tab, setTab] = useState<Tab>("All");
+
+  const guarantees = data?.guarantees ?? [];
   const shown = tab === "All" ? guarantees : guarantees.filter((item) => item.status === tab);
 
   return (
@@ -46,13 +49,22 @@ export function GuaranteeList() {
       </div>
 
       <div className="flex flex-col gap-4 px-6 pt-6">
-        {shown.length === 0 ? (
-          <p className="text-body-sm text-grey-600">Nothing here yet.</p>
-        ) : (
-          shown.map((guarantee) => (
-            <GuaranteeCard key={guarantee.id} guarantee={guarantee} layout="inline" />
-          ))
+        {loading && (
+          <p role="status" className="text-body-sm text-grey-600">
+            Loading…
+          </p>
         )}
+        {error && (
+          <p role="alert" className="text-body-sm text-error">
+            {error}
+          </p>
+        )}
+        {!loading && !error && shown.length === 0 && (
+          <p className="text-body-sm text-grey-600">Nothing here yet.</p>
+        )}
+        {shown.map((guarantee) => (
+          <GuaranteeCard key={guarantee.instrument_id} guarantee={guarantee} layout="inline" />
+        ))}
       </div>
     </main>
   );

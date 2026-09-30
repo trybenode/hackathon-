@@ -1,7 +1,9 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Button, DotIcon } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { formatNaira, type DashboardGuarantee } from "@/lib/dashboardMock";
+import { formatNaira, formatStartedOn } from "@/lib/format";
+import type { GuaranteeCard as Guarantee } from "@/lib/guarantor";
 
 /** Initials stand in until workers have avatars. */
 function initialsOf(name: string) {
@@ -14,24 +16,46 @@ function initialsOf(name: string) {
     .toUpperCase();
 }
 
+const statusDot: Record<string, string> = {
+  Active: "text-success",
+  Completed: "text-success",
+  "Pending Signature": "text-warning",
+  "Pending Verification": "text-warning",
+  Triggered: "text-error-mid",
+  Declined: "text-error-mid",
+  Revoked: "text-error-mid",
+  Expired: "text-grey-800",
+};
+
 export function GuaranteeCard({
   guarantee,
   layout = "stacked",
 }: {
-  guarantee: DashboardGuarantee;
+  guarantee: Guarantee;
   /** `stacked` puts View on the left (home), `inline` puts it on the right. */
   layout?: "stacked" | "inline";
 }) {
-  const active = guarantee.status === "Active";
+  const view = (
+    <Link href={`/guarantor/${guarantee.instrument_id}/review`}>
+      <Button variant="outline" size="md" className="rounded-pill px-8">
+        View
+      </Button>
+    </Link>
+  );
+  const started = (
+    <span className="text-body-sm text-grey-600">
+      Started - {formatStartedOn(guarantee.started_on)}
+    </span>
+  );
 
   return (
     <article className="flex flex-col gap-4 rounded-xl border border-stroke bg-white p-4 shadow-1">
       <header className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-badge-high text-body-sm font-semibold text-grey-900">
-            {guarantee.avatarUrl ? (
+            {guarantee.avatar_url ? (
               <Image
-                src={guarantee.avatarUrl}
+                src={guarantee.avatar_url}
                 alt=""
                 width={44}
                 height={44}
@@ -39,40 +63,40 @@ export function GuaranteeCard({
                 className="h-11 w-11 object-cover"
               />
             ) : (
-              initialsOf(guarantee.workerName)
+              initialsOf(guarantee.worker_name)
             )}
           </span>
           <span className="flex flex-col">
-            <span className="text-body-md font-medium text-grey-900">{guarantee.workerName}</span>
-            <span className="text-body-sm text-grey-600">{guarantee.workerRole}</span>
+            <span className="text-body-md font-medium text-grey-900">
+              {guarantee.worker_name}
+            </span>
+            <span className="text-body-sm text-grey-600">{guarantee.worker_role ?? ""}</span>
           </span>
         </div>
 
         <span className="flex items-center gap-1.5 text-body-sm text-grey-900">
-          <DotIcon className={cn("shrink-0", active ? "text-success" : "text-success")} />
+          <DotIcon className={cn("shrink-0", statusDot[guarantee.status] ?? "text-grey-400")} />
           {guarantee.status}
         </span>
       </header>
 
       <div className="flex flex-col gap-1">
-        <p className="text-body-lg font-semibold text-grey-900">{guarantee.jobTitle}</p>
+        <p className="text-body-lg font-semibold text-grey-900">
+          {guarantee.job_title ?? "Guarantee"}
+        </p>
         <p className="text-body-sm text-grey-600">{formatNaira(guarantee.amount)}</p>
       </div>
 
       <footer className="flex items-center justify-between gap-4">
         {layout === "inline" ? (
           <>
-            <span className="text-body-sm text-grey-600">Started - {guarantee.startedOn}</span>
-            <Button variant="outline" size="md" className="rounded-pill px-8">
-              View
-            </Button>
+            {started}
+            {view}
           </>
         ) : (
           <>
-            <Button variant="outline" size="md" className="rounded-pill px-8">
-              View
-            </Button>
-            <span className="text-body-sm text-grey-600">Started - {guarantee.startedOn}</span>
+            {view}
+            {started}
           </>
         )}
       </footer>

@@ -1,13 +1,47 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, type FormEvent } from "react";
 import { Button, Input, NigeriaFlagIcon, PencilIcon } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { guarantor } from "@/lib/dashboardMock";
+import { ApiError, getSignedInUser, type SignedInUser } from "@/lib/guarantor";
+
+/** Initials for the avatar, e.g. "Daniel Peters" becomes DP. */
+function initialsOf(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
 
 export function EditProfile() {
+  const router = useRouter();
+  const [user, setUser] = useState<SignedInUser | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const loaded = await getSignedInUser();
+        if (!cancelled) setUser(loaded);
+      } catch (cause) {
+        if (!cancelled && cause instanceof ApiError && cause.status === 401) {
+          router.replace("/sign-in");
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,7 +68,7 @@ export function EditProfile() {
         <div className="flex justify-center">
           <span className="relative">
             <span className="flex h-24 w-24 items-center justify-center rounded-pill bg-primary-500 text-h2 font-medium text-white">
-              {guarantor.initials}
+              {user ? initialsOf(user.display_name) : "—"}
             </span>
             <button
               type="button"
@@ -46,13 +80,14 @@ export function EditProfile() {
           </span>
         </div>
 
-        <Input name="name" label="Name" defaultValue={guarantor.fullName} />
+        <Input key={user?.display_name} name="name" label="Name" defaultValue={user?.display_name ?? ""} />
 
         <Input
           name="email"
           type="email"
           label="Email"
-          defaultValue={guarantor.email}
+          key={user?.email}
+          defaultValue={user?.email ?? ""}
           // The email identifies the account, so it is shown but not editable
           // here; changing it will belong to the sign-in flow.
           readOnly

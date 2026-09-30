@@ -273,3 +273,45 @@ export function getSignedInUser() {
 export function signOut() {
   return request<void>("/auth/logout", { method: "POST" });
 }
+
+export type GuaranteeCard = {
+  instrument_id: string;
+  worker_name: string;
+  worker_role: string | null;
+  avatar_url: string | null;
+  job_title: string | null;
+  amount: string | null;
+  status: string;
+  started_on: string | null;
+};
+
+export type ActivityItem = {
+  id: string;
+  label: string;
+  at: string;
+};
+
+export type DashboardData = {
+  greeting_name: string;
+  active_count: number;
+  completed_count: number;
+  guarantees: GuaranteeCard[];
+  recent_activity: ActivityItem[];
+  action_required: GuaranteeCard | null;
+};
+
+export type NotificationItem = {
+  id: string;
+  title: string;
+  body: string;
+  at: string;
+  icon: "bell" | "check" | "calendar";
+};
+
+export function getDashboard() {
+  return request<DashboardData>("/me/dashboard");
+}
+
+export function getNotifications() {
+  return request<NotificationItem[]>("/me/notifications");
+}
