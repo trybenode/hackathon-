@@ -31,6 +31,8 @@ class GuaranteeCard(ApiModel):
     job_title: str | None = None
     amount: Decimal | None = None
     status: str
+    #: Which tab shows this card: "pending", "active" or "completed".
+    bucket: str
     started_on: datetime | None = None
 
 
@@ -66,6 +68,7 @@ def _card(source: dashboard_service.DashboardGuarantee) -> GuaranteeCard:
         job_title=source.job_title,
         amount=source.amount,
         status=source.status,
+        bucket=source.bucket,
         started_on=source.started_on,
     )
 

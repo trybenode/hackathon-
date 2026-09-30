@@ -37,6 +37,24 @@ FINISHED_JOB_STATUSES = {JobStatus.COMPLETED, JobStatus.RELEASED}
 #: How close to expiry counts as "expires soon" in the alerts list.
 EXPIRING_WINDOW = timedelta(days=14)
 
+#: Instrument states that mean the guarantee is over, however it ended. They
+#: keep their own label on the card; the bucket only decides which tab shows
+#: them.
+CLOSED_STATUSES = {
+    AgreementStatus.TRIGGERED,
+    AgreementStatus.REVOKED,
+    AgreementStatus.EXPIRED,
+    AgreementStatus.DECLINED,
+}
+
+#: Waiting on the guarantor, so not yet a live guarantee.
+PENDING_STATUSES = {
+    AgreementStatus.DRAFT,
+    AgreementStatus.REQUESTED,
+    AgreementStatus.PENDING_SIGNATURE,
+    AgreementStatus.PENDING_VERIFICATION,
+}
+
 #: Audit actions worth showing a guarantor, and how to word them.
 ACTIVITY_LABELS = {
     "guarantor.created": "Guarantee requested",
@@ -60,6 +78,8 @@ class DashboardGuarantee:
     job_title: str | None
     amount: Decimal | None
     status: str
+    #: Which tab shows this card: "pending", "active" or "completed".
+    bucket: str
     started_on: datetime | None
 
 
@@ -96,6 +116,23 @@ def _card_status(agreement: GuarantorAgreement, job: Job | None) -> str:
     return status_label(agreement.status)
 
 
+def _bucket(agreement: GuarantorAgreement, job: Job | None) -> str:
+    """Group a guarantee for the All / Active / Completed tabs.
+
+    A guarantee is done when its job finished, or when the instrument closed
+    for any reason, so a triggered or revoked guarantee is filed with the
+    completed ones rather than vanishing from both tabs.
+    """
+
+    if agreement.status in PENDING_STATUSES:
+        return "pending"
+    if agreement.status in CLOSED_STATUSES:
+        return "completed"
+    if job is not None and job.status in FINISHED_JOB_STATUSES:
+        return "completed"
+    return "active"
+
+
 async def _load_guarantees(
     session: AsyncSession, guarantor_user_id: UUID
 ) -> list[tuple[GuarantorAgreement, DashboardGuarantee]]:
@@ -125,6 +162,7 @@ async def _load_guarantees(
                     job_title=job.title if job else None,
                     amount=job.agreed_amount if job else None,
                     status=_card_status(agreement, job),
+                    bucket=_bucket(agreement, job),
                     started_on=agreement.signed_at or agreement.created_at,
                 ),
             )
@@ -138,8 +176,8 @@ async def load_summary(session: AsyncSession, guarantor_user_id: UUID) -> Dashbo
 
     cards = await _load_guarantees(session, guarantor_user_id)
 
-    active = [card for _, card in cards if card.status == "Active"]
-    completed = [card for _, card in cards if card.status == "Completed"]
+    active = [card for _, card in cards if card.bucket == "active"]
+    completed = [card for _, card in cards if card.bucket == "completed"]
 
     waiting = next(
         (

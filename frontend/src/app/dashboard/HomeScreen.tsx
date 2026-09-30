@@ -32,7 +32,7 @@ export function HomeScreen() {
     );
   }
 
-  const active = data.guarantees.filter((item) => item.status === "Active");
+  const active = data.guarantees.filter((item) => item.bucket === "active");
   const waiting = data.action_required;
 
   return (

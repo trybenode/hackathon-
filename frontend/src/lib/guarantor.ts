@@ -282,6 +282,8 @@ export type GuaranteeCard = {
   job_title: string | null;
   amount: string | null;
   status: string;
+  /** Which tab shows this card: "pending", "active" or "completed". */
+  bucket: "pending" | "active" | "completed";
   started_on: string | null;
 };
 

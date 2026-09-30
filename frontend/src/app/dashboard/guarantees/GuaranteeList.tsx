@@ -8,12 +8,19 @@ import { useDashboard } from "../useDashboard";
 const TABS = ["All", "Active", "Completed"] as const;
 type Tab = (typeof TABS)[number];
 
+/** The API decides which bucket a guarantee belongs to; tabs just filter. */
+const TAB_BUCKET: Record<Exclude<Tab, "All">, string> = {
+  Active: "active",
+  Completed: "completed",
+};
+
 export function GuaranteeList() {
   const { data, error, loading } = useDashboard();
   const [tab, setTab] = useState<Tab>("All");
 
   const guarantees = data?.guarantees ?? [];
-  const shown = tab === "All" ? guarantees : guarantees.filter((item) => item.status === tab);
+  const shown =
+    tab === "All" ? guarantees : guarantees.filter((item) => item.bucket === TAB_BUCKET[tab]);
 
   return (
     <main className="flex flex-col">

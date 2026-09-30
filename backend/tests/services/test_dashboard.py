@@ -82,7 +82,65 @@ async def test_summary_counts_active_and_completed(
     # A finished job reads as Completed even while the instrument is active.
     assert summary.completed_count == 1
     assert {card.status for card in summary.guarantees} == {"Active", "Completed"}
+    assert {card.bucket for card in summary.guarantees} == {"active", "completed"}
     assert summary.guarantees[0].amount == Decimal("25000.00")
+
+
+async def test_closed_guarantees_group_with_completed(
+    session: AsyncSession, worker: Worker
+) -> None:
+    """A triggered or revoked guarantee is over, so the Completed tab shows it."""
+
+    guarantor = User(email="grace@example.com", display_name="Grace G")
+    session.add(guarantor)
+    await session.flush()
+
+    triggered = await build_guarantee(
+        session,
+        worker,
+        guarantor,
+        job_status=JobStatus.IN_PROGRESS,
+        agreement_status=AgreementStatus.TRIGGERED,
+    )
+    revoked = await build_guarantee(
+        session,
+        worker,
+        guarantor,
+        job_status=JobStatus.IN_PROGRESS,
+        agreement_status=AgreementStatus.REVOKED,
+    )
+
+    summary = await service.load_summary(session, guarantor.id)
+    by_id = {card.instrument_id: card for card in summary.guarantees}
+
+    assert by_id[triggered.id].bucket == "completed"
+    assert by_id[revoked.id].bucket == "completed"
+    # The card still says what actually happened.
+    assert by_id[triggered.id].status == "Triggered"
+    assert by_id[revoked.id].status == "Revoked"
+    assert summary.active_count == 0
+
+
+async def test_pending_requests_are_their_own_bucket(
+    session: AsyncSession, worker: Worker
+) -> None:
+    guarantor = User(email="grace@example.com", display_name="Grace G")
+    session.add(guarantor)
+    await session.flush()
+
+    await build_guarantee(
+        session,
+        worker,
+        guarantor,
+        job_status=JobStatus.ACCEPTED,
+        agreement_status=AgreementStatus.PENDING_SIGNATURE,
+    )
+
+    summary = await service.load_summary(session, guarantor.id)
+
+    assert summary.guarantees[0].bucket == "pending"
+    assert summary.active_count == 0
+    assert summary.completed_count == 0
 
 
 async def test_summary_is_scoped_to_one_guarantor(
