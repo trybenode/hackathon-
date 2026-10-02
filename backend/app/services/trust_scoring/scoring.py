@@ -10,7 +10,13 @@ class PlatformConfig:
     min_jobs: int = 5
     high_t: float = 0.80
     medium_t: float = 0.60
-    baseline: float = 0.60
+    # No separate `baseline` field. decision is derived directly from band
+    # (High/Medium -> accept, Low/Building History -> reject) rather than
+    # from an independent threshold, so band and decision can never
+    # disagree. A previous version had these as two separate numbers, which
+    # allowed a worker to land in the Medium band while still being
+    # rejected -- confusing to show on screen, and not a decision anyone
+    # made on purpose. See docs/trust_scoring_decision_band_matches_decision.md.
     k: int = 10                                     # evidence term = 0.5 at n = k
     building_history_decision: bool = False
 
@@ -21,7 +27,7 @@ PRESETS = {
                  "dispute_rate": 0.20, "repeat_hire_rate": 0.15,
                  "no_show_rate": 0.10, "cancellation_rate": 0.10},
         required_signals=("completion_rate", "safety_incident_rate"),
-        min_jobs=8, baseline=0.70),
+        min_jobs=8, medium_t=0.70),
     "ride_hailing": PlatformConfig(
         weights={"completion_rate": 0.35, "cancellation_rate": 0.30,
                  "dispute_rate": 0.35},
@@ -73,9 +79,11 @@ def score_worker(signals: dict, n_jobs: int, cfg: PlatformConfig) -> dict:
 
     band = ("High" if score >= cfg.high_t else
             "Medium" if score >= cfg.medium_t else "Low")
-    decision = score >= cfg.baseline
+    # decision follows band directly: High/Medium accept, Low rejects.
+    # This guarantees band and decision can never disagree.
+    decision = band in ("High", "Medium")
     weakest = min(norm, key=norm.get)
-    summary = f"Score {score:.2f} vs baseline {cfg.baseline:.2f}; weakest signal: {weakest}"
+    summary = f"Score {score:.2f} ({band}); weakest signal: {weakest}"
 
     return {"decision": decision, "confidence": confidence, "band": band,
             "status": "Scored", "signals_used": used, "explanation_summary": summary}
