@@ -6,11 +6,11 @@ import { cn } from "@/lib/cn";
 import { BriefcaseIcon, HomeIcon, PersonIcon } from "./icons";
 
 const TABS = [
-  // Home and Profile have no designs yet, so they are shown but inert rather
-  // than linking to pages that would 404.
+  // Home has no design yet, so it is shown but inert rather than linking to a
+  // page that would 404.
   { label: "Home", href: null, Icon: HomeIcon },
   { label: "Jobs", href: "/worker/jobs", Icon: BriefcaseIcon },
-  { label: "Profile", href: null, Icon: PersonIcon },
+  { label: "Profile", href: "/worker/profile", Icon: PersonIcon },
 ];
 
 export function WorkerNav() {
