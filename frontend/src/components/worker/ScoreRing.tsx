@@ -8,20 +8,21 @@ export function ScoreRing({
   thickness = 8,
   className,
 }: {
-  /** 0 to 1. */
-  score: number;
+  /** 0 to 1, or null when there is no score yet. */
+  score: number | null;
   size?: number;
   thickness?: number;
   className?: string;
 }) {
   const radius = (size - thickness) / 2;
   const circumference = 2 * Math.PI * radius;
-  const filled = Math.min(1, Math.max(0, score)) * circumference;
+  const filled = score === null ? 0 : Math.min(1, Math.max(0, score)) * circumference;
+  const label = score === null ? "—" : formatPercent(score);
 
   return (
     <span
       role="img"
-      aria-label={`Trust score ${formatPercent(score)}`}
+      aria-label={score === null ? "No trust score yet" : `Trust score ${label}`}
       className={cn("relative inline-flex shrink-0 items-center justify-center", className)}
       style={{ width: size, height: size }}
     >
@@ -50,7 +51,7 @@ export function ScoreRing({
           size >= 64 ? "text-body-lg font-medium" : "text-body-sm",
         )}
       >
-        {formatPercent(score)}
+        {label}
       </span>
     </span>
   );

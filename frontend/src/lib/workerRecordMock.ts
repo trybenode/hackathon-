@@ -5,16 +5,30 @@
  * credentials APIs exist.
  *
  * `assessment` follows the dict that trust_scoring.score_worker() returns, so
- * the screens can switch to the real /trust/query response without reshaping.
- * score_worker() does not return the score itself yet; the 87% in the designs
- * needs it, so `score` is carried alongside until that output includes it.
+ * the screens can switch to the real /trust/query response without reshaping,
+ * plus one field that dict does not have yet: `score`, which the designs show
+ * as the "Trust Score" percentage.
  */
 
 export type TrustBand = "High" | "Medium" | "Low" | "Building History";
 
 export type TrustAssessment = {
   decision: boolean;
+  /**
+   * How much evidence backs the score, from 0 to 1: job count against the
+   * preset's k, times the share of weighted signals present. Not a second
+   * score; a worker with a poor record and plenty of jobs is low score, high
+   * confidence.
+   */
   confidence: number;
+  /**
+   * How good the worker's record is, from 0 to 1: the weighted average of the
+   * normalised signals. score_worker() already computes this and derives
+   * `band` (high_t / medium_t) and `decision` (baseline) from it, but does not
+   * return it. Returning it, rounded, is the change these screens need.
+   * Null for Building History and Disqualified, which return before scoring.
+   */
+  score: number | null;
   band: TrustBand;
   status: "Scored" | "Building History" | "Disqualified";
   signals_used: string[];
@@ -29,18 +43,30 @@ export type VerifiedOutcome = {
   status: "Client Confirmed" | "Auto-released";
 };
 
+/**
+ * A verified claim the worker carries between platforms (SRS 3.5): who they
+ * are, who stands behind them, and work history verified elsewhere. Not
+ * documents; the documents stay with the provider that checked them. Distinct
+ * from verified outcomes, which are individual jobs on this platform.
+ */
+export type VerifiedCredential = {
+  id: string;
+  kind: "identity" | "guarantor" | "imported_history";
+  label: string;
+  issuer: string;
+};
+
 export type WorkerRecord = {
   name: string;
   /** "Jane A." on the record, which leaves the profile for a link's viewers. */
   shortName: string;
   role: string;
   identityVerified: boolean;
-  score: number;
   assessment: TrustAssessment;
-  /** Verified outcomes the score rests on: score_worker's n_jobs. */
+  /** Jobs whose outcome was verified, on this platform: score_worker's n_jobs. */
   verifiedOutcomes: number;
   lastUpdated: string;
-  credentials: number;
+  credentials: VerifiedCredential[];
   stats: {
     completedJobs: number;
     onTimeRate: number;
@@ -67,10 +93,10 @@ export const workerRecord: WorkerRecord = {
   shortName: "Jane A.",
   role: "Cleaner",
   identityVerified: true,
-  score: 0.87,
   assessment: {
     decision: true,
     confidence: 0.81,
+    score: 0.87,
     band: "High",
     status: "Scored",
     signals_used: ["completion_rate", "dispute_rate", "no_show_rate", "repeat_hire_rate"],
@@ -78,7 +104,16 @@ export const workerRecord: WorkerRecord = {
   },
   verifiedOutcomes: 42,
   lastUpdated: "2026-09-23T10:00:00+01:00",
-  credentials: 8,
+  credentials: [
+    { id: "cred-1", kind: "identity", label: "Identity verified (NIN)", issuer: "KYC provider" },
+    { id: "cred-2", kind: "identity", label: "Liveness check passed", issuer: "KYC provider" },
+    { id: "cred-3", kind: "guarantor", label: "Active guarantor", issuer: "Guarantor instrument" },
+    { id: "cred-4", kind: "imported_history", label: "12 verified jobs", issuer: "CleanPro" },
+    { id: "cred-5", kind: "imported_history", label: "9 verified jobs", issuer: "HomeHelp NG" },
+    { id: "cred-6", kind: "imported_history", label: "6 verified jobs", issuer: "Sparkle Services" },
+    { id: "cred-7", kind: "imported_history", label: "4 verified jobs", issuer: "TidyUp" },
+    { id: "cred-8", kind: "imported_history", label: "3 verified jobs", issuer: "Maids Direct" },
+  ],
   stats: {
     completedJobs: 42,
     onTimeRate: 0.95,

@@ -97,7 +97,7 @@ export function PortableRecord() {
           </div>
 
           <div className="flex items-center gap-4 rounded-lg bg-primary-25 p-3">
-            <ScoreRing score={record.score} />
+            <ScoreRing score={record.assessment.score} />
             <div className="flex flex-col gap-1.5">
               <p className="text-body-md font-semibold text-grey-900">Trust Score</p>
               <p className="text-xs leading-5 text-grey-900">
@@ -118,7 +118,7 @@ export function PortableRecord() {
           className="flex items-center gap-4 rounded-xl border border-grey-400 px-6 py-4 text-grey-900"
         >
           <CredentialIcon className="shrink-0 text-info" />
-          <span className="flex-1 text-body-md">{record.credentials} verified credentials</span>
+          <span className="flex-1 text-body-md">{record.credentials.length} verified credentials</span>
           <ChevronRightIcon className="shrink-0" />
         </div>
 

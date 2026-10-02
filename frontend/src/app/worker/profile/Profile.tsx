@@ -42,7 +42,7 @@ export function Profile() {
             <TrustBandBadge band={record.assessment.band} />
           </div>
           <div className="flex items-center gap-3">
-            <ScoreRing score={record.score} size={44} thickness={5} />
+            <ScoreRing score={record.assessment.score} size={44} thickness={5} />
             <div className="flex flex-col gap-0.5">
               <p className="text-body-sm text-grey-900">Trust Score</p>
               <p className="text-xs leading-4 text-grey-900">
