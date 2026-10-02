@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: str = "http://localhost:3000"
 
+    #: How often the background sweep expires overdue instruments. Set to 0
+    #: to disable it, e.g. when a scheduler calls the endpoint instead.
+    expiry_sweep_seconds: int = Field(900, alias="EXPIRY_SWEEP_SECONDS")
+
     #: S3-compatible object storage for KYC documents. Without a bucket the
     #: document is validated and dropped.
     s3_bucket: str = Field("", alias="S3_BUCKET")

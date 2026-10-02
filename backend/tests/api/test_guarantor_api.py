@@ -255,3 +255,34 @@ async def test_self_guarantee_returns_422(session: AsyncSession, worker: Worker)
         assert response.status_code == 422
 
     app.dependency_overrides.clear()
+
+
+async def test_expire_due_endpoint_closes_overdue_instruments(
+    session: AsyncSession, worker: Worker
+) -> None:
+    from datetime import UTC, datetime, timedelta
+    from uuid import UUID
+
+    from sqlalchemy import select
+
+    from app.models.domain import GuarantorAgreement
+
+    async with client_for(session) as client:
+        created = await client.post("/api/v1/guarantor-instruments", json=create_payload(worker))
+        instrument_id = created.json()["instrument_id"]
+
+        # Backdate it past its validity window.
+        agreement = await session.scalar(
+            select(GuarantorAgreement).where(GuarantorAgreement.id == UUID(instrument_id))
+        )
+        agreement.valid_until = datetime.now(tz=UTC) - timedelta(days=1)
+        await session.flush()
+
+        swept = await client.post("/api/v1/guarantor-instruments/expire-due")
+        assert swept.status_code == 200
+        assert swept.json() == {"expired": 1}
+
+        detail = await client.get(f"/api/v1/guarantor-instruments/{instrument_id}")
+        assert detail.json()["status"] == "Expired"
+
+    app.dependency_overrides.clear()

@@ -141,6 +141,24 @@ async def create_instrument(
     )
 
 
+@router.post(
+    "/expire-due",
+    summary="Expire instruments whose validity period has ended",
+)
+async def expire_due(
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, int]:
+    """Run the expiry sweep on demand.
+
+    The app also sweeps on a timer; this exists so an external scheduler can
+    own it instead, and so the sweep can be triggered in a demo.
+    """
+
+    expired = await guarantor_service.expire_due_instruments(session)
+    await session.commit()
+    return {"expired": len(expired)}
+
+
 @router.get("", response_model=GuarantorInstrumentListResponse, summary="List guarantor instruments")
 async def list_instruments(
     worker_id: UUID | None = Query(default=None),
