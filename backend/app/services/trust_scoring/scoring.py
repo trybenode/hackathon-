@@ -87,3 +87,20 @@ def score_worker(signals: dict, n_jobs: int, cfg: PlatformConfig) -> dict:
 
     return {"decision": decision, "confidence": confidence, "band": band,
             "status": "Scored", "signals_used": used, "explanation_summary": summary}
+
+
+def starting_rating(signals: dict, n_jobs: int) -> dict:
+    """
+    Separate, capped, unverified rating for imported-only workers who never
+    have enough data to go through score_worker. Uses only completion_rate
+    and cancellation_rate, since imports only ever supply job_id, date,
+    status. Capped at 0.65 so it can never read as the top tier. Does not
+    call score_worker and shares no state with it.
+    """
+    completion = signals.get("completion_rate", 0)
+    cancellation = signals.get("cancellation_rate", 0)
+    raw = (0.6 * NORMALIZERS["completion_rate"](completion)
+           + 0.4 * NORMALIZERS["cancellation_rate"](cancellation))
+    capped = min(raw, 0.65)
+    return {"starting_rating": round(capped, 2), "verified": False,
+            "label": "Building History (imported)"}
