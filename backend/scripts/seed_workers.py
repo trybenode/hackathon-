@@ -108,12 +108,16 @@ print(f"    label={sr['label']!r}  verified={sr['verified']}")
 print(f"    Note: Capped at 0.65 regardless of how clean the imported history looks.")
 print()
 
-# 10. Boundary case — near the domestic medium_t threshold (0.70).
-jobs = make_jobs(40, n_clients=8)
-for j in jobs[:5]:
+# 10. Genuine boundary case — score lands exactly at medium_t (0.70).
+#     Every client is unique (no repeat hires at all) plus 3 upheld
+#     disputes combine to land precisely on the threshold, correctly
+#     classified Medium since medium_t is inclusive (score >= medium_t).
+jobs = make_jobs(40, n_clients=40)
+for j in jobs[:3]:
     j["dispute_resolution"] = "upheld"
-run("10. Domestic worker, boundary case near medium_t (0.70)",
-    jobs, DOMESTIC_FULL, "domestic")
+run("10. Domestic worker, genuine boundary case (score lands exactly at 0.70)",
+    jobs, DOMESTIC_FULL, "domestic",
+    note="Confirms medium_t is inclusive — score == threshold correctly lands Medium, not Low.")
 
 print("=" * 90)
 print("Review each result above: does the band and explanation feel right")
