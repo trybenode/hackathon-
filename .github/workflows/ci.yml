@@ -1,0 +1,92 @@
+name: CI
+
+# Local runs use SQLite for speed. This is where the Postgres run becomes
+# mandatory: the suite runs against the same engine as Neon, after the
+# migrations have actually been applied, so nothing merges without catching
+# Postgres-specific problems (enum labels, timezone-aware timestamps, types).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (Postgres)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: trust
+          POSTGRES_PASSWORD: trust
+          POSTGRES_DB: trust_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://trust:trust@localhost:5432/trust_test
+      TEST_DATABASE_URL: postgresql+asyncpg://trust:trust@localhost:5432/trust_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Apply migrations
+        working-directory: backend
+        # Proves the migrations build the schema from scratch, which a local
+        # SQLite run never exercises.
+        run: alembic upgrade head
+
+      - name: Check migrations match the models
+        working-directory: backend
+        # Applying migrations proves they run; this proves they produce the
+        # schema the models describe.
+        run: python scripts/check_migrations.py
+
+      - name: Run tests against Postgres
+        working-directory: backend
+        run: pytest -q
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        working-directory: frontend
+        run: pnpm typecheck
+
+      - name: Lint
+        working-directory: frontend
+        run: pnpm lint

@@ -74,8 +74,26 @@ class AssessmentStatus(StrEnum):
 
 
 class AgreementStatus(StrEnum):
+    """Guarantor instrument lifecycle.
+
+    Draft -> Pending Signature -> Pending Verification -> Active ->
+    Triggered -> (Disputed) -> Paid / Dismissed, or Expired / Revoked.
+
+    A triggered claim is still live work for the guarantor; it ends only when
+    it is paid or dismissed.
+    Declined covers a guarantor refusing to sign; suspended is reserved for
+    administrative holds on an active instrument.
+    """
+
+    DRAFT = "draft"
     REQUESTED = "requested"
+    PENDING_SIGNATURE = "pending_signature"
+    PENDING_VERIFICATION = "pending_verification"
     ACTIVE = "active"
+    TRIGGERED = "triggered"
+    DISPUTED = "disputed"
+    PAID = "paid"
+    DISMISSED = "dismissed"
     SUSPENDED = "suspended"
     REVOKED = "revoked"
     EXPIRED = "expired"
@@ -122,6 +140,9 @@ class User(UUIDTimestampMixin, Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(160))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    #: Contact details a guarantor maintains on their profile.
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     worker: Mapped["Worker | None"] = relationship(back_populates="user")
 
@@ -133,6 +154,11 @@ class Worker(UUIDTimestampMixin, Base):
     history_status: Mapped[HistoryStatus] = mapped_column(
         Enum(HistoryStatus, name="history_status"), default=HistoryStatus.BUILDING_HISTORY
     )
+    #: What the worker does, e.g. "Cleaner". Shown to guarantors and clients.
+    role: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    #: Where the worker operates, e.g. "Lekki, Lagos".
+    location: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     user: Mapped[User] = relationship(back_populates="worker")
     outcomes: Mapped[list["NormalizedOutcome"]] = relationship(back_populates="worker")
@@ -163,12 +189,22 @@ class PlatformConnection(UUIDTimestampMixin, Base):
 
 
 class IdentityVerification(UUIDTimestampMixin, Base):
+    """A completed check against a KYC provider.
+
+    Holds the provider's reference and outcome only. Identity numbers and
+    documents are never stored: they are passed to the provider and dropped.
+    """
+
     __tablename__ = "identity_verifications"
 
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     provider: Mapped[str] = mapped_column(String(80))
     provider_reference: Mapped[str] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(40))
+    #: "identity" for the details check, "liveness" for the face check.
+    check_type: Mapped[str] = mapped_column(String(40), default="identity")
+    #: Object storage key for a supporting document, never the document itself.
+    document_reference: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class OutcomeSource(UUIDTimestampMixin, Base):
@@ -344,17 +380,30 @@ class GuarantorAgreement(UUIDTimestampMixin, Base):
     scope: Mapped[str] = mapped_column(Text)
     conditions: Mapped[str] = mapped_column(Text)
     relationship_type: Mapped[str] = mapped_column(String(40))
+    guarantor_phone: Mapped[str] = mapped_column(String(40), default="")
+    guarantor_address: Mapped[str] = mapped_column(String(500), default="")
     status: Mapped[AgreementStatus] = mapped_column(
-        Enum(AgreementStatus, name="agreement_status"), default=AgreementStatus.REQUESTED
+        Enum(AgreementStatus, name="agreement_status"), default=AgreementStatus.DRAFT
     )
     valid_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: When a triggered claim was paid or dismissed.
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    signatures: Mapped[list["ElectronicSignature"]] = relationship(
+        back_populates="agreement", cascade="all, delete-orphan"
+    )
 
 
 class ElectronicSignature(UUIDTimestampMixin, Base):
     __tablename__ = "electronic_signatures"
 
     agreement_id: Mapped[UUID] = mapped_column(ForeignKey("guarantor_agreements.id", ondelete="CASCADE"))
+    agreement: Mapped[GuarantorAgreement] = relationship(back_populates="signatures")
     signer_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     signer_name: Mapped[str] = mapped_column(String(160))
     signer_phone: Mapped[str] = mapped_column(String(40))
@@ -431,3 +480,35 @@ class AuditEvent(UUIDTimestampMixin, Base):
     event_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
 
     __table_args__ = (Index("ix_audit_events_entity", "entity_type", "entity_id", "created_at"),)
+
+
+class LoginCode(UUIDTimestampMixin, Base):
+    """A one-time code emailed to a guarantor so they can prove an address.
+
+    Only the hash is stored, so a database leak does not hand out valid codes.
+    """
+
+    __tablename__ = "login_codes"
+
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    code_hash: Mapped[str] = mapped_column(String(128))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    __table_args__ = (Index("ix_login_codes_email_created", "email", "created_at"),)
+
+
+class UserSession(UUIDTimestampMixin, Base):
+    """A signed-in session, referenced by an HTTP-only cookie.
+
+    The cookie carries a random token; only its hash lives here, so the table
+    cannot be used to mint sessions.
+    """
+
+    __tablename__ = "user_sessions"
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

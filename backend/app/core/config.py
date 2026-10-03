@@ -15,8 +15,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables."""
 
+    #: `.env` holds the shared settings; `.env.local` overrides them per
+    #: machine, which is how local development points at a local Postgres
+    #: instead of Neon. Later files win.
+    _REPO_ROOT = Path(__file__).resolve().parents[3]
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).resolve().parents[3] / ".env",
+        env_file=(_REPO_ROOT / ".env", _REPO_ROOT / ".env.local"),
         extra="ignore",
     )
 
@@ -28,6 +32,29 @@ class Settings(BaseSettings):
     )
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: str = "http://localhost:3000"
+
+    #: How often the background sweep expires overdue instruments. Set to 0
+    #: to disable it, e.g. when a scheduler calls the endpoint instead.
+    expiry_sweep_seconds: int = Field(900, alias="EXPIRY_SWEEP_SECONDS")
+
+    #: S3-compatible object storage for KYC documents. Without a bucket the
+    #: document is validated and dropped.
+    s3_bucket: str = Field("", alias="S3_BUCKET")
+    aws_endpoint_url_s3: str = Field("", alias="AWS_ENDPOINT_URL_S3")
+    aws_region: str = Field("", alias="AWS_REGION")
+    #: boto3 reads the process environment, which does not see .env, so the
+    #: credentials are passed to the client explicitly.
+    aws_access_key_id: str = Field("", alias="AWS_ACCESS_KEY_ID")
+    aws_secret_access_key: str = Field("", alias="AWS_SECRET_ACCESS_KEY")
+
+    #: Transactional email. Without a key, login codes are logged instead.
+    resend_api_key: str = Field("", alias="RESEND_API_KEY")
+    #: Resend only accepts a verified domain, or its shared onboarding sender.
+    resend_from: str = Field("Trust Infrastructure <onboarding@resend.dev>", alias="RESEND_FROM")
+
+    @property
+    def email_enabled(self) -> bool:
+        return bool(self.resend_api_key.strip())
 
     @property
     def cors_origin_list(self) -> list[str]:

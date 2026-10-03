@@ -5,6 +5,7 @@ Used by: FastAPI route handlers and generated OpenAPI documentation.
 """
 
 from datetime import datetime
+from typing import Literal
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
@@ -167,6 +168,8 @@ class GuarantorInstrumentCreateRequest(ApiModel):
     scope: str = Field(min_length=1, max_length=1000)
     conditions: str = Field(min_length=1, max_length=2000)
     valid_until: datetime
+    #: Keep the instrument in Draft instead of sending it for signature.
+    as_draft: bool = False
 
 
 class GuarantorInstrumentCreateResponse(ApiModel):
@@ -193,24 +196,80 @@ class GuarantorSignRequest(ApiModel):
 
 class GuarantorSignResponse(ApiModel):
     instrument_id: UUID
-    status: str = "Active"
+    status: str = "Pending Verification"
     signed_at: datetime
+
+
+class GuarantorIdentityResponse(ApiModel):
+    """Outcome of an identity check. Never carries the submitted numbers."""
+
+    instrument_id: UUID
+    check_type: str
+    status: str
+    provider_reference: str
+
+
+class GuarantorVerifyRequest(ApiModel):
+    """Result of the guarantor's identity check, from the provider."""
+
+    provider: str = Field(min_length=1, max_length=80)
+    provider_reference: str = Field(min_length=1, max_length=255)
+
+
+class GuarantorTriggerRequest(ApiModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class GuarantorResolveRequest(ApiModel):
+    """How a triggered claim ended."""
+
+    outcome: Literal["disputed", "paid", "dismissed"]
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class GuarantorRevokeRequest(ApiModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class WorkerProfileSummary(ApiModel):
+    """The worker a guarantee stands behind, as shown on the review screen."""
+
+    worker_id: UUID
+    full_name: str
+    role: str | None = None
+    location: str | None = None
+    avatar_url: str | None = None
+    #: Title of the linked job, when the instrument covers one.
+    job_title: str | None = None
 
 
 class GuarantorSummary(ApiModel):
     full_name: str
     relationship: str
+    phone: str | None = None
+    email: str | None = None
 
 
 class GuarantorInstrumentResponse(ApiModel):
     instrument_id: UUID
     worker_id: UUID
+    worker: WorkerProfileSummary | None = None
     guarantor: GuarantorSummary
     scope: str
     conditions: str
     status: str
     signed_at: datetime | None = None
     valid_until: datetime
+    job_id: UUID | None = None
+    verified_at: datetime | None = None
+    resolved_at: datetime | None = None
+    triggered_at: datetime | None = None
+    status_reason: str | None = None
+    created_at: datetime | None = None
+
+
+class GuarantorInstrumentListResponse(ApiModel):
+    items: list[GuarantorInstrumentResponse]
 
 
 class TrustSummary(ApiModel):
