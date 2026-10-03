@@ -38,8 +38,12 @@ def aggregate(jobs: list[dict], tracked: set[str]) -> tuple[dict, int]:
                for s, pred in SIGNAL_DEFS.items() if s in tracked}
 
     if "repeat_hire_rate" in tracked:
-        clients = Counter(j["client_id"] for j in jobs)
-        signals["repeat_hire_rate"] = sum(c >= 2 for c in clients.values()) / len(clients)
+        known_clients = [j.get("client_id") for j in jobs if j.get("client_id")]
+        if known_clients:
+            clients = Counter(known_clients)
+            signals["repeat_hire_rate"] = sum(
+                count >= 2 for count in clients.values()
+            ) / len(clients)
 
     if "average_rating" in tracked:
         # Every job has a rating (confirmed — not optional, unlike some other
