@@ -75,13 +75,12 @@ class TrustQueryRequest(ApiModel):
     worker_id: UUID
     platform_type: PlatformType
     job_context: JobContext
-    raw_signals: RawSignals | None = None
 
 
 class TrustQueryResponse(ApiModel):
     worker_id: UUID
     decision: bool
-    confidence: Decimal = Field(ge=0, le=1)
+    confidence: float = Field(ge=0, le=1)
     band: str
     status: TrustStatus
     signals_used: list[str]
@@ -143,7 +142,7 @@ class OutcomeCreateRequest(ApiModel):
 class TrustUpdate(ApiModel):
     previous_band: str | None = None
     new_band: str
-    confidence: Decimal = Field(ge=0, le=1)
+    confidence: float = Field(ge=0, le=1)
 
 
 class OutcomeCreateResponse(ApiModel):
@@ -274,17 +273,18 @@ class GuarantorInstrumentListResponse(ApiModel):
 
 class TrustSummary(ApiModel):
     band: str
-    confidence: Decimal = Field(ge=0, le=1)
+    confidence: float = Field(ge=0, le=1)
     total_jobs: int = Field(ge=0)
-    completion_rate: Decimal = Field(ge=0, le=1)
+    completion_rate: float = Field(ge=0, le=1)
 
 
 class VerifiedOutcome(ApiModel):
-    job_id: UUID
-    platform_type: PlatformType
+    outcome_id: UUID
+    job_id: UUID | None = None
+    source_platform: str
     status: OutcomeStatus
-    rating: Decimal | None = Field(default=None, ge=0, le=5)
-    completed_at: datetime | None = None
+    occurred_at: datetime
+    rating: float | None = Field(default=None, ge=0, le=5)
 
 
 class CredentialsExportResponse(ApiModel):
@@ -371,7 +371,7 @@ class WorkerStats(ApiModel):
 
 class WorkerTrust(ApiModel):
     decision: bool
-    confidence: Decimal = Field(ge=0, le=1)
+    confidence: float = Field(ge=0, le=1)
     band: str
     status: TrustStatus
 

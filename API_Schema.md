@@ -19,7 +19,7 @@ Supporting capabilities are normalization, configurable policies, outcome ingest
 
 ## 1. Onboarding Trust Assessment
 
-### `POST /trust/query` or /trust/onboard
+### `POST /trust/query`
 
 Run a full onboarding or new-service-category assessment.
 
@@ -32,19 +32,7 @@ Request:
   "job_context": {
     "job_type": "cleaning",
     "value_band": "low"
-  },
-  "raw_signals": {
-    "completion_rate": 0.92,
-    "total_jobs": 47,
-    "disputes": 1,
-    "no_shows": 0,
-    "repeat_hires": 12,
-    "average_rating": 4.7,
-    "cancellations": 3,
-    "custom_fields": {}
-  },
-  "credential_token": null,
-  "attach_guarantor": false
+  }
 }
 ```
 
@@ -59,13 +47,13 @@ Response:
   "status": "Scored",
   "signals_used": ["completion_rate", "dispute_count", "repeat_hires"],
   "explanation_summary": "Strong completion history with very low disputes",
-  "platform_type_applied": "domestic",
-  "guarantor_instrument_id": null,
-  "credential_imported": false
+  "platform_type_applied": "domestic"
 }
 ```
 
 Trust bands are `High`, `Medium`, `Low`, and `Building History`. A new worker with insufficient evidence must receive `Building History` rather than a fabricated score.
+
+The current endpoint scores persisted, normalized, verified outcomes only. It does not accept caller-supplied aggregate signals. Outcome ingestion and this endpoint must call the same `assess_worker(session, worker_id, platform_type)` service so a score is consistent across both paths. An unchanged input/configuration fingerprint reuses the existing assessment.
 
 ### `POST /trust/configure`
 
@@ -197,6 +185,8 @@ New negative outcomes invalidate cached trust summaries and notify active subscr
 
 Export verified work history and the current trust record.
 
+The response contains `worker_id`, `exported_at`, a `trust_summary`, `verified_outcomes`, and an expiring HMAC-signed `credential_token`. The token is bound to the same worker ID and expires after seven days. Only verified outcomes are included.
+
 ### `POST /workers/{worker_id}/credentials/import`
 
 Import a signed or short-lived credential token from another platform.
@@ -209,6 +199,7 @@ Import a signed or short-lived credential token from another platform.
 ```
 
 Imports must validate the token, preserve source and issuer metadata, avoid duplicate outcomes, and trigger reassessment when new evidence is accepted.
+The basic implementation accepts only bundles signed by this service and bound to the authenticated worker. User-uploaded CSV history remains unverified and must not be promoted to verified evidence by this endpoint.
 
 ## Supporting Capabilities
 

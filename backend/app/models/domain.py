@@ -24,6 +24,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -64,6 +65,24 @@ class OutcomeStatus(StrEnum):
     DISPUTED = "disputed"
     NO_SHOW = "no_show"
     UNKNOWN = "unknown"
+
+
+class CancelledBy(StrEnum):
+    WORKER = "worker"
+    CLIENT = "client"
+    PLATFORM = "platform"
+
+
+class DisputeResolution(StrEnum):
+    OPEN = "open"
+    UPHELD = "upheld"
+    DISMISSED = "dismissed"
+
+
+class ImportMethod(StrEnum):
+    NATIVE = "native"
+    API = "api"
+    CSV_UPLOAD = "csv_upload"
 
 
 class AssessmentStatus(StrEnum):
@@ -224,7 +243,9 @@ class RawOutcome(UUIDTimestampMixin, Base):
     external_outcome_id: Mapped[str] = mapped_column(String(255))
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
     payload_checksum: Mapped[str] = mapped_column(String(64))
-    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     __table_args__ = (
         UniqueConstraint("source_id", "external_outcome_id"),
@@ -247,12 +268,36 @@ class NormalizedOutcome(UUIDTimestampMixin, Base):
     dispute_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     evidence_urls: Mapped[list[str]] = mapped_column(JSON, default=list)
     normalization_version: Mapped[str] = mapped_column(String(40))
+    cancelled_by: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    dispute_resolution: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    client_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_platform: Mapped[str] = mapped_column(
+        String(120), default="legacy", server_default="legacy", nullable=False
+    )
+    import_method: Mapped[str] = mapped_column(
+        String(20), default="native", server_default="native", nullable=False
+    )
+    verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
 
     worker: Mapped[Worker] = relationship(back_populates="outcomes")
     __table_args__ = (
         Index("ix_normalized_outcomes_worker_occurred", "worker_id", "occurred_at"),
         CheckConstraint("rating IS NULL OR (rating >= 0 AND rating <= 5)", name="rating_range"),
         CheckConstraint("amount IS NULL OR amount >= 0", name="amount_nonnegative"),
+        CheckConstraint(
+            "cancelled_by IS NULL OR cancelled_by IN ('worker', 'client', 'platform')",
+            name="cancelled_by_valid",
+        ),
+        CheckConstraint(
+            "dispute_resolution IS NULL OR dispute_resolution IN ('open', 'upheld', 'dismissed')",
+            name="dispute_resolution_valid",
+        ),
+        CheckConstraint(
+            "import_method IN ('native', 'api', 'csv_upload')",
+            name="import_method_valid",
+        ),
     )
 
 
@@ -286,6 +331,15 @@ class TrustAssessment(UUIDTimestampMixin, Base):
     decision: Mapped[bool] = mapped_column(Boolean)
     confidence: Mapped[Decimal] = mapped_column(Numeric(5, 4))
     status: Mapped[AssessmentStatus] = mapped_column(Enum(AssessmentStatus, name="assessment_status"))
+    band: Mapped[str] = mapped_column(
+        String(24), default="Building History", server_default="Building History", nullable=False
+    )
+    signals_used: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default="[]", nullable=False
+    )
+    explanation_summary: Mapped[str] = mapped_column(
+        Text, default="", server_default="", nullable=False
+    )
     input_fingerprint: Mapped[str] = mapped_column(String(64))
     assessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
 
@@ -434,11 +488,16 @@ class Credential(UUIDTimestampMixin, Base):
 class CredentialTransfer(UUIDTimestampMixin, Base):
     __tablename__ = "credential_transfers"
 
+    worker_id: Mapped[UUID] = mapped_column(ForeignKey("workers.id", ondelete="CASCADE"))
     credential_id: Mapped[UUID] = mapped_column(ForeignKey("credentials.id", ondelete="CASCADE"))
     direction: Mapped[str] = mapped_column(String(20))
     source_platform: Mapped[str | None] = mapped_column(String(120), nullable=True)
     transfer_token_hash: Mapped[str] = mapped_column(String(128))
     validation_status: Mapped[str] = mapped_column(String(40))
+
+    __table_args__ = (
+        UniqueConstraint("worker_id", "direction", "transfer_token_hash"),
+    )
 
 
 class InsurancePolicy(UUIDTimestampMixin, Base):
