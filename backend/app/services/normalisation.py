@@ -1,4 +1,5 @@
 """
+
 Outcome Normalization
 
 Converts raw job data from any source (native platform events, the /outcomes
@@ -7,6 +8,8 @@ platforms) into the common job schema defined in
 docs/trust_scoring_schema_spec.md, so trust_scoring.signals.aggregate()
 never has to know or care where a job record originally came from.
 """
+
+from app.models.domain import NormalizedOutcome
 
 # Only flags our scoring engine actually knows how to use (see
 # docs/trust_scoring_flag_integrity.md). "late" is deliberately excluded —
@@ -18,6 +21,25 @@ KNOWN_FLAGS = {"safety", "rework", "damage"}
 def _filter_flags(raw_flags: list) -> list:
     """Pass through only the flag values SIGNAL_DEFS actually understands."""
     return [f for f in (raw_flags or []) if f in KNOWN_FLAGS]
+
+
+def normalise_db_row(row: NormalizedOutcome) -> dict[str, object]:
+    """Convert a persisted normalized outcome into the scorer's common job shape."""
+
+    status = getattr(row.status, "value", row.status)
+    return {
+        "job_id": str(row.outcome_key),
+        "date": row.occurred_at,
+        "status": status,
+        "cancelled_by": row.cancelled_by,
+        "dispute_resolution": row.dispute_resolution,
+        "client_id": row.client_id,
+        "rating": float(row.rating or 0),
+        "flags": _filter_flags(row.quality_flags or []),
+        "source_platform": row.source_platform,
+        "import_method": row.import_method,
+        "verified": row.verified,
+    }
 
 
 # ---------------------------------------------------------------------------

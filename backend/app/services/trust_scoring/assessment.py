@@ -24,6 +24,7 @@ from app.models.domain import (
     TrustPolicy,
     Worker,
 )
+from app.services.normalisation import normalise_db_row
 from app.services.trust_scoring.scoring import PRESETS, PlatformConfig, score_worker
 from app.services.trust_scoring.signals import aggregate
 
@@ -160,19 +161,7 @@ async def assess_worker(
         )
 
     tracked = set(config.weights)
-    canonical_jobs = [
-        {
-            "job_id": str(row.id),
-            "date": row.occurred_at,
-            "status": row.status.value,
-            "cancelled_by": row.cancelled_by,
-            "dispute_resolution": row.dispute_resolution,
-            "client_id": row.client_id,
-            "rating": float(row.rating) if row.rating is not None else 0.0,
-            "flags": row.quality_flags or [],
-        }
-        for row in outcomes
-    ]
+    canonical_jobs = [normalise_db_row(row) for row in outcomes]
     signals, job_count = aggregate(canonical_jobs, tracked)
     result = score_worker(signals, job_count, config)
 

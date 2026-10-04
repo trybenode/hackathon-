@@ -46,11 +46,10 @@ def aggregate(jobs: list[dict], tracked: set[str]) -> tuple[dict, int]:
             ) / len(clients)
 
     if "average_rating" in tracked:
-        # Every job has a rating (confirmed — not optional, unlike some other
-        # sources' data). average_rating is a mean of a 1-5 value, not a rate
-        # over a predicate, so it can't live in SIGNAL_DEFS like the others.
+        # average_rating is a mean of 1-5 values, not a predicate-based rate.
         # Normalized to [0,1] here so NORMALIZERS can treat it as identity.
-        signals["average_rating"] = sum(j["rating"] for j in jobs) / n / 5.0
+        # signals["average_rating"] = sum(j["rating"] for j in jobs) / n / 5.0
+        signals["average_rating"] = sum(float(job.get("rating") or 0) for job in jobs) / n / 5.0
 
     return signals, n
 
