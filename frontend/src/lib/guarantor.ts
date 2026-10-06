@@ -316,14 +316,22 @@ export type GuaranteeCard = {
   worker_name: string;
   worker_role: string | null;
   avatar_url: string | null;
+  job_title: string | null;
   status: string;
   /**
-   * Which tab shows this card. Active and Expired have tabs; pending requests
-   * and guarantees closed some other way (revoked, paid…) show only under All.
+   * Where "My guarantees" files it. Active and Expired have tabs; guarantees
+   * closed some other way (revoked, paid…) show only under All. "request"
+   * never went live, so it is only on the requests screen.
    */
-  bucket: "pending" | "active" | "expired" | "closed";
+  bucket: "request" | "active" | "expired" | "closed";
+  /** Where "Guarantee requests" files it; null for lapsed requests. */
+  request_bucket: "pending" | "accepted" | "declined" | null;
+  requested_at: string;
+  /** When the guarantor accepted or declined. */
+  responded_at: string | null;
   /** When the guarantee's year began; null until it goes live. */
   started_on: string | null;
+  /** The deadline to answer a request, or the end of a guarantee's year. */
   valid_until: string;
   ended_on: string | null;
 };
@@ -332,12 +340,14 @@ export type ActivityItem = {
   id: string;
   label: string;
   at: string;
+  /** Present on the home screen's list, which spans every guarantee. */
+  worker_name?: string;
 };
 
 export type DashboardData = {
   greeting_name: string;
   active_count: number;
-  completed_count: number;
+  expired_count: number;
   guarantees: GuaranteeCard[];
   recent_activity: ActivityItem[];
   action_required: GuaranteeCard | null;

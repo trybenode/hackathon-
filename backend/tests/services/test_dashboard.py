@@ -22,6 +22,7 @@ async def build_guarantee(
     *,
     agreement_status: AgreementStatus = AgreementStatus.ACTIVE,
     valid_days: int = 60,
+    went_live: bool = True,
 ) -> GuarantorAgreement:
     agreement = GuarantorAgreement(
         worker_id=worker.id,
@@ -31,8 +32,8 @@ async def build_guarantee(
         relationship_type="sibling",
         status=agreement_status,
         valid_until=NOW + timedelta(days=valid_days),
-        signed_at=NOW - timedelta(days=3),
-        verified_at=NOW - timedelta(days=3),
+        signed_at=NOW - timedelta(days=3) if went_live else None,
+        verified_at=NOW - timedelta(days=3) if went_live else None,
     )
     if agreement_status is AgreementStatus.EXPIRED:
         agreement.closed_at = agreement.valid_until
@@ -64,7 +65,9 @@ async def test_active_and_expired_tabs(session: AsyncSession, worker: Worker) ->
     assert by_id[expired.id].bucket == "expired"
     assert by_id[expired.id].ended_on == expired.closed_at
     assert summary.active_count == 1
-    assert summary.completed_count == 1
+    assert summary.expired_count == 1
+    # Both were accepted requests, whatever happened since.
+    assert {card.request_bucket for card in summary.guarantees} == {"accepted"}
 
 
 async def test_card_carries_the_term(session: AsyncSession, worker: Worker) -> None:
@@ -91,9 +94,6 @@ async def test_card_carries_the_term(session: AsyncSession, worker: Worker) -> N
         (AgreementStatus.DISMISSED, "closed"),
         (AgreementStatus.REVOKED, "closed"),
         (AgreementStatus.DECLINED, "closed"),
-        # Waiting on the guarantor.
-        (AgreementStatus.PENDING_SIGNATURE, "pending"),
-        (AgreementStatus.PENDING_VERIFICATION, "pending"),
     ],
 )
 async def test_bucket_follows_the_instrument_alone(
@@ -107,6 +107,39 @@ async def test_bucket_follows_the_instrument_alone(
     assert card.bucket == bucket
     # The card still says what actually happened.
     assert card.status == service.status_label(status)
+
+
+@pytest.mark.parametrize(
+    ("status", "signed", "request_bucket"),
+    [
+        (AgreementStatus.PENDING_SIGNATURE, False, "pending"),
+        # Said yes; the identity checks are still to come.
+        (AgreementStatus.PENDING_VERIFICATION, True, "accepted"),
+        (AgreementStatus.DECLINED, False, "declined"),
+        # Never sent, or lapsed unanswered: on neither screen.
+        (AgreementStatus.DRAFT, False, None),
+        (AgreementStatus.EXPIRED, False, None),
+    ],
+)
+async def test_requests_that_never_went_live(
+    session: AsyncSession,
+    worker: Worker,
+    status: AgreementStatus,
+    signed: bool,
+    request_bucket: str | None,
+) -> None:
+    guarantor = await make_guarantor(session)
+    agreement = await build_guarantee(
+        session, worker, guarantor, agreement_status=status, went_live=False
+    )
+    if signed:
+        agreement.signed_at = NOW - timedelta(days=1)
+    await session.flush()
+
+    card = (await service.load_summary(session, guarantor.id)).guarantees[0]
+
+    assert card.bucket == "request"
+    assert card.request_bucket == request_bucket
 
 
 async def test_summary_is_scoped_to_one_guarantor(
@@ -128,13 +161,36 @@ async def test_action_required_picks_the_waiting_request(
 ) -> None:
     guarantor = await make_guarantor(session)
     await build_guarantee(
-        session, worker, guarantor, agreement_status=AgreementStatus.PENDING_SIGNATURE
+        session,
+        worker,
+        guarantor,
+        agreement_status=AgreementStatus.PENDING_SIGNATURE,
+        went_live=False,
     )
 
     summary = await service.load_summary(session, guarantor.id)
 
     assert summary.action_required is not None
     assert summary.action_required.status == "Pending Signature"
+
+
+async def test_home_activity_names_the_worker(session: AsyncSession, worker: Worker) -> None:
+    guarantor = await make_guarantor(session)
+    agreement = await build_guarantee(session, worker, guarantor)
+    session.add(
+        AuditEvent(
+            entity_type="guarantor_agreement",
+            entity_id=agreement.id,
+            action="guarantor.activated",
+            event_metadata={},
+        )
+    )
+    await session.flush()
+
+    summary = await service.load_summary(session, guarantor.id)
+
+    assert summary.recent_activity[0].label == "Guarantee activated"
+    assert summary.recent_activity[0].worker_name == summary.guarantees[0].worker_name
 
 
 async def test_guarantee_detail_has_its_own_history(

@@ -10,8 +10,8 @@ type Tab = (typeof TABS)[number];
 
 /**
  * The API decides which bucket a guarantee belongs to; tabs just filter.
- * Pending requests and guarantees closed early (revoked, paid…) have no tab of
- * their own, so they show under All.
+ * Guarantees closed early (revoked, paid…) have no tab of their own, so they
+ * show under All. Requests that never went live are on the requests screen.
  */
 const TAB_BUCKET: Record<Exclude<Tab, "All">, string> = {
   Active: "active",
@@ -22,7 +22,7 @@ export function GuaranteeList() {
   const { data, error, loading } = useDashboard();
   const [tab, setTab] = useState<Tab>("All");
 
-  const guarantees = data?.guarantees ?? [];
+  const guarantees = (data?.guarantees ?? []).filter((item) => item.bucket !== "request");
   const shown =
     tab === "All" ? guarantees : guarantees.filter((item) => item.bucket === TAB_BUCKET[tab]);
 
@@ -74,7 +74,7 @@ export function GuaranteeList() {
           <p className="text-body-sm text-grey-600">Nothing here yet.</p>
         )}
         {shown.map((guarantee) => (
-          <GuaranteeCard key={guarantee.instrument_id} guarantee={guarantee} layout="inline" />
+          <GuaranteeCard key={guarantee.instrument_id} guarantee={guarantee} />
         ))}
       </div>
     </main>

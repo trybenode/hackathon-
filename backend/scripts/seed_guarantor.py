@@ -40,7 +40,7 @@ from app.models.domain import (  # noqa: E402
     User,
     Worker,
 )
-from app.services.guarantor import term_end  # noqa: E402
+from app.services.guarantor import REQUEST_WINDOW, term_end  # noqa: E402
 
 DB_URL = get_settings().async_database_url
 
@@ -220,9 +220,36 @@ async def main() -> None:
             guarantor_phone="+2348012345678",
             guarantor_address="12 Trust Street, Lagos",
             status=AgreementStatus.PENDING_SIGNATURE,
-            valid_until=term_end(NOW),
+            # Sent five days ago, so two days are left to answer.
+            created_at=NOW - timedelta(days=5),
+            valid_until=NOW - timedelta(days=5) + REQUEST_WINDOW,
         )
-        session.add_all([active, expired, pending])
+        renewal = GuarantorAgreement(
+            worker_id=daniella.id,
+            guarantor_user_id=guarantor.id,
+            scope="Plumbing callouts",
+            conditions="Covers no-show and repeat visits.",
+            relationship_type="colleague",
+            guarantor_phone="+2348012345678",
+            guarantor_address="12 Trust Street, Lagos",
+            status=AgreementStatus.PENDING_SIGNATURE,
+            created_at=NOW - timedelta(hours=2),
+            valid_until=NOW - timedelta(hours=2) + REQUEST_WINDOW,
+        )
+        declined = GuarantorAgreement(
+            worker_id=tomiwa.id,
+            guarantor_user_id=guarantor.id,
+            scope="Electrical work up to NGN 80,000",
+            conditions="Covers no-show and rework.",
+            relationship_type="other",
+            guarantor_phone="+2348012345678",
+            guarantor_address="12 Trust Street, Lagos",
+            status=AgreementStatus.DECLINED,
+            created_at=NOW - timedelta(days=20),
+            valid_until=NOW - timedelta(days=20) + REQUEST_WINDOW,
+            closed_at=NOW - timedelta(days=19),
+        )
+        session.add_all([active, expired, pending, renewal, declined])
         await session.flush()
 
         # A trail the "Recent activity" list can read.
@@ -230,6 +257,8 @@ async def main() -> None:
             (active, ("guarantor.created", "guarantor.signed", "guarantor.identity_submitted", "guarantor.identity_verified", "guarantor.activated")),
             (expired, ("guarantor.created", "guarantor.signed", "guarantor.identity_verified", "guarantor.activated", "guarantor.expired")),
             (pending, ("guarantor.created",)),
+            (renewal, ("guarantor.created",)),
+            (declined, ("guarantor.created", "guarantor.declined")),
         ):
             for offset, action in enumerate(actions):
                 session.add(
@@ -248,7 +277,9 @@ async def main() -> None:
         print(f"GUARANTOR={guarantor_email}")
         print(f"  active guarantee   : {active.id} (Jane A, Home cleaning)")
         print(f"  expired guarantee  : {expired.id} (Daniella k.)")
-        print(f"  pending request    : {pending.id} (Tomiwa B., Socket rewiring)")
+        print(f"  pending request    : {pending.id} (Tomiwa B., expires in 2 days)")
+        print(f"  pending request    : {renewal.id} (Daniella k., 2 hours ago)")
+        print(f"  declined request   : {declined.id} (Tomiwa B.)")
 
     await engine.dispose()
 

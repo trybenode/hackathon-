@@ -30,11 +30,18 @@ class GuaranteeCard(ApiModel):
     worker_name: str
     worker_role: str | None = None
     avatar_url: str | None = None
+    job_title: str | None = None
     status: str
-    #: Which tab shows this card: "pending", "active", "expired" or "closed".
+    #: "My guarantees" tab: "active", "expired", "closed", or "request" if it
+    #: never went live.
     bucket: str
+    #: "Guarantee requests" tab: "pending", "accepted", "declined", or null.
+    request_bucket: str | None = None
+    requested_at: datetime
+    responded_at: datetime | None = None
     #: When the year began; empty until both identity checks pass.
     started_on: datetime | None = None
+    #: The deadline to answer a request, or the end of a guarantee's year.
     valid_until: datetime
     ended_on: datetime | None = None
 
@@ -43,6 +50,7 @@ class ActivityItem(ApiModel):
     id: UUID
     label: str
     at: datetime
+    worker_name: str = ""
 
 
 class GuaranteeDetailResponse(ApiModel):
@@ -58,7 +66,7 @@ class GuaranteeDetailResponse(ApiModel):
 class DashboardResponse(ApiModel):
     greeting_name: str
     active_count: int
-    completed_count: int
+    expired_count: int
     guarantees: list[GuaranteeCard]
     recent_activity: list[ActivityItem]
     action_required: GuaranteeCard | None = None
@@ -99,8 +107,12 @@ def _card(source: dashboard_service.DashboardGuarantee) -> GuaranteeCard:
         worker_name=source.worker_name,
         worker_role=source.worker_role,
         avatar_url=source.avatar_url,
+        job_title=source.job_title,
         status=source.status,
         bucket=source.bucket,
+        request_bucket=source.request_bucket,
+        requested_at=source.requested_at,
+        responded_at=source.responded_at,
         started_on=source.started_on,
         valid_until=source.valid_until,
         ended_on=source.ended_on,
@@ -127,10 +139,12 @@ async def dashboard(
         # The greeting uses the first name, as the design shows.
         greeting_name=user.display_name.split(" ")[0],
         active_count=summary.active_count,
-        completed_count=summary.completed_count,
+        expired_count=summary.expired_count,
         guarantees=[_card(card) for card in summary.guarantees],
         recent_activity=[
-            ActivityItem(id=entry.id, label=entry.label, at=entry.at)
+            ActivityItem(
+                id=entry.id, label=entry.label, at=entry.at, worker_name=entry.worker_name
+            )
             for entry in summary.recent_activity
         ],
         action_required=_card(summary.action_required) if summary.action_required else None,

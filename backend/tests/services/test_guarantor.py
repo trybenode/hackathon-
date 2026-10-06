@@ -114,19 +114,19 @@ async def test_create_rejects_self_guarantee(session: AsyncSession, worker: Work
         await service.create_instrument(session, request, now=NOW)
 
 
-async def test_create_sets_a_one_year_window(session: AsyncSession, worker: Worker) -> None:
-    """The caller no longer picks the term; a request stays open for a year."""
+async def test_create_gives_a_week_to_answer(session: AsyncSession, worker: Worker) -> None:
+    """The caller no longer picks the term; a request stays open for a week."""
 
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
 
-    assert agreement.valid_until == datetime(2027, 1, 1, 12, 0, tzinfo=UTC)
+    assert agreement.valid_until == NOW + timedelta(days=7)
 
 
 async def test_activation_starts_the_year(session: AsyncSession, worker: Worker) -> None:
     """The year runs from the day the guarantee goes live, not from the request."""
 
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
-    live_on = NOW + timedelta(days=40)
+    live_on = NOW + timedelta(days=5)
 
     await activate(session, agreement.id, at=live_on)
 
@@ -471,18 +471,29 @@ async def test_expiry_sweep_closes_due_instruments(session: AsyncSession, worker
     assert agreement.closed_at == after_a_year
 
 
+async def test_unanswered_request_lapses_after_a_week(
+    session: AsyncSession, worker: Worker
+) -> None:
+    agreement = await service.create_instrument(session, build_request(worker), now=NOW)
+
+    expired = await service.expire_due_instruments(session, now=NOW + timedelta(days=8))
+
+    assert [record.id for record in expired] == [agreement.id]
+    assert agreement.verified_at is None
+
+
 async def test_expiry_sweep_leaves_live_instruments_alone(
     session: AsyncSession, worker: Worker
 ) -> None:
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
 
-    assert await service.expire_due_instruments(session, now=NOW + timedelta(days=364)) == []
+    assert await service.expire_due_instruments(session, now=NOW + timedelta(days=6)) == []
     assert agreement.status is AgreementStatus.PENDING_SIGNATURE
 
 
 async def test_signing_after_expiry_expires_instead(session: AsyncSession, worker: Worker) -> None:
     agreement = await service.create_instrument(session, build_request(worker), now=NOW)
-    late = NOW + timedelta(days=400)
+    late = NOW + timedelta(days=8)
 
     with pytest.raises(service.InvalidTransitionError):
         await service.sign_instrument(session, agreement.id, build_signature(at=late), now=late)

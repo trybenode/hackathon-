@@ -1,15 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { GuaranteeCard } from "@/components/dashboard/GuaranteeCard";
-import { CheckIcon, ChevronDownIcon, CloseIcon, WarningTriangleIcon } from "@/components/ui";
+import { CheckIcon, ChevronDownIcon, WarningTriangleIcon } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatActivityTime } from "@/lib/format";
 import { useDashboard } from "./useDashboard";
 
 export function HomeScreen() {
   const { data, error, loading } = useDashboard();
-  const [bannerOpen, setBannerOpen] = useState(true);
   const [listOpen, setListOpen] = useState(true);
 
   if (loading) {
@@ -45,30 +45,28 @@ export function HomeScreen() {
       </header>
 
       <div className="flex flex-col gap-6 px-6 pt-6">
-        {waiting && bannerOpen && (
-          <section className="flex items-start gap-3 rounded-lg bg-warning p-4 text-white">
-            <WarningTriangleIcon className="mt-0.5 shrink-0" width={22} height={22} />
+        {waiting && (
+          <section className="flex items-center gap-3 rounded-lg bg-warning p-4 text-white">
+            <WarningTriangleIcon className="shrink-0" width={22} height={22} />
             <div className="flex flex-1 flex-col gap-1">
               <p className="text-body-md font-semibold">Action required</p>
               <p className="text-body-sm text-white/90">
                 {waiting.worker_name} requested you as a guarantor
               </p>
             </div>
-            <button
-              type="button"
-              aria-label="Dismiss"
-              onClick={() => setBannerOpen(false)}
-              className="shrink-0 rounded-sm text-white/90 hover:text-white"
+            <Link
+              href="/dashboard/requests"
+              className="shrink-0 rounded-pill bg-black/30 px-5 py-2.5 text-body-md font-semibold text-white transition-colors hover:bg-black/40"
             >
-              <CloseIcon width={18} height={18} />
-            </button>
+              View
+            </Link>
           </section>
         )}
 
         <section className="grid grid-cols-2 gap-4">
           {[
             { label: "Active Guarantees", value: data.active_count },
-            { label: "Completed Guarantees", value: data.completed_count },
+            { label: "Expired Guarantees", value: data.expired_count },
           ].map((stat) => (
             <div
               key={stat.label}
@@ -96,7 +94,11 @@ export function HomeScreen() {
               <span className="text-body-md font-semibold text-grey-900">Active guarantees</span>
               <span className="text-body-sm text-grey-600">
                 {active.length > 0
-                  ? active.map((item) => item.worker_name).join(", ")
+                  ? active
+                      .map((item) =>
+                        item.job_title ? `${item.worker_name} - ${item.job_title}` : item.worker_name,
+                      )
+                      .join(", ")
                   : "Nothing active right now"}
               </span>
             </span>
@@ -110,7 +112,7 @@ export function HomeScreen() {
 
           {listOpen &&
             active.map((guarantee) => (
-              <GuaranteeCard key={guarantee.instrument_id} guarantee={guarantee} />
+              <GuaranteeCard key={guarantee.instrument_id} guarantee={guarantee} variant="home" />
             ))}
         </section>
 
@@ -127,7 +129,9 @@ export function HomeScreen() {
                 >
                   <CheckIcon className="mt-1 shrink-0 text-grey-900" />
                   <span className="flex flex-col gap-0.5">
-                    <span className="text-body-sm font-medium text-grey-900">{entry.label}</span>
+                    <span className="text-body-sm font-medium text-grey-900">
+                      {entry.worker_name ? `${entry.label} - ${entry.worker_name}` : entry.label}
+                    </span>
                     <span className="text-body-sm text-grey-600">
                       {formatActivityTime(entry.at)}
                     </span>

@@ -30,7 +30,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Sequence
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -190,6 +190,11 @@ class InvalidTransitionError(GuarantorError):
         )
         self.current = current
         self.target = target
+
+
+#: How long a guarantor has to answer a request, and then to finish the
+#: identity checks, before it lapses.
+REQUEST_WINDOW = timedelta(days=7)
 
 
 def term_end(start: datetime) -> datetime:
@@ -379,9 +384,9 @@ async def create_instrument(
         guarantor_phone=request.guarantor.phone,
         guarantor_address=request.guarantor.address,
         status=AgreementStatus.DRAFT if as_draft else AgreementStatus.PENDING_SIGNATURE,
-        # Until the guarantee goes live this only bounds how long the request
-        # stays open; activation restarts the year from that day.
-        valid_until=term_end(moment),
+        # Until the guarantee goes live this is the deadline to answer and pass
+        # the checks; activation replaces it with the end of the year.
+        valid_until=moment + REQUEST_WINDOW,
     )
     session.add(agreement)
     await session.flush()

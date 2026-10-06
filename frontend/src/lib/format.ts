@@ -63,6 +63,19 @@ export function formatActivityTime(value: string) {
   return `${date.toLocaleDateString("en-GB")}· ${date.toLocaleTimeString("en-GB")}`;
 }
 
+/** Requests closer than this to their deadline show how long is left. */
+const EXPIRY_WARNING_DAYS = 3;
+
+/** "Expires in 2 days" when a deadline is close, otherwise null. */
+export function formatExpiresIn(value: string, now: Date = new Date()) {
+  const left = new Date(value).getTime() - now.getTime();
+  if (Number.isNaN(left) || left <= 0) return null;
+
+  const days = Math.ceil(left / 86_400_000);
+  if (days > EXPIRY_WARNING_DAYS) return null;
+  return days === 1 ? "Expires within a day" : `Expires in ${days} days`;
+}
+
 /** "1 hour ago", "Yesterday", "2 days ago" for the alerts list. */
 export function formatRelative(value: string, now: Date = new Date()) {
   const date = new Date(value);

@@ -1,20 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Button, DotIcon } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatStartedOn } from "@/lib/format";
 import type { GuaranteeCard as Guarantee } from "@/lib/guarantor";
-
-/** Initials stand in until workers have avatars. */
-function initialsOf(name: string) {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
+import { WorkerAvatar } from "./WorkerAvatar";
 
 /**
  * Each outcome gets its own colour so a claim that was paid out does not read
@@ -44,52 +33,29 @@ function termLine(guarantee: Guarantee) {
       return `Expired - ${formatStartedOn(guarantee.ended_on ?? guarantee.valid_until)}`;
     case "closed":
       return `${guarantee.status} - ${formatStartedOn(guarantee.ended_on)}`;
-    case "pending":
+    case "request":
       return "Awaiting your response";
   }
 }
 
 export function GuaranteeCard({
   guarantee,
-  layout = "stacked",
+  variant = "list",
 }: {
   guarantee: Guarantee;
-  /** `stacked` puts View on the left (home), `inline` puts it on the right. */
-  layout?: "stacked" | "inline";
+  /** `home` says when the guarantee started; `list` says when it ends. */
+  variant?: "home" | "list";
 }) {
-  // A request still waiting on the guarantor goes back into the signing flow;
-  // anything past that has a details page.
-  const href =
-    guarantee.bucket === "pending"
-      ? `/guarantor/${guarantee.instrument_id}/review`
-      : `/dashboard/guarantees/${guarantee.instrument_id}`;
-  const view = (
-    <Link href={href}>
-      <Button variant="outline" size="md" className="rounded-pill px-8">
-        View
-      </Button>
-    </Link>
-  );
-  const term = <span className="text-body-sm text-grey-900">{termLine(guarantee)}</span>;
+  const term =
+    variant === "home"
+      ? `Started - ${formatStartedOn(guarantee.started_on)}`
+      : termLine(guarantee);
 
   return (
     <article className="flex flex-col gap-10 rounded-xl border border-stroke bg-white p-4 shadow-1">
       <header className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-badge-high text-body-sm font-semibold text-grey-900">
-            {guarantee.avatar_url ? (
-              <Image
-                src={guarantee.avatar_url}
-                alt=""
-                width={44}
-                height={44}
-                unoptimized
-                className="h-11 w-11 object-cover"
-              />
-            ) : (
-              initialsOf(guarantee.worker_name)
-            )}
-          </span>
+          <WorkerAvatar name={guarantee.worker_name} src={guarantee.avatar_url} />
           <span className="flex flex-col">
             <span className="text-body-md font-medium text-grey-900">
               {guarantee.worker_name}
@@ -105,17 +71,12 @@ export function GuaranteeCard({
       </header>
 
       <footer className="flex items-center justify-between gap-4">
-        {layout === "inline" ? (
-          <>
-            {term}
-            {view}
-          </>
-        ) : (
-          <>
-            {view}
-            {term}
-          </>
-        )}
+        <span className="text-body-sm text-grey-900">{term}</span>
+        <Link href={`/dashboard/guarantees/${guarantee.instrument_id}`}>
+          <Button variant="outline" size="md" className="rounded-pill px-8">
+            View
+          </Button>
+        </Link>
       </footer>
     </article>
   );

@@ -22,6 +22,7 @@ from app.models.domain import (
     AgreementStatus,
     AuditEvent,
     GuarantorAgreement,
+    Job,
     User,
     Worker,
 )
@@ -48,13 +49,9 @@ LIVE_STATUSES = {
     AgreementStatus.SUSPENDED,
 }
 
-#: Waiting on the guarantor, so not yet a live guarantee.
-PENDING_STATUSES = {
-    AgreementStatus.DRAFT,
-    AgreementStatus.REQUESTED,
-    AgreementStatus.PENDING_SIGNATURE,
-    AgreementStatus.PENDING_VERIFICATION,
-}
+#: Sent to the guarantor and waiting for their answer. Drafts are absent: the
+#: platform has not sent them yet, so the guarantor has nothing to answer.
+AWAITING_ANSWER_STATUSES = {AgreementStatus.PENDING_SIGNATURE}
 
 #: Audit actions worth showing a guarantor, and how to word them.
 ACTIVITY_LABELS = {
@@ -81,13 +78,23 @@ class DashboardGuarantee:
     worker_name: str
     worker_role: str | None
     avatar_url: str | None
+    #: The linked job, when the request came with one. The guarantee itself
+    #: covers the worker for the year, not just this job.
+    job_title: str | None
     status: str
-    #: Which tab shows this card: "pending", "active", "expired" or "closed".
-    #: The guarantees screen has Active and Expired tabs; pending and closed
-    #: cards appear only under All.
+    #: Where "My guarantees" files it: "active", "expired" or "closed" once it
+    #: has gone live, or "request" if it never did (it is then only on the
+    #: requests screen).
     bucket: str
+    #: Where "Guarantee requests" files it: "pending", "accepted" or
+    #: "declined", or None for drafts and requests that lapsed unanswered.
+    request_bucket: str | None
+    requested_at: datetime
+    #: When the guarantor accepted or declined.
+    responded_at: datetime | None
     #: When the year began: the day both identity checks passed.
     started_on: datetime | None
+    #: For a request, the deadline to answer; for a guarantee, the end of its year.
     valid_until: datetime
     #: When the guarantee stopped, for expired and closed ones.
     ended_on: datetime | None
@@ -98,6 +105,8 @@ class ActivityEntry:
     id: UUID
     label: str
     at: datetime
+    #: Whose guarantee it was, so the home screen can say "… - Jane A".
+    worker_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -117,8 +126,7 @@ class GuaranteeDetail:
 @dataclass(frozen=True)
 class DashboardSummary:
     active_count: int
-    #: Guarantees that are over: expired, or closed some other way.
-    completed_count: int
+    expired_count: int
     guarantees: list[DashboardGuarantee]
     recent_activity: list[ActivityEntry]
     #: The request awaiting this guarantor's decision, if any.
@@ -138,13 +146,14 @@ def _as_aware(moment: datetime) -> datetime:
 def _bucket(agreement: GuarantorAgreement) -> str:
     """Group a guarantee for the All / Active / Expired tabs.
 
-    A guarantee covers the worker for a year, whatever jobs they take in it,
-    so only the instrument's own state matters. A running claim stays active
+    Only instruments that went live are guarantees; the rest are requests. A
+    guarantee covers the worker for a year, whatever jobs they take in it, so
+    only the instrument's own state matters. A running claim stays active
     until it is paid or dismissed.
     """
 
-    if agreement.status in PENDING_STATUSES:
-        return "pending"
+    if agreement.verified_at is None:
+        return "request"
     if agreement.status is AgreementStatus.EXPIRED:
         return "expired"
     if agreement.status in LIVE_STATUSES:
@@ -152,9 +161,27 @@ def _bucket(agreement: GuarantorAgreement) -> str:
     return "closed"
 
 
+def _request_bucket(agreement: GuarantorAgreement) -> str | None:
+    """Group a request for the Pending / Accepted / Declined tabs.
+
+    Accepted means the guarantor said yes, whatever has happened to the
+    guarantee since; the year it then runs is on "My guarantees".
+    """
+
+    if agreement.status in AWAITING_ANSWER_STATUSES:
+        return "pending"
+    if agreement.status is AgreementStatus.DECLINED:
+        return "declined"
+    if agreement.signed_at is not None:
+        return "accepted"
+    return None
+
+
 async def _build_card(session: AsyncSession, agreement: GuarantorAgreement) -> DashboardGuarantee:
     worker = await session.get(Worker, agreement.worker_id)
     person = await session.get(User, worker.user_id) if worker else None
+    job = await session.get(Job, agreement.job_id) if agreement.job_id else None
+    request_bucket = _request_bucket(agreement)
 
     return DashboardGuarantee(
         instrument_id=agreement.id,
@@ -162,8 +189,14 @@ async def _build_card(session: AsyncSession, agreement: GuarantorAgreement) -> D
         worker_name=person.display_name if person else "Unknown worker",
         worker_role=worker.role if worker else None,
         avatar_url=worker.avatar_url if worker else None,
+        job_title=job.title if job else None,
         status=status_label(agreement.status),
         bucket=_bucket(agreement),
+        request_bucket=request_bucket,
+        requested_at=agreement.created_at,
+        responded_at=(
+            agreement.closed_at if request_bucket == "declined" else agreement.signed_at
+        ),
         started_on=agreement.verified_at,
         valid_until=agreement.valid_until,
         ended_on=agreement.closed_at,
@@ -186,10 +219,15 @@ async def _load_guarantees(
 
 
 async def _activity(
-    session: AsyncSession, instrument_ids: list[UUID], *, limit: int | None = None
+    session: AsyncSession,
+    instrument_ids: list[UUID],
+    *,
+    limit: int | None = None,
+    worker_names: dict[UUID, str] | None = None,
 ) -> list[ActivityEntry]:
     if not instrument_ids:
         return []
+    names = worker_names or {}
 
     query = (
         select(AuditEvent)
@@ -208,6 +246,7 @@ async def _activity(
             id=event.id,
             label=ACTIVITY_LABELS.get(event.action, event.action),
             at=event.created_at,
+            worker_name=names.get(event.entity_id, ""),
         )
         for event in (await session.scalars(query)).all()
     ]
@@ -219,23 +258,21 @@ async def load_summary(session: AsyncSession, guarantor_user_id: UUID) -> Dashbo
     cards = await _load_guarantees(session, guarantor_user_id)
 
     active = [card for _, card in cards if card.bucket == "active"]
-    completed = [card for _, card in cards if card.bucket in {"expired", "closed"}]
+    expired = [card for _, card in cards if card.bucket == "expired"]
 
-    waiting = next(
-        (
-            card
-            for agreement, card in cards
-            if agreement.status
-            in {AgreementStatus.PENDING_SIGNATURE, AgreementStatus.PENDING_VERIFICATION}
-        ),
-        None,
+    # Newest first, so the banner names the latest request.
+    waiting = next((card for _, card in cards if card.request_bucket == "pending"), None)
+
+    activity = await _activity(
+        session,
+        [agreement.id for agreement, _ in cards],
+        limit=10,
+        worker_names={card.instrument_id: card.worker_name for _, card in cards},
     )
-
-    activity = await _activity(session, [agreement.id for agreement, _ in cards], limit=10)
 
     return DashboardSummary(
         active_count=len(active),
-        completed_count=len(completed),
+        expired_count=len(expired),
         guarantees=[card for _, card in cards],
         recent_activity=activity,
         action_required=waiting,

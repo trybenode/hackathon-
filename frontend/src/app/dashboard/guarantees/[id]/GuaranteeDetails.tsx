@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { statusDot } from "@/components/dashboard/GuaranteeCard";
 import { useGuarantee } from "@/components/dashboard/useGuarantee";
+import { WorkerAvatar } from "@/components/dashboard/WorkerAvatar";
 import { CheckIcon, DotIcon } from "@/components/ui";
 import { ArrowLeftIcon } from "@/components/worker/icons";
 import { cn } from "@/lib/cn";
@@ -24,20 +24,10 @@ function standing(guarantee: GuaranteeCard) {
     case "Expired":
       return "Your guarantee for this worker has ended";
     default:
-      return guarantee.bucket === "pending"
+      return guarantee.bucket === "request"
         ? "Waiting for your response"
         : `This guarantee was ${guarantee.status.toLowerCase()}`;
   }
-}
-
-function initialsOf(name: string) {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
 }
 
 /** When the guarantee runs out, or when it stopped if it already has. */
@@ -83,20 +73,7 @@ export function GuaranteeDetails({ instrumentId }: { instrumentId: string }) {
         <div className="flex flex-col gap-8 px-6 pt-8">
           <section className="flex flex-col gap-6 rounded-xl border border-stroke bg-white p-4 shadow-1">
             <div className="flex items-center gap-3">
-              <span className="flex h-13 w-13 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-badge-high text-body-sm font-semibold text-grey-900">
-                {data.guarantee.avatar_url ? (
-                  <Image
-                    src={data.guarantee.avatar_url}
-                    alt=""
-                    width={52}
-                    height={52}
-                    unoptimized
-                    className="h-13 w-13 object-cover"
-                  />
-                ) : (
-                  initialsOf(data.guarantee.worker_name)
-                )}
-              </span>
+              <WorkerAvatar name={data.guarantee.worker_name} src={data.guarantee.avatar_url} size={52} />
               <span className="flex flex-col">
                 <span className="text-body-md text-grey-900">{data.guarantee.worker_name}</span>
                 <span className="text-body-sm text-grey-600">{data.guarantee.worker_role ?? ""}</span>
