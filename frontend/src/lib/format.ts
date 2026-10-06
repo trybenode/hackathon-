@@ -41,6 +41,20 @@ export function formatStartedOn(value: string | null | undefined) {
     .replace(/(\w{3})/, (month) => month.toLowerCase());
 }
 
+const LONG_MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** "23 September, 2026", as on the guarantee details screen. */
+export function formatLongDay(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return `${date.getDate()} ${LONG_MONTHS[date.getMonth()]}, ${date.getFullYear()}`;
+}
+
 /** "20/2/2026· 12:04:32", matching the recent activity list. */
 export function formatActivityTime(value: string) {
   const date = new Date(value);

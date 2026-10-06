@@ -5,13 +5,17 @@ import { GuaranteeCard } from "@/components/dashboard/GuaranteeCard";
 import { cn } from "@/lib/cn";
 import { useDashboard } from "../useDashboard";
 
-const TABS = ["All", "Active", "Completed"] as const;
+const TABS = ["All", "Active", "Expired"] as const;
 type Tab = (typeof TABS)[number];
 
-/** The API decides which bucket a guarantee belongs to; tabs just filter. */
+/**
+ * The API decides which bucket a guarantee belongs to; tabs just filter.
+ * Pending requests and guarantees closed early (revoked, paid…) have no tab of
+ * their own, so they show under All.
+ */
 const TAB_BUCKET: Record<Exclude<Tab, "All">, string> = {
   Active: "active",
-  Completed: "completed",
+  Expired: "expired",
 };
 
 export function GuaranteeList() {

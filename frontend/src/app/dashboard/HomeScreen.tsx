@@ -52,7 +52,6 @@ export function HomeScreen() {
               <p className="text-body-md font-semibold">Action required</p>
               <p className="text-body-sm text-white/90">
                 {waiting.worker_name} requested you as a guarantor
-                {waiting.job_title ? ` for a ${waiting.job_title.toLowerCase()} job` : ""}
               </p>
             </div>
             <button
@@ -97,7 +96,7 @@ export function HomeScreen() {
               <span className="text-body-md font-semibold text-grey-900">Active guarantees</span>
               <span className="text-body-sm text-grey-600">
                 {active.length > 0
-                  ? active.map((item) => `${item.worker_name} - ${item.job_title ?? ""}`).join(", ")
+                  ? active.map((item) => item.worker_name).join(", ")
                   : "Nothing active right now"}
               </span>
             </span>

@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button, DotIcon } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { formatNaira, formatStartedOn } from "@/lib/format";
+import { formatStartedOn } from "@/lib/format";
 import type { GuaranteeCard as Guarantee } from "@/lib/guarantor";
 
 /** Initials stand in until workers have avatars. */
@@ -20,9 +20,8 @@ function initialsOf(name: string) {
  * Each outcome gets its own colour so a claim that was paid out does not read
  * the same as one that was dismissed.
  */
-const statusDot: Record<string, string> = {
+export const statusDot: Record<string, string> = {
   Active: "text-success",
-  Completed: "text-success",
   "Pending Signature": "text-warning",
   "Pending Verification": "text-warning",
   // A claim is running: red while open, orange while contested.
@@ -36,6 +35,20 @@ const statusDot: Record<string, string> = {
   Expired: "text-grey-800",
 };
 
+/** The line under the worker: when the guarantee runs out, or when it ended. */
+function termLine(guarantee: Guarantee) {
+  switch (guarantee.bucket) {
+    case "active":
+      return `Valid until - ${formatStartedOn(guarantee.valid_until)}`;
+    case "expired":
+      return `Expired - ${formatStartedOn(guarantee.ended_on ?? guarantee.valid_until)}`;
+    case "closed":
+      return `${guarantee.status} - ${formatStartedOn(guarantee.ended_on)}`;
+    case "pending":
+      return "Awaiting your response";
+  }
+}
+
 export function GuaranteeCard({
   guarantee,
   layout = "stacked",
@@ -44,21 +57,23 @@ export function GuaranteeCard({
   /** `stacked` puts View on the left (home), `inline` puts it on the right. */
   layout?: "stacked" | "inline";
 }) {
+  // A request still waiting on the guarantor goes back into the signing flow;
+  // anything past that has a details page.
+  const href =
+    guarantee.bucket === "pending"
+      ? `/guarantor/${guarantee.instrument_id}/review`
+      : `/dashboard/guarantees/${guarantee.instrument_id}`;
   const view = (
-    <Link href={`/guarantor/${guarantee.instrument_id}/review`}>
+    <Link href={href}>
       <Button variant="outline" size="md" className="rounded-pill px-8">
         View
       </Button>
     </Link>
   );
-  const started = (
-    <span className="text-body-sm text-grey-600">
-      Started - {formatStartedOn(guarantee.started_on)}
-    </span>
-  );
+  const term = <span className="text-body-sm text-grey-900">{termLine(guarantee)}</span>;
 
   return (
-    <article className="flex flex-col gap-4 rounded-xl border border-stroke bg-white p-4 shadow-1">
+    <article className="flex flex-col gap-10 rounded-xl border border-stroke bg-white p-4 shadow-1">
       <header className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-badge-high text-body-sm font-semibold text-grey-900">
@@ -89,23 +104,16 @@ export function GuaranteeCard({
         </span>
       </header>
 
-      <div className="flex flex-col gap-1">
-        <p className="text-body-lg font-semibold text-grey-900">
-          {guarantee.job_title ?? "Guarantee"}
-        </p>
-        <p className="text-body-sm text-grey-600">{formatNaira(guarantee.amount)}</p>
-      </div>
-
       <footer className="flex items-center justify-between gap-4">
         {layout === "inline" ? (
           <>
-            {started}
+            {term}
             {view}
           </>
         ) : (
           <>
             {view}
-            {started}
+            {term}
           </>
         )}
       </footer>
