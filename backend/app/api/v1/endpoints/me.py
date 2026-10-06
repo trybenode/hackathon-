@@ -8,10 +8,10 @@ instruments they stand behind.
 """
 
 from datetime import datetime
-from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,21 +26,33 @@ router = APIRouter(prefix="/me", tags=["dashboard"])
 
 class GuaranteeCard(ApiModel):
     instrument_id: UUID
+    reference: str
     worker_name: str
     worker_role: str | None = None
     avatar_url: str | None = None
-    job_title: str | None = None
-    amount: Decimal | None = None
     status: str
-    #: Which tab shows this card: "pending", "active" or "completed".
+    #: Which tab shows this card: "pending", "active", "expired" or "closed".
     bucket: str
+    #: When the year began; empty until both identity checks pass.
     started_on: datetime | None = None
+    valid_until: datetime
+    ended_on: datetime | None = None
 
 
 class ActivityItem(ApiModel):
     id: UUID
     label: str
     at: datetime
+
+
+class GuaranteeDetailResponse(ApiModel):
+    guarantee: GuaranteeCard
+    relationship: str
+    scope: str
+    conditions: str
+    signed_at: datetime | None = None
+    activity: list[ActivityItem]
+    agreement: list[str]
 
 
 class DashboardResponse(ApiModel):
@@ -83,15 +95,25 @@ class NotificationItem(ApiModel):
 def _card(source: dashboard_service.DashboardGuarantee) -> GuaranteeCard:
     return GuaranteeCard(
         instrument_id=source.instrument_id,
+        reference=source.reference,
         worker_name=source.worker_name,
         worker_role=source.worker_role,
         avatar_url=source.avatar_url,
-        job_title=source.job_title,
-        amount=source.amount,
         status=source.status,
         bucket=source.bucket,
         started_on=source.started_on,
+        valid_until=source.valid_until,
+        ended_on=source.ended_on,
     )
+
+
+async def _load_guarantee(
+    session: AsyncSession, user: User, instrument_id: UUID
+) -> dashboard_service.GuaranteeDetail:
+    try:
+        return await dashboard_service.load_guarantee(session, user.id, instrument_id)
+    except dashboard_service.GuaranteeNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
 
 
 @router.get("/dashboard", response_model=DashboardResponse, summary="The guarantor's overview")
@@ -162,3 +184,48 @@ async def notifications(
         NotificationItem(id=item.id, title=item.title, body=item.body, at=item.at, icon=item.icon)
         for item in items
     ]
+
+
+@router.get(
+    "/guarantees/{instrument_id}",
+    response_model=GuaranteeDetailResponse,
+    summary="One of the guarantor's guarantees, with its history",
+)
+async def guarantee_detail(
+    instrument_id: UUID,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> GuaranteeDetailResponse:
+    detail = await _load_guarantee(session, user, instrument_id)
+
+    return GuaranteeDetailResponse(
+        guarantee=_card(detail.card),
+        relationship=detail.relationship,
+        scope=detail.scope,
+        conditions=detail.conditions,
+        signed_at=detail.signed_at,
+        activity=[
+            ActivityItem(id=entry.id, label=entry.label, at=entry.at) for entry in detail.activity
+        ],
+        agreement=detail.agreement,
+    )
+
+
+@router.get(
+    "/guarantees/{instrument_id}/agreement",
+    response_class=PlainTextResponse,
+    summary="Download the agreement as a text file",
+)
+async def guarantee_agreement(
+    instrument_id: UUID,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> PlainTextResponse:
+    detail = await _load_guarantee(session, user, instrument_id)
+    reference = detail.card.reference
+    body = "\n\n".join([f"Guarantee agreement {reference}", *detail.agreement]) + "\n"
+
+    return PlainTextResponse(
+        body,
+        headers={"Content-Disposition": f'attachment; filename="agreement-{reference}.txt"'},
+    )

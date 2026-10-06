@@ -5,21 +5,11 @@ Used by: the backend test suite and CI.
 """
 
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.domain import (
-    AgreementStatus,
-    GuarantorAgreement,
-    Job,
-    JobStatus,
-    JobType,
-    Organization,
-    OrganizationType,
-    User,
-    Worker,
-)
+from app.models.domain import AgreementStatus, AuditEvent, GuarantorAgreement, User, Worker
 from app.services import dashboard as service
 
 NOW = datetime.now(tz=UTC)
@@ -30,29 +20,12 @@ async def build_guarantee(
     worker: Worker,
     guarantor: User,
     *,
-    job_status: JobStatus,
     agreement_status: AgreementStatus = AgreementStatus.ACTIVE,
     valid_days: int = 60,
 ) -> GuarantorAgreement:
-    organization = Organization(name="Sparkle", organization_type=OrganizationType.EMPLOYER)
-    session.add(organization)
-    await session.flush()
-
-    job = Job(
-        worker_id=worker.id,
-        organization_id=organization.id,
-        job_type=JobType.INDEPENDENT,
-        status=job_status,
-        title="Home cleaning",
-        agreed_amount=Decimal("25000.00"),
-    )
-    session.add(job)
-    await session.flush()
-
     agreement = GuarantorAgreement(
         worker_id=worker.id,
         guarantor_user_id=guarantor.id,
-        job_id=job.id,
         scope="Cleaning",
         conditions="Covers no-show.",
         relationship_type="sibling",
@@ -61,154 +34,88 @@ async def build_guarantee(
         signed_at=NOW - timedelta(days=3),
         verified_at=NOW - timedelta(days=3),
     )
+    if agreement_status is AgreementStatus.EXPIRED:
+        agreement.closed_at = agreement.valid_until
     session.add(agreement)
     await session.flush()
     return agreement
 
 
-async def test_summary_counts_active_and_completed(
-    session: AsyncSession, worker: Worker
-) -> None:
-    guarantor = User(email="grace@example.com", display_name="Grace G")
+async def make_guarantor(session: AsyncSession, email: str = "grace@example.com") -> User:
+    guarantor = User(email=email, display_name="Grace G")
     session.add(guarantor)
     await session.flush()
-
-    await build_guarantee(session, worker, guarantor, job_status=JobStatus.IN_PROGRESS)
-    await build_guarantee(session, worker, guarantor, job_status=JobStatus.COMPLETED)
-
-    summary = await service.load_summary(session, guarantor.id)
-
-    assert summary.active_count == 1
-    # A finished job reads as Completed even while the instrument is active.
-    assert summary.completed_count == 1
-    assert {card.status for card in summary.guarantees} == {"Active", "Completed"}
-    assert {card.bucket for card in summary.guarantees} == {"active", "completed"}
-    assert summary.guarantees[0].amount == Decimal("25000.00")
+    return guarantor
 
 
-async def test_triggered_stays_active_and_revoked_closes(
-    session: AsyncSession, worker: Worker
-) -> None:
-    """A called-in guarantee is a live obligation; a revoked one is over."""
+async def test_active_and_expired_tabs(session: AsyncSession, worker: Worker) -> None:
+    """A guarantee lasts a year; once it runs out it moves to Expired."""
 
-    guarantor = User(email="grace@example.com", display_name="Grace G")
-    session.add(guarantor)
-    await session.flush()
-
-    triggered = await build_guarantee(
-        session,
-        worker,
-        guarantor,
-        job_status=JobStatus.IN_PROGRESS,
-        agreement_status=AgreementStatus.TRIGGERED,
-    )
-    revoked = await build_guarantee(
-        session,
-        worker,
-        guarantor,
-        job_status=JobStatus.IN_PROGRESS,
-        agreement_status=AgreementStatus.REVOKED,
+    guarantor = await make_guarantor(session)
+    active = await build_guarantee(session, worker, guarantor)
+    expired = await build_guarantee(
+        session, worker, guarantor, agreement_status=AgreementStatus.EXPIRED, valid_days=-5
     )
 
     summary = await service.load_summary(session, guarantor.id)
     by_id = {card.instrument_id: card for card in summary.guarantees}
 
-    # A claim is running, so the guarantor still has something to answer.
-    assert by_id[triggered.id].bucket == "active"
-    assert by_id[revoked.id].bucket == "completed"
+    assert by_id[active.id].bucket == "active"
+    assert by_id[expired.id].bucket == "expired"
+    assert by_id[expired.id].ended_on == expired.closed_at
+    assert summary.active_count == 1
+    assert summary.completed_count == 1
+
+
+async def test_card_carries_the_term(session: AsyncSession, worker: Worker) -> None:
+    guarantor = await make_guarantor(session)
+    agreement = await build_guarantee(session, worker, guarantor)
+
+    card = (await service.load_summary(session, guarantor.id)).guarantees[0]
+
+    assert card.started_on == agreement.verified_at
+    assert card.valid_until == agreement.valid_until
+    assert card.reference.startswith("G-")
+    assert card.status == "Active"
+
+
+@pytest.mark.parametrize(
+    ("status", "bucket"),
+    [
+        # A running claim still needs the guarantor.
+        (AgreementStatus.TRIGGERED, "active"),
+        (AgreementStatus.DISPUTED, "active"),
+        (AgreementStatus.SUSPENDED, "active"),
+        # Over, but not by running out the year: shown only under All.
+        (AgreementStatus.PAID, "closed"),
+        (AgreementStatus.DISMISSED, "closed"),
+        (AgreementStatus.REVOKED, "closed"),
+        (AgreementStatus.DECLINED, "closed"),
+        # Waiting on the guarantor.
+        (AgreementStatus.PENDING_SIGNATURE, "pending"),
+        (AgreementStatus.PENDING_VERIFICATION, "pending"),
+    ],
+)
+async def test_bucket_follows_the_instrument_alone(
+    session: AsyncSession, worker: Worker, status: AgreementStatus, bucket: str
+) -> None:
+    guarantor = await make_guarantor(session)
+    await build_guarantee(session, worker, guarantor, agreement_status=status)
+
+    card = (await service.load_summary(session, guarantor.id)).guarantees[0]
+
+    assert card.bucket == bucket
     # The card still says what actually happened.
-    assert by_id[triggered.id].status == "Triggered"
-    assert by_id[revoked.id].status == "Revoked"
-    assert summary.active_count == 1
-    assert summary.completed_count == 1
-
-
-async def test_triggered_outranks_a_finished_job(
-    session: AsyncSession, worker: Worker
-) -> None:
-    """The claim outlives the work: a finished job does not close a claim."""
-
-    guarantor = User(email="grace@example.com", display_name="Grace G")
-    session.add(guarantor)
-    await session.flush()
-
-    await build_guarantee(
-        session,
-        worker,
-        guarantor,
-        job_status=JobStatus.COMPLETED,
-        agreement_status=AgreementStatus.TRIGGERED,
-    )
-
-    summary = await service.load_summary(session, guarantor.id)
-
-    assert summary.guarantees[0].bucket == "active"
-    assert summary.active_count == 1
-
-
-async def test_pending_requests_are_their_own_bucket(
-    session: AsyncSession, worker: Worker
-) -> None:
-    guarantor = User(email="grace@example.com", display_name="Grace G")
-    session.add(guarantor)
-    await session.flush()
-
-    await build_guarantee(
-        session,
-        worker,
-        guarantor,
-        job_status=JobStatus.ACCEPTED,
-        agreement_status=AgreementStatus.PENDING_SIGNATURE,
-    )
-
-    summary = await service.load_summary(session, guarantor.id)
-
-    assert summary.guarantees[0].bucket == "pending"
-    assert summary.active_count == 0
-    assert summary.completed_count == 0
-
-
-async def test_resolved_claims_move_to_completed(
-    session: AsyncSession, worker: Worker
-) -> None:
-    """Disputed stays active; paid and dismissed are done."""
-
-    guarantor = User(email="grace@example.com", display_name="Grace G")
-    session.add(guarantor)
-    await session.flush()
-
-    disputed = await build_guarantee(
-        session, worker, guarantor, job_status=JobStatus.IN_PROGRESS,
-        agreement_status=AgreementStatus.DISPUTED,
-    )
-    paid = await build_guarantee(
-        session, worker, guarantor, job_status=JobStatus.IN_PROGRESS,
-        agreement_status=AgreementStatus.PAID,
-    )
-    dismissed = await build_guarantee(
-        session, worker, guarantor, job_status=JobStatus.IN_PROGRESS,
-        agreement_status=AgreementStatus.DISMISSED,
-    )
-
-    summary = await service.load_summary(session, guarantor.id)
-    by_id = {card.instrument_id: card for card in summary.guarantees}
-
-    assert by_id[disputed.id].bucket == "active"
-    assert by_id[paid.id].bucket == "completed"
-    assert by_id[dismissed.id].bucket == "completed"
-    assert by_id[paid.id].status == "Paid"
-    assert by_id[dismissed.id].status == "Dismissed"
+    assert card.status == service.status_label(status)
 
 
 async def test_summary_is_scoped_to_one_guarantor(
     session: AsyncSession, worker: Worker
 ) -> None:
-    mine = User(email="mine@example.com", display_name="Mine")
-    theirs = User(email="theirs@example.com", display_name="Theirs")
-    session.add_all([mine, theirs])
-    await session.flush()
+    mine = await make_guarantor(session, "mine@example.com")
+    theirs = await make_guarantor(session, "theirs@example.com")
 
-    await build_guarantee(session, worker, theirs, job_status=JobStatus.IN_PROGRESS)
+    await build_guarantee(session, worker, theirs)
 
     summary = await service.load_summary(session, mine.id)
 
@@ -219,16 +126,9 @@ async def test_summary_is_scoped_to_one_guarantor(
 async def test_action_required_picks_the_waiting_request(
     session: AsyncSession, worker: Worker
 ) -> None:
-    guarantor = User(email="grace@example.com", display_name="Grace G")
-    session.add(guarantor)
-    await session.flush()
-
+    guarantor = await make_guarantor(session)
     await build_guarantee(
-        session,
-        worker,
-        guarantor,
-        job_status=JobStatus.ACCEPTED,
-        agreement_status=AgreementStatus.PENDING_SIGNATURE,
+        session, worker, guarantor, agreement_status=AgreementStatus.PENDING_SIGNATURE
     )
 
     summary = await service.load_summary(session, guarantor.id)
@@ -237,18 +137,69 @@ async def test_action_required_picks_the_waiting_request(
     assert summary.action_required.status == "Pending Signature"
 
 
+async def test_guarantee_detail_has_its_own_history(
+    session: AsyncSession, worker: Worker
+) -> None:
+    guarantor = await make_guarantor(session)
+    agreement = await build_guarantee(session, worker, guarantor)
+    other = await build_guarantee(session, worker, guarantor)
+    session.add_all(
+        [
+            AuditEvent(
+                entity_type="guarantor_agreement",
+                entity_id=agreement.id,
+                action="guarantor.identity_verified",
+                event_metadata={},
+            ),
+            AuditEvent(
+                entity_type="guarantor_agreement",
+                entity_id=agreement.id,
+                action="guarantor.activated",
+                event_metadata={},
+            ),
+            AuditEvent(
+                entity_type="guarantor_agreement",
+                entity_id=other.id,
+                action="guarantor.expired",
+                event_metadata={},
+            ),
+        ]
+    )
+    await session.flush()
+
+    detail = await service.load_guarantee(session, guarantor.id, agreement.id)
+
+    assert {entry.label for entry in detail.activity} == {
+        "Identity verified",
+        "Guarantee activated",
+    }
+    assert detail.relationship == "sibling"
+    assert detail.card.instrument_id == agreement.id
+    assert any("Cleaning" in paragraph for paragraph in detail.agreement)
+    assert "one year" in detail.agreement[0]
+
+
+async def test_guarantee_detail_hides_other_guarantors(
+    session: AsyncSession, worker: Worker
+) -> None:
+    mine = await make_guarantor(session, "mine@example.com")
+    theirs = await make_guarantor(session, "theirs@example.com")
+    agreement = await build_guarantee(session, worker, theirs)
+
+    with pytest.raises(service.GuaranteeNotFoundError):
+        await service.load_guarantee(session, mine.id, agreement.id)
+
+
 async def test_notifications_sort_without_timezone_errors(
     session: AsyncSession, worker: Worker
 ) -> None:
     """Stored timestamps are naive on SQLite and aware on Postgres."""
 
-    guarantor = User(email="grace@example.com", display_name="Grace G")
-    session.add(guarantor)
-    await session.flush()
+    guarantor = await make_guarantor(session)
 
     # One expiring soon and one far off, so both branches are built and sorted.
-    await build_guarantee(session, worker, guarantor, job_status=JobStatus.IN_PROGRESS, valid_days=3)
-    await build_guarantee(session, worker, guarantor, job_status=JobStatus.IN_PROGRESS, valid_days=300)
+    await build_guarantee(session, worker, guarantor, valid_days=3)
+    await build_guarantee(session, worker, guarantor, valid_days=300)
 
     items = await service.load_notifications(session, guarantor.id)
 

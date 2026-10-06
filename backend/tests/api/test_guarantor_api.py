@@ -28,7 +28,6 @@ def create_payload(worker: Worker, **overrides: object) -> dict:
         },
         "scope": "Domestic cleaning jobs up to NGN 50,000",
         "conditions": "Covers no-show and property damage claims.",
-        "valid_until": (datetime.now(tz=UTC) + timedelta(days=30)).isoformat(),
     }
     payload.update(overrides)
     return payload

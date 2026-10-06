@@ -40,6 +40,7 @@ from app.models.domain import (  # noqa: E402
     User,
     Worker,
 )
+from app.services.guarantor import term_end  # noqa: E402
 
 DB_URL = get_settings().async_database_url
 
@@ -187,11 +188,12 @@ async def main() -> None:
             guarantor_phone="+2348012345678",
             guarantor_address="12 Trust Street, Lagos",
             status=AgreementStatus.ACTIVE,
-            valid_until=NOW + timedelta(days=10),
+            # A guarantee runs for a year from activation.
+            valid_until=term_end(NOW - timedelta(days=7)),
             signed_at=NOW - timedelta(days=7),
             verified_at=NOW - timedelta(days=7),
         )
-        finished = GuarantorAgreement(
+        expired = GuarantorAgreement(
             worker_id=daniella.id,
             guarantor_user_id=guarantor.id,
             job_id=sink.id,
@@ -200,10 +202,13 @@ async def main() -> None:
             relationship_type="colleague",
             guarantor_phone="+2348012345678",
             guarantor_address="12 Trust Street, Lagos",
-            status=AgreementStatus.ACTIVE,
-            valid_until=NOW + timedelta(days=120),
-            signed_at=NOW - timedelta(days=40),
-            verified_at=NOW - timedelta(days=40),
+            status=AgreementStatus.EXPIRED,
+            # Went live a year and three weeks ago, so its year ran out.
+            valid_until=term_end(NOW - timedelta(days=386)),
+            signed_at=NOW - timedelta(days=386),
+            verified_at=NOW - timedelta(days=386),
+            closed_at=term_end(NOW - timedelta(days=386)),
+            status_reason="Validity period ended.",
         )
         pending = GuarantorAgreement(
             worker_id=tomiwa.id,
@@ -215,15 +220,15 @@ async def main() -> None:
             guarantor_phone="+2348012345678",
             guarantor_address="12 Trust Street, Lagos",
             status=AgreementStatus.PENDING_SIGNATURE,
-            valid_until=NOW + timedelta(days=90),
+            valid_until=term_end(NOW),
         )
-        session.add_all([active, finished, pending])
+        session.add_all([active, expired, pending])
         await session.flush()
 
         # A trail the "Recent activity" list can read.
         for agreement, actions in (
-            (active, ("guarantor.created", "guarantor.signed", "guarantor.identity_submitted", "guarantor.identity_verified")),
-            (finished, ("guarantor.created", "guarantor.signed", "guarantor.identity_verified")),
+            (active, ("guarantor.created", "guarantor.signed", "guarantor.identity_submitted", "guarantor.identity_verified", "guarantor.activated")),
+            (expired, ("guarantor.created", "guarantor.signed", "guarantor.identity_verified", "guarantor.activated", "guarantor.expired")),
             (pending, ("guarantor.created",)),
         ):
             for offset, action in enumerate(actions):
@@ -242,7 +247,7 @@ async def main() -> None:
         print(f"DATABASE_URL={DB_URL}")
         print(f"GUARANTOR={guarantor_email}")
         print(f"  active guarantee   : {active.id} (Jane A, Home cleaning)")
-        print(f"  completed guarantee: {finished.id} (Daniella k., Sink fix)")
+        print(f"  expired guarantee  : {expired.id} (Daniella k.)")
         print(f"  pending request    : {pending.id} (Tomiwa B., Socket rewiring)")
 
     await engine.dispose()

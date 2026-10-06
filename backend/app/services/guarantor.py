@@ -168,10 +168,6 @@ class SelfGuaranteeError(GuarantorError):
     """A worker cannot act as their own guarantor."""
 
 
-class ValidityWindowError(GuarantorError):
-    """valid_until must be in the future when the instrument is created."""
-
-
 class IdentityCheckFailedError(GuarantorError):
     """The provider could not verify the guarantor's identity details."""
 
@@ -194,6 +190,29 @@ class InvalidTransitionError(GuarantorError):
         )
         self.current = current
         self.target = target
+
+
+def term_end(start: datetime) -> datetime:
+    """The moment a guarantee that starts at `start` runs out: one year on.
+
+    A guarantor vouches for a worker for a year, not for a single job. A start
+    on 29 February ends on 28 February, since the next year has no 29th.
+    """
+
+    try:
+        return start.replace(year=start.year + 1)
+    except ValueError:
+        return start.replace(year=start.year + 1, day=28)
+
+
+def instrument_reference(instrument_id: UUID) -> str:
+    """A short reference for people to quote, e.g. "G-3F9A1C".
+
+    Taken from the id, so it needs no column; it is for reading out, not for
+    looking an instrument up.
+    """
+
+    return f"G-{instrument_id.hex[:6].upper()}"
 
 
 def status_label(status: AgreementStatus) -> str:
@@ -344,9 +363,6 @@ async def create_instrument(
     if worker is None:
         raise WorkerNotFoundError(f"No worker with id {request.worker_id}.")
 
-    if _as_aware(request.valid_until) <= moment:
-        raise ValidityWindowError("valid_until must be in the future.")
-
     guarantor = await _resolve_guarantor_user(
         session, email=request.guarantor.email, full_name=request.guarantor.full_name
     )
@@ -363,7 +379,9 @@ async def create_instrument(
         guarantor_phone=request.guarantor.phone,
         guarantor_address=request.guarantor.address,
         status=AgreementStatus.DRAFT if as_draft else AgreementStatus.PENDING_SIGNATURE,
-        valid_until=request.valid_until,
+        # Until the guarantee goes live this only bounds how long the request
+        # stays open; activation restarts the year from that day.
+        valid_until=term_end(moment),
     )
     session.add(agreement)
     await session.flush()
@@ -573,12 +591,20 @@ async def complete_liveness_check(
         )
 
     apply_transition(agreement, AgreementStatus.ACTIVE, at=now)
+    agreement.valid_until = term_end(_as_aware(agreement.verified_at))
     _record_audit(
         session,
         agreement=agreement,
         action="guarantor.identity_verified",
         actor_id=agreement.guarantor_user_id,
         metadata={"provider": result.provider, "provider_reference": result.reference},
+    )
+    _record_audit(
+        session,
+        agreement=agreement,
+        action="guarantor.activated",
+        actor_id=agreement.guarantor_user_id,
+        metadata={"valid_until": agreement.valid_until.isoformat()},
     )
     return agreement
 
