@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { GuaranteeCard } from "@/components/dashboard/GuaranteeCard";
-import { CheckIcon, ChevronDownIcon, WarningTriangleIcon } from "@/components/ui";
+import { CheckIcon, ChevronDownIcon, ClockIcon, WarningTriangleIcon } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatActivityTime } from "@/lib/format";
 import { useDashboard } from "./useDashboard";
@@ -63,21 +63,42 @@ export function HomeScreen() {
           </section>
         )}
 
-        <section className="grid grid-cols-2 gap-4">
+        <section className="grid grid-cols-3 gap-3">
           {[
-            { label: "Active Guarantees", value: data.active_count },
-            { label: "Expired Guarantees", value: data.expired_count },
-          ].map((stat) => (
+            {
+              label: "Active Guarantees",
+              value: data.active_count,
+              ring: "bg-primary-50",
+              fill: "bg-info",
+              Icon: CheckIcon,
+            },
+            {
+              label: "Pending Request",
+              value: data.pending_count,
+              ring: "bg-warning-light",
+              fill: "bg-warning",
+              Icon: ClockIcon,
+            },
+            {
+              label: "Expired Guarantees",
+              value: data.expired_count,
+              ring: "bg-warning-light",
+              fill: "bg-error-mid",
+              Icon: ClockIcon,
+            },
+          ].map(({ label, value, ring, fill, Icon }) => (
             <div
-              key={stat.label}
-              className="flex flex-col gap-4 rounded-xl border border-stroke bg-white p-4 shadow-1"
+              key={label}
+              className="flex flex-col gap-3 rounded-xl border border-stroke bg-white p-3"
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-pill bg-info-light">
-                <CheckIcon className="text-primary-500" width={18} height={18} />
+              <span className={cn("flex h-10 w-10 items-center justify-center rounded-pill", ring)}>
+                <span className={cn("flex h-6 w-6 items-center justify-center rounded-pill", fill)}>
+                  <Icon className="text-white" width={14} height={14} />
+                </span>
               </span>
               <span className="flex flex-col gap-1">
-                <span className="text-body-sm text-grey-600">{stat.label}</span>
-                <span className="text-body-lg text-grey-900">{stat.value}</span>
+                <span className="text-body-sm text-grey-600">{label}</span>
+                <span className="text-body-lg text-grey-900">{value}</span>
               </span>
             </div>
           ))}

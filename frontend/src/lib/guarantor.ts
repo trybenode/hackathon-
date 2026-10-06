@@ -347,6 +347,8 @@ export type ActivityItem = {
 export type DashboardData = {
   greeting_name: string;
   active_count: number;
+  /** Requests waiting for the guarantor's answer. */
+  pending_count: number;
   expired_count: number;
   guarantees: GuaranteeCard[];
   recent_activity: ActivityItem[];

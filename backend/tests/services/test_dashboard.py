@@ -66,6 +66,7 @@ async def test_active_and_expired_tabs(session: AsyncSession, worker: Worker) ->
     assert by_id[expired.id].ended_on == expired.closed_at
     assert summary.active_count == 1
     assert summary.expired_count == 1
+    assert summary.pending_count == 0
     # Both were accepted requests, whatever happened since.
     assert {card.request_bucket for card in summary.guarantees} == {"accepted"}
 
@@ -170,6 +171,7 @@ async def test_action_required_picks_the_waiting_request(
 
     summary = await service.load_summary(session, guarantor.id)
 
+    assert summary.pending_count == 1
     assert summary.action_required is not None
     assert summary.action_required.status == "Pending Signature"
 

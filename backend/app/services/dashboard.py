@@ -126,6 +126,8 @@ class GuaranteeDetail:
 @dataclass(frozen=True)
 class DashboardSummary:
     active_count: int
+    #: Requests waiting for this guarantor's answer.
+    pending_count: int
     expired_count: int
     guarantees: list[DashboardGuarantee]
     recent_activity: list[ActivityEntry]
@@ -259,6 +261,7 @@ async def load_summary(session: AsyncSession, guarantor_user_id: UUID) -> Dashbo
 
     active = [card for _, card in cards if card.bucket == "active"]
     expired = [card for _, card in cards if card.bucket == "expired"]
+    pending = [card for _, card in cards if card.request_bucket == "pending"]
 
     # Newest first, so the banner names the latest request.
     waiting = next((card for _, card in cards if card.request_bucket == "pending"), None)
@@ -272,6 +275,7 @@ async def load_summary(session: AsyncSession, guarantor_user_id: UUID) -> Dashbo
 
     return DashboardSummary(
         active_count=len(active),
+        pending_count=len(pending),
         expired_count=len(expired),
         guarantees=[card for _, card in cards],
         recent_activity=activity,

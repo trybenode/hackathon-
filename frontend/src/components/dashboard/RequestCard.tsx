@@ -63,11 +63,11 @@ export function RequestCard({ request }: { request: Guarantee }) {
       </header>
 
       <div className="flex flex-col gap-4">
-        <div className="flex min-h-10 items-center justify-between gap-4">
-          <span className="text-body-sm text-grey-900">{when}</span>
+        <div className="flex min-h-10 items-center justify-between gap-3">
+          <span className="text-body-sm whitespace-nowrap text-grey-900">{when}</span>
           {action && (
             <Link href={action.href}>
-              <Button variant="outline" size="md" className="rounded-pill px-8">
+              <Button variant="outline" size="md" className="rounded-pill px-7">
                 {action.label}
               </Button>
             </Link>

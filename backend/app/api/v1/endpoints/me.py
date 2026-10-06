@@ -66,6 +66,7 @@ class GuaranteeDetailResponse(ApiModel):
 class DashboardResponse(ApiModel):
     greeting_name: str
     active_count: int
+    pending_count: int
     expired_count: int
     guarantees: list[GuaranteeCard]
     recent_activity: list[ActivityItem]
@@ -139,6 +140,7 @@ async def dashboard(
         # The greeting uses the first name, as the design shows.
         greeting_name=user.display_name.split(" ")[0],
         active_count=summary.active_count,
+        pending_count=summary.pending_count,
         expired_count=summary.expired_count,
         guarantees=[_card(card) for card in summary.guarantees],
         recent_activity=[

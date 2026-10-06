@@ -70,10 +70,10 @@ export function GuaranteeCard({
         </span>
       </header>
 
-      <footer className="flex items-center justify-between gap-4">
-        <span className="text-body-sm text-grey-900">{term}</span>
+      <footer className="flex items-center justify-between gap-3">
+        <span className="text-body-sm whitespace-nowrap text-grey-900">{term}</span>
         <Link href={`/dashboard/guarantees/${guarantee.instrument_id}`}>
-          <Button variant="outline" size="md" className="rounded-pill px-8">
+          <Button variant="outline" size="md" className="rounded-pill px-7">
             View
           </Button>
         </Link>
