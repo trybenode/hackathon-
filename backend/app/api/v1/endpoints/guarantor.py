@@ -26,7 +26,11 @@ from app.schemas.api import (
     WorkerProfileSummary,
 )
 from app.services import guarantor as guarantor_service
-from app.services.document_store import DocumentTooLargeError, UnsupportedDocumentError
+from app.services.document_store import (
+    DocumentStorageError,
+    DocumentTooLargeError,
+    UnsupportedDocumentError,
+)
 from app.services.identity_provider import IdentitySubmission, LivenessSubmission
 from app.services.guarantor import (
     GuarantorError,
@@ -277,6 +281,11 @@ async def submit_identity(
         )
     except (UnsupportedDocumentError, DocumentTooLargeError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    except DocumentStorageError as error:
+        # The upload runs before anything is saved, so a retry starts clean.
+        raise HTTPException(
+            status_code=503, detail="We could not upload your document. Try again in a moment."
+        ) from error
     except GuarantorError as error:
         # The failed attempt is still worth recording.
         await session.commit()
