@@ -66,8 +66,7 @@ hotfix/escrow-status-bug
 * At least **1 approval** from another team member
 * Prefer squash merge (keeps main history clean)
 
-
-PR Checklist 
+PR Checklist
 
 ## What
 
@@ -85,6 +84,7 @@ PR Checklist
 - [ ] Documentation updated if API contract changed
 
 Copy `.env.example` to `.env` and set the shared Neon `DATABASE_URL`. Do not commit `.env` or real credentials.
+Before enabling endpoints: set PLATFORM_API_KEY and CREDENTIAL_SIGNING_SECRET in .env (each at least 32 characters; generate with openssl rand -hex 32)
 
 The runtime database is hosted on Neon so the team shares one database environment. Redis runs locally through Docker for development caching and rate limiting.
 
@@ -93,6 +93,10 @@ The runtime database is hosted on Neon so the team shares one database environme
 ```bash
 docker compose up -d redis
 ```
+## db upgrade
+```bash
+PYTHONPATH=backend alembic -c alembic.ini upgrade head --sql
+``` 
 
 ## Backend
 
