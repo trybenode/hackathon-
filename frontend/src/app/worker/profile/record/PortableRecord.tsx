@@ -112,7 +112,7 @@ export function PortableRecord() {
           className="flex items-center gap-4 rounded-xl border border-grey-400 px-6 py-4 text-grey-900"
         >
           <CredentialIcon className="shrink-0 text-info" />
-          <span className="flex-1 text-body-md">verified credentials</span>
+          <span className="flex-1 text-body-md">Verified credentials</span>
           <ChevronRightIcon className="shrink-0" />
         </Link>
 
