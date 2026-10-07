@@ -44,16 +44,37 @@ export type VerifiedOutcome = {
 };
 
 /**
- * A verified claim the worker carries between platforms (SRS 3.5): who they
- * are, who stands behind them, and work history verified elsewhere. Not
- * documents; the documents stay with the provider that checked them. Distinct
- * from verified outcomes, which are individual jobs on this platform.
+ * The verified claims a worker carries between platforms (SRS 3.5). Exactly
+ * three kinds count: identity (NIN and BVN), an active guarantor, and work
+ * history imported from another platform. Not documents; those stay with the
+ * provider that checked them. Distinct from verified outcomes, which are
+ * individual jobs on this platform.
  */
-export type VerifiedCredential = {
-  id: string;
-  kind: "identity" | "guarantor" | "imported_history";
-  label: string;
-  issuer: string;
+export type IdentityCredential = {
+  ninVerified: boolean;
+  bvnVerified: boolean;
+  verifiedAt: string;
+};
+
+export type GuarantorCredential = {
+  name: string;
+  /** The guarantor passed their own identity checks. */
+  verified: boolean;
+  status: "Active" | "Expired";
+  activatedAt: string;
+  /** A guarantee runs for one year from activation. */
+  validUntil: string;
+};
+
+export type ImportedRecordCredential = {
+  verifiedOutcomes: number;
+  updatedAt: string;
+};
+
+export type Credentials = {
+  identity: IdentityCredential | null;
+  guarantor: GuarantorCredential | null;
+  importedRecord: ImportedRecordCredential | null;
 };
 
 export type WorkerRecord = {
@@ -66,7 +87,7 @@ export type WorkerRecord = {
   /** Jobs whose outcome was verified, on this platform: score_worker's n_jobs. */
   verifiedOutcomes: number;
   lastUpdated: string;
-  credentials: VerifiedCredential[];
+  credentials: Credentials;
   stats: {
     completedJobs: number;
     onTimeRate: number;
@@ -76,17 +97,38 @@ export type WorkerRecord = {
   outcomes: VerifiedOutcome[];
 };
 
-export const SHARE_SCOPES = [
-  "Work outcomes",
-  "Trust history",
-  "Performance",
-  "Identity verification",
-] as const;
+/** The guarantor credential in both states the designs cover. */
+export const guarantorStates: Record<"active" | "expired", GuarantorCredential> = {
+  active: {
+    name: "John Parker",
+    verified: true,
+    status: "Active",
+    activatedAt: "2026-09-12T10:00:00+01:00",
+    validUntil: "2027-09-12T10:00:00+01:00",
+  },
+  expired: {
+    name: "John Parker",
+    verified: true,
+    status: "Expired",
+    activatedAt: "2025-09-12T10:00:00+01:00",
+    validUntil: "2026-09-12T10:00:00+01:00",
+  },
+};
 
-export type ShareScope = (typeof SHARE_SCOPES)[number];
-
-/** Shared links stop working after this many days. */
-export const SHARE_LINK_DAYS = 7;
+const OUTCOME_HISTORY: [string, string, number, VerifiedOutcome["status"]][] = [
+  ["Home cleaning", "2026-09-20", 15000, "Client Confirmed"],
+  ["Deep cleaning", "2026-09-06", 40000, "Client Confirmed"],
+  ["Home cleaning", "2026-08-23", 15000, "Auto-released"],
+  ["Office cleaning", "2026-08-09", 50000, "Client Confirmed"],
+  ["Home cleaning", "2026-07-26", 15000, "Client Confirmed"],
+  ["Home cleaning", "2026-07-12", 15000, "Client Confirmed"],
+  ["Deep cleaning", "2026-06-28", 40000, "Client Confirmed"],
+  ["Home cleaning", "2026-06-14", 15000, "Auto-released"],
+  ["Home cleaning", "2026-05-31", 15000, "Client Confirmed"],
+  ["Office cleaning", "2026-05-17", 50000, "Client Confirmed"],
+  ["Home cleaning", "2026-05-03", 15000, "Client Confirmed"],
+  ["Home cleaning", "2026-04-19", 15000, "Client Confirmed"],
+];
 
 export const workerRecord: WorkerRecord = {
   name: "Jane Adams",
@@ -104,27 +146,25 @@ export const workerRecord: WorkerRecord = {
   },
   verifiedOutcomes: 42,
   lastUpdated: "2026-09-23T10:00:00+01:00",
-  credentials: [
-    { id: "cred-1", kind: "identity", label: "Identity verified (NIN)", issuer: "KYC provider" },
-    { id: "cred-2", kind: "identity", label: "Liveness check passed", issuer: "KYC provider" },
-    { id: "cred-3", kind: "guarantor", label: "Active guarantor", issuer: "Guarantor instrument" },
-    { id: "cred-4", kind: "imported_history", label: "12 verified jobs", issuer: "CleanPro" },
-    { id: "cred-5", kind: "imported_history", label: "9 verified jobs", issuer: "HomeHelp NG" },
-    { id: "cred-6", kind: "imported_history", label: "6 verified jobs", issuer: "Sparkle Services" },
-    { id: "cred-7", kind: "imported_history", label: "4 verified jobs", issuer: "TidyUp" },
-    { id: "cred-8", kind: "imported_history", label: "3 verified jobs", issuer: "Maids Direct" },
-  ],
+  credentials: {
+    identity: { ninVerified: true, bvnVerified: true, verifiedAt: "2026-09-12T10:00:00+01:00" },
+    guarantor: guarantorStates.active,
+    importedRecord: { verifiedOutcomes: 42, updatedAt: "2026-10-05T10:00:00+01:00" },
+  },
   stats: {
     completedJobs: 42,
     onTimeRate: 0.95,
     repeatHires: 12,
     disputes: 1,
   },
-  outcomes: [
-    { id: "out-1", title: "Home cleaning", date: "2026-02-20", amount: 15000, status: "Client Confirmed" },
-    { id: "out-2", title: "Home cleaning", date: "2026-02-20", amount: 15000, status: "Client Confirmed" },
-    { id: "out-3", title: "Home cleaning", date: "2026-02-20", amount: 15000, status: "Client Confirmed" },
-  ],
+  // Newest first, as the outcome history reads.
+  outcomes: OUTCOME_HISTORY.map(([title, date, amount, status], index) => ({
+    id: `out-${index + 1}`,
+    title,
+    date,
+    amount,
+    status,
+  })),
 };
 
 /** 87% */

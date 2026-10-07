@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { ArrowLeftIcon, ArrowRightIcon, BriefcaseIcon } from "@/components/worker/icons";
 import {
   ChartIcon,
@@ -9,21 +10,17 @@ import {
   CredentialIcon,
   DownloadIcon,
   PeopleIcon,
-  ShareIcon,
   WarningIcon,
 } from "@/components/worker/recordIcons";
+import { OutcomeList } from "@/components/worker/OutcomeList";
 import { ScoreRing } from "@/components/worker/ScoreRing";
 import { TrustBandBadge } from "@/components/worker/TrustBandBadge";
-import { Button, CheckIcon } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { formatShortDate, initialsOf } from "@/lib/workerMock";
-import {
-  formatNairaWhole,
-  formatNumericDate,
-  formatPercent,
-  workerRecord,
-  type WorkerRecord,
-} from "@/lib/workerRecordMock";
-import { ShareRecordDialog } from "./ShareRecordDialog";
+import { formatPercent, workerRecord, type WorkerRecord } from "@/lib/workerRecordMock";
+
+/** How many outcomes the record shows before "view all outcomes". */
+const OUTCOME_PREVIEW = 3;
 
 function Stat({
   icon,
@@ -66,7 +63,6 @@ function exportRecord(record: WorkerRecord) {
 
 export function PortableRecord() {
   const router = useRouter();
-  const [sharing, setSharing] = useState(false);
   const record = workerRecord;
   const { stats } = record;
 
@@ -111,16 +107,14 @@ export function PortableRecord() {
           </p>
         </section>
 
-        {/* No design yet for the credentials list, so the row is shown but
-            does not open anything. */}
-        <div
-          aria-disabled="true"
+        <Link
+          href="/worker/profile/record/credentials"
           className="flex items-center gap-4 rounded-xl border border-grey-400 px-6 py-4 text-grey-900"
         >
           <CredentialIcon className="shrink-0 text-info" />
-          <span className="flex-1 text-body-md">{record.credentials.length} verified credentials</span>
+          <span className="flex-1 text-body-md">verified credentials</span>
           <ChevronRightIcon className="shrink-0" />
-        </div>
+        </Link>
 
         <div className="grid grid-cols-2 gap-2.5">
           <Stat
@@ -148,34 +142,14 @@ export function PortableRecord() {
         </div>
 
         <section className="flex flex-col gap-3">
-          <div className="overflow-hidden rounded-lg bg-white shadow-1">
-            <h2 className="bg-primary-25 px-3 py-4 text-body-md text-grey-900">Verified outcomes</h2>
-            <ul>
-              {record.outcomes.map((outcome) => (
-                <li
-                  key={outcome.id}
-                  className="flex items-center gap-3 border-t border-stroke px-3 py-2"
-                >
-                  <CheckIcon className="shrink-0 text-grey-900" />
-                  <span className="flex flex-1 flex-col">
-                    <span className="text-body-sm font-medium text-grey-900">{outcome.title}</span>
-                    <span className="text-body-sm text-grey-800">
-                      {formatNumericDate(outcome.date)}· {formatNairaWhole(outcome.amount)}
-                    </span>
-                  </span>
-                  <span className="text-xs leading-4 text-grey-900">{outcome.status}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          {/* No design yet for the full list. */}
-          <span
-            aria-disabled="true"
+          <OutcomeList outcomes={record.outcomes.slice(0, OUTCOME_PREVIEW)} />
+          <Link
+            href="/worker/profile/record/outcomes"
             className="flex items-center gap-2 self-end text-body-sm font-medium text-grey-900"
           >
             view all outcomes
             <ArrowRightIcon width={20} height={20} />
-          </span>
+          </Link>
         </section>
 
         <div className="flex flex-col items-center gap-3 pb-4">
@@ -187,19 +161,8 @@ export function PortableRecord() {
             <DownloadIcon />
             Export record
           </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            className="w-56 rounded-xl px-0 text-body-lg font-semibold"
-            onClick={() => setSharing(true)}
-          >
-            <ShareIcon />
-            Share record
-          </Button>
         </div>
       </div>
-
-      <ShareRecordDialog open={sharing} onClose={() => setSharing(false)} />
     </main>
   );
 }
