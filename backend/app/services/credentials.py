@@ -12,7 +12,7 @@ import hmac
 import json
 import secrets
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -103,15 +103,11 @@ def verify_bundle(
         claims = json.loads(_b64decode(encoded_payload))
     except CredentialTokenError:
         raise
-    except (ValueError, UnicodeError, json.JSONDecodeError) as error:
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise CredentialTokenError("Credential token is malformed") from error
 
-    if not isinstance(claims, dict) or type(claims.get("exp")) is not int:
+    if not isinstance(claims, dict) or not isinstance(claims.get("exp"), int):
         raise CredentialTokenError("Credential token claims are invalid")
-    try:
-        datetime.fromtimestamp(claims["exp"], tz=UTC)
-    except (ValueError, OverflowError, OSError) as error:
-        raise CredentialTokenError("Credential expiration is invalid") from error
     current_time = int((now or datetime.now(UTC)).timestamp())
     if claims["exp"] <= current_time:
         raise CredentialTokenError("Credential token has expired")
@@ -167,8 +163,6 @@ async def export_credentials(
             )
         ).all()
     )
-    if len(outcomes) > MAX_BUNDLE_OUTCOMES:
-        raise CredentialTokenError("Credential export exceeds 1,000 records; use approved paginated platform history access")
     latest_assessment = await session.scalar(
         select(TrustAssessment)
         .where(TrustAssessment.worker_id == worker_id)
@@ -263,7 +257,7 @@ async def export_credentials(
         credential_token=token,
     )
 
-"""when the sealed ennvelope is handed back to the platform, it checks the seal, make sure it is still valid, and then copies the contents into the platform's own database"""
+"""when the sealed envelope is handed back to the platform, it checks the seal, make sure it is still valid, and then copies the contents into the platform's own database"""
 async def import_credentials(
     session: AsyncSession,
     worker_id: UUID,
@@ -335,7 +329,7 @@ async def import_credentials(
             rating = item.get("rating")
             if rating is not None:
                 rating = Decimal(str(rating))
-                if not rating.is_finite() or rating < 0 or rating > 5:
+                if rating < 0 or rating > 5:
                     raise ValueError("invalid rating")
             availability = item.get("available_signals")
             if availability is not None and (not isinstance(availability, list) or any(not isinstance(v, str) for v in availability)):
@@ -356,7 +350,7 @@ async def import_credentials(
             dispute_resolution = item.get("dispute_resolution")
             if dispute_resolution not in (None, "open", "upheld", "dismissed"):
                 raise ValueError("invalid dispute resolution")
-        except (KeyError, ValueError, TypeError, InvalidOperation, OverflowError) as error:
+        except (KeyError, ValueError, TypeError) as error:
             raise CredentialTokenError("Credential outcome is malformed") from error
 
         row_payload = dict(item)
