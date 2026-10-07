@@ -4,7 +4,7 @@ import { WorkerDialog } from "@/components/worker/WorkerDialog";
 import { Button, DotIcon, VerificationBadge } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatShortDate, initialsOf } from "@/lib/workerMock";
-import type { GuarantorCredential } from "@/lib/workerRecordMock";
+import type { GuarantorCredential } from "@/lib/workerRecord";
 
 /**
  * The worker's guarantor and where the guarantee stands.
@@ -51,7 +51,7 @@ export function GuarantorDialog({
             </span>
           </p>
           <p className="text-xs leading-4 text-grey-900">
-            Valid until - {formatShortDate(guarantor.validUntil)}
+            Valid until - {formatShortDate(guarantor.valid_until)}
           </p>
         </section>
 

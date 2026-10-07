@@ -3,11 +3,13 @@
 import { useRouter } from "next/navigation";
 import { ArrowLeftIcon } from "@/components/worker/icons";
 import { OutcomeList } from "@/components/worker/OutcomeList";
-import { workerRecord } from "@/lib/workerRecordMock";
+import { RecordGate } from "@/components/worker/RecordGate";
+import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
 
 /** Every verified outcome on the worker's record, newest first. */
 export function OutcomeHistory() {
   const router = useRouter();
+  const { data, error, loading } = useWorkerRecord();
 
   return (
     <main className="flex flex-col">
@@ -18,9 +20,13 @@ export function OutcomeHistory() {
         <h1 className="text-body-lg font-semibold text-grey-900">Verified Outcomes</h1>
       </header>
 
-      <div className="px-6 pt-4 pb-4">
-        <OutcomeList outcomes={workerRecord.outcomes} />
-      </div>
+      <RecordGate loading={loading} error={error}>
+        {data && (
+          <div className="px-6 pt-4 pb-4">
+            <OutcomeList outcomes={data.outcomes} />
+          </div>
+        )}
+      </RecordGate>
     </main>
   );
 }

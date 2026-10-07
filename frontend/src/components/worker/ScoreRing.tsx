@@ -1,5 +1,5 @@
 import { cn } from "@/lib/cn";
-import { formatPercent } from "@/lib/workerRecordMock";
+import { formatPercent } from "@/lib/workerRecord";
 
 /** The trust score as a filled ring with the percentage in the middle. */
 export function ScoreRing({

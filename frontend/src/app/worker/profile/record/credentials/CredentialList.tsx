@@ -7,7 +7,9 @@ import { ChevronRightIcon } from "@/components/worker/recordIcons";
 import { Button, CheckIcon, ClockIcon, VerificationBadge } from "@/components/ui";
 import { formatRelative } from "@/lib/format";
 import { formatShortDate } from "@/lib/workerMock";
-import type { Credentials } from "@/lib/workerRecordMock";
+import { RecordGate } from "@/components/worker/RecordGate";
+import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
+import type { Credentials } from "@/lib/workerRecord";
 import { GuarantorDialog } from "./GuarantorDialog";
 
 function Check({ children }: { children: ReactNode }) {
@@ -62,11 +64,9 @@ function CredentialCard({
  * The credentials a worker carries between platforms: identity, an active
  * guarantor, and work history imported from elsewhere.
  */
-export function CredentialList({ credentials }: { credentials: Credentials }) {
+export function CredentialList() {
   const router = useRouter();
-  const [guarantorOpen, setGuarantorOpen] = useState(false);
-  const { identity, guarantor, importedRecord } = credentials;
-  const none = !identity && !guarantor && !importedRecord;
+  const { data, error, loading } = useWorkerRecord();
 
   return (
     <main className="flex flex-col">
@@ -77,6 +77,21 @@ export function CredentialList({ credentials }: { credentials: Credentials }) {
         <h1 className="text-body-lg font-semibold text-grey-900">Verified Credentials</h1>
       </header>
 
+      <RecordGate loading={loading} error={error}>
+        {data && <CredentialCards credentials={data.credentials} />}
+      </RecordGate>
+    </main>
+  );
+}
+
+function CredentialCards({ credentials }: { credentials: Credentials }) {
+  const [guarantorOpen, setGuarantorOpen] = useState(false);
+  const { identity, guarantor, imported_record: importedRecord } = credentials;
+  const none = !identity && !guarantor && !importedRecord;
+
+  return (
+    <>
+
       <div className="flex flex-col gap-8 px-6 pt-10">
         {none && <p className="text-body-sm text-grey-600">No verified credentials yet.</p>}
 
@@ -85,11 +100,11 @@ export function CredentialList({ credentials }: { credentials: Credentials }) {
             title="Identity Verification"
             checks={
               <>
-                {identity.ninVerified && <Check>NIN verified</Check>}
-                {identity.bvnVerified && <Check>BVN verified</Check>}
+                {identity.nin_verified && <Check>NIN verified</Check>}
+                {identity.bvn_verified && <Check>BVN verified</Check>}
               </>
             }
-            footer={`Verified - ${formatShortDate(identity.verifiedAt)}`}
+            footer={`Verified - ${formatShortDate(identity.verified_at)}`}
           />
         )}
 
@@ -111,8 +126,8 @@ export function CredentialList({ credentials }: { credentials: Credentials }) {
             }
             footer={
               guarantor.status === "Active"
-                ? `Activated - ${formatShortDate(guarantor.activatedAt)}`
-                : `Expired - ${formatShortDate(guarantor.validUntil)}`
+                ? `Activated - ${formatShortDate(guarantor.activated_at)}`
+                : `Expired - ${formatShortDate(guarantor.valid_until)}`
             }
             onOpen={() => setGuarantorOpen(true)}
           />
@@ -121,8 +136,8 @@ export function CredentialList({ credentials }: { credentials: Credentials }) {
         {importedRecord && (
           <CredentialCard
             title="Imported Work Record"
-            checks={<Check>{importedRecord.verifiedOutcomes} verified outcomes</Check>}
-            footer={`Updated - ${formatRelative(importedRecord.updatedAt)}`}
+            checks={<Check>{importedRecord.verified_outcomes} verified outcomes</Check>}
+            footer={`Updated - ${formatRelative(importedRecord.updated_at)}`}
           />
         )}
 
@@ -144,6 +159,6 @@ export function CredentialList({ credentials }: { credentials: Credentials }) {
           onClose={() => setGuarantorOpen(false)}
         />
       )}
-    </main>
+    </>
   );
 }

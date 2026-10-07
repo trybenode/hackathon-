@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ArrowLeftIcon, ArrowRightIcon, BriefcaseIcon } from "@/components/worker/icons";
 import {
   ChartIcon,
@@ -13,11 +13,13 @@ import {
   WarningIcon,
 } from "@/components/worker/recordIcons";
 import { OutcomeList } from "@/components/worker/OutcomeList";
+import { RecordGate } from "@/components/worker/RecordGate";
+import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
 import { ScoreRing } from "@/components/worker/ScoreRing";
 import { TrustBandBadge } from "@/components/worker/TrustBandBadge";
 import { Button } from "@/components/ui";
 import { formatShortDate, initialsOf } from "@/lib/workerMock";
-import { formatPercent, workerRecord, type WorkerRecord } from "@/lib/workerRecordMock";
+import { exportCredentials, formatPercent, shortName } from "@/lib/workerRecord";
 
 /** How many outcomes the record shows before "view all outcomes". */
 const OUTCOME_PREVIEW = 3;
@@ -47,24 +49,36 @@ function Stat({
   );
 }
 
-/**
- * Saves the record as JSON. A stand-in for the portable credentials export
- * (Abdul's side), whose signed format will replace this file.
- */
-function exportRecord(record: WorkerRecord) {
-  const blob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json" });
+/** Saves the signed export, ready to import on another platform. */
+async function saveExport(workerId: string, name: string) {
+  const exported = await exportCredentials(workerId);
+  const blob = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `portable-record-${record.name.toLowerCase().replace(/\s+/g, "-")}.json`;
+  anchor.download = `portable-record-${name.toLowerCase().replace(/\s+/g, "-")}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
 
 export function PortableRecord() {
   const router = useRouter();
-  const record = workerRecord;
-  const { stats } = record;
+  const { data: record, error, loading } = useWorkerRecord();
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function exportRecord() {
+    if (!record) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      await saveExport(record.worker_id, record.name);
+    } catch {
+      setExportError("Could not export your record. Try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <main className="flex flex-col">
@@ -75,6 +89,8 @@ export function PortableRecord() {
         <h1 className="text-body-lg font-semibold text-grey-900">Portable Record</h1>
       </header>
 
+      <RecordGate loading={loading} error={error}>
+      {record && (
       <div className="flex flex-col gap-6 px-6 pt-4">
         <section className="flex flex-col gap-4">
           <p className="text-xs leading-4 text-grey-900">Your verified work history</p>
@@ -86,7 +102,7 @@ export function PortableRecord() {
               {initialsOf(record.name)}
             </span>
             <span className="flex flex-1 flex-col">
-              <span className="text-body-lg text-grey-900">{record.shortName}</span>
+              <span className="text-body-lg text-grey-900">{shortName(record.name)}</span>
               <span className="text-body-sm text-grey-600">{record.role}</span>
             </span>
             <TrustBandBadge band={record.assessment.band} />
@@ -103,7 +119,7 @@ export function PortableRecord() {
           </div>
 
           <p className="px-2 text-body-sm text-grey-900">
-            Last updated - {formatShortDate(record.lastUpdated)}
+            Last updated - {formatShortDate(record.last_updated)}
           </p>
         </section>
 
@@ -120,24 +136,28 @@ export function PortableRecord() {
           <Stat
             icon={<BriefcaseIcon width={20} height={20} />}
             label="Work history"
-            value={String(stats.completedJobs)}
+            value={String(record.stats.completed_jobs)}
             caption="Completed jobs"
           />
           <Stat
             icon={<ChartIcon width={20} height={20} />}
             label="Performance"
-            value={formatPercent(stats.onTimeRate)}
-            caption="on-time"
+            // There is no on-time data to measure, so this is the completion
+            // rate: jobs completed out of those the worker was responsible for.
+            value={
+              record.stats.completion_rate === null ? "—" : formatPercent(record.stats.completion_rate)
+            }
+            caption="completed"
           />
           <Stat
             icon={<PeopleIcon width={20} height={20} />}
             label="Repeat hires"
-            value={String(stats.repeatHires)}
+            value={String(record.stats.repeat_hires)}
           />
           <Stat
             icon={<WarningIcon width={20} height={20} />}
             label="Dispute"
-            value={String(stats.disputes)}
+            value={String(record.stats.disputes)}
           />
         </div>
 
@@ -153,16 +173,24 @@ export function PortableRecord() {
         </section>
 
         <div className="flex flex-col items-center gap-3 pb-4">
+          {exportError && (
+            <p role="alert" className="text-body-sm text-error">
+              {exportError}
+            </p>
+          )}
           <Button
             size="lg"
             className="w-56 rounded-xl px-0 text-body-lg font-semibold"
-            onClick={() => exportRecord(record)}
+            disabled={exporting}
+            onClick={exportRecord}
           >
             <DownloadIcon />
-            Export record
+            {exporting ? "Exporting…" : "Export record"}
           </Button>
         </div>
       </div>
+      )}
+      </RecordGate>
     </main>
   );
 }

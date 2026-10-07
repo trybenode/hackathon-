@@ -1,5 +1,5 @@
 import { Badge, type BadgeTone } from "@/components/ui";
-import type { TrustBand } from "@/lib/workerRecordMock";
+import type { TrustBand } from "@/lib/workerRecord";
 
 const BAND_TONE: Record<TrustBand, BadgeTone> = {
   High: "high",
