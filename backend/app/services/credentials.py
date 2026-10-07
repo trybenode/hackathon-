@@ -12,7 +12,7 @@ import hmac
 import json
 import secrets
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -103,11 +103,15 @@ def verify_bundle(
         claims = json.loads(_b64decode(encoded_payload))
     except CredentialTokenError:
         raise
-    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
+    except (ValueError, UnicodeError, json.JSONDecodeError) as error:
         raise CredentialTokenError("Credential token is malformed") from error
 
-    if not isinstance(claims, dict) or not isinstance(claims.get("exp"), int):
+    if not isinstance(claims, dict) or type(claims.get("exp")) is not int:
         raise CredentialTokenError("Credential token claims are invalid")
+    try:
+        datetime.fromtimestamp(claims["exp"], tz=UTC)
+    except (ValueError, OverflowError, OSError) as error:
+        raise CredentialTokenError("Credential expiration is invalid") from error
     current_time = int((now or datetime.now(UTC)).timestamp())
     if claims["exp"] <= current_time:
         raise CredentialTokenError("Credential token has expired")
@@ -163,6 +167,8 @@ async def export_credentials(
             )
         ).all()
     )
+    if len(outcomes) > MAX_BUNDLE_OUTCOMES:
+        raise CredentialTokenError("Credential export exceeds 1,000 records; use approved paginated platform history access")
     latest_assessment = await session.scalar(
         select(TrustAssessment)
         .where(TrustAssessment.worker_id == worker_id)
@@ -186,6 +192,11 @@ async def export_credentials(
             "cancelled_by": outcome.cancelled_by,
             "dispute_resolution": outcome.dispute_resolution,
             "flags": outcome.quality_flags or [],
+            "client_id": outcome.client_id,
+            "available_signals": outcome.available_signals,
+            "verification_method": outcome.verification_method,
+            "verified_by_org_id": str(outcome.verified_by_org_id) if outcome.verified_by_org_id else None,
+            "verified_at": outcome.verified_at.isoformat() if outcome.verified_at else None,
         }
         outcome_claims.append(outcome_claim)
         response_outcomes.append(
@@ -324,15 +335,28 @@ async def import_credentials(
             rating = item.get("rating")
             if rating is not None:
                 rating = Decimal(str(rating))
-                if rating < 0 or rating > 5:
+                if not rating.is_finite() or rating < 0 or rating > 5:
                     raise ValueError("invalid rating")
+            availability = item.get("available_signals")
+            if availability is not None and (not isinstance(availability, list) or any(not isinstance(v, str) for v in availability)):
+                raise ValueError("invalid signal availability")
+            client_id = item.get("client_id")
+            if client_id is not None and (not isinstance(client_id, str) or len(client_id) > 255):
+                raise ValueError("invalid opaque client identifier")
+            verified_by_org_id = UUID(item["verified_by_org_id"]) if item.get("verified_by_org_id") else None
+            verified_at = datetime.fromisoformat(item["verified_at"]) if item.get("verified_at") else None
+            method = item.get("verification_method")
+            if method is not None and (not isinstance(method, str) or len(method) > 40):
+                raise ValueError("invalid verification method")
+            if not 1 <= len(outcome_key) <= 80 or not 1 <= len(source_platform_value) <= 120:
+                raise ValueError("invalid source identifiers")
             cancelled_by = item.get("cancelled_by")
             if cancelled_by not in (None, "worker", "client", "platform"):
                 raise ValueError("invalid cancellation source")
             dispute_resolution = item.get("dispute_resolution")
             if dispute_resolution not in (None, "open", "upheld", "dismissed"):
                 raise ValueError("invalid dispute resolution")
-        except (KeyError, ValueError, TypeError) as error:
+        except (KeyError, ValueError, TypeError, InvalidOperation, OverflowError) as error:
             raise CredentialTokenError("Credential outcome is malformed") from error
 
         row_payload = dict(item)
@@ -366,7 +390,11 @@ async def import_credentials(
                 normalization_version="credential-v1",
                 cancelled_by=cancelled_by,
                 dispute_resolution=dispute_resolution,
-                client_id=None,
+                client_id=client_id,
+                available_signals=availability,
+                verification_method=method,
+                verified_by_org_id=verified_by_org_id,
+                verified_at=verified_at,
                 source_platform=source_platform_value,
                 import_method="api",
                 verified=True,
