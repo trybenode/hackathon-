@@ -67,7 +67,9 @@ async def test_start_sends_the_job_and_reads_the_payment_link() -> None:
     assert body["transactionReference"] == "JOB-123"
     assert body["merchantEmailAddress"] == "jane@example.com"
     assert body["customerPhoneNo"] == "08012345678"
-    assert body["items"] == [{"name": "Home cleaning", "quantity": 1, "price": 25000.0}]
+    assert body["items"] == [
+        {"name": "Home cleaning", "description": "Home cleaning", "quantity": 1, "price": 25000.0}
+    ]
     assert body["webhookNotificationUrl"].endswith("/webhooks/payscrow")
     # No phone for the worker: the optional field is left out, not sent empty.
     assert "merchantPhoneNo" not in body
@@ -82,6 +84,21 @@ async def test_payscrow_errors_surface_with_their_message() -> None:
         )
 
     with pytest.raises(EscrowProviderError, match="customerPhoneNo is invalid"):
+        await provider_with(handler).start(START)
+
+
+async def test_field_validation_errors_name_the_field() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400,
+            json={
+                "title": "One or more validation errors occurred.",
+                "status": 400,
+                "errors": {"Items[0].Description": ["The Description field is required."]},
+            },
+        )
+
+    with pytest.raises(EscrowProviderError, match="Items\\[0\\].Description: The Description"):
         await provider_with(handler).start(START)
 
 

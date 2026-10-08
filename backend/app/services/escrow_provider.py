@@ -127,6 +127,8 @@ class PayscrowProvider:
             "items": [
                 {
                     "name": request.description[:300],
+                    # Payscrow's docs mark this optional; its API requires it.
+                    "description": request.description[:4000],
                     "quantity": 1,
                     "price": float(request.amount),
                 }
@@ -165,10 +167,17 @@ class PayscrowProvider:
 
 
 def _error_message(payload: dict, status_code: int) -> str:
-    errors = payload.get("errors") or (payload.get("data") or {}).get("errors") or []
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    errors = payload.get("errors") or data.get("errors") or []
+    # Validation failures come back as {"Field": ["message", ...]}.
+    if isinstance(errors, dict) and errors:
+        return "; ".join(
+            f"{field}: {' '.join(map(str, messages)) if isinstance(messages, list) else messages}"
+            for field, messages in errors.items()
+        )
     if isinstance(errors, list) and errors:
         return "; ".join(str(error) for error in errors)
-    return payload.get("message") or f"Payscrow returned {status_code}."
+    return payload.get("message") or payload.get("title") or f"Payscrow returned {status_code}."
 
 
 class StubEscrowProvider:
