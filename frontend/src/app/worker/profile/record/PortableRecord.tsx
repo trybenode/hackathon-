@@ -18,7 +18,7 @@ import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
 import { ScoreRing } from "@/components/worker/ScoreRing";
 import { TrustBandBadge } from "@/components/worker/TrustBandBadge";
 import { Button } from "@/components/ui";
-import { formatShortDate, initialsOf } from "@/lib/workerMock";
+import { formatShortDate, initialsOf } from "@/lib/workerFormat";
 import { exportCredentials, formatPercent, shortName } from "@/lib/workerRecord";
 
 /** How many outcomes the record shows before "view all outcomes". */

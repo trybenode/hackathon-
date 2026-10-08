@@ -1,0 +1,47 @@
+/**
+ * Purpose: Format names, money and dates the way the worker designs show them.
+ * Dependencies: none.
+ * Used by: the worker jobs, escrow, profile and portable record screens.
+ */
+
+export function initialsOf(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+// Formatting helpers. lib/format.ts carries the same on the guarantor branch;
+// they live here so this branch does not edit a file that one changes. Fold
+// them back into lib/format.ts after that branch merges.
+
+/** ₦25,000.00 */
+export function formatNaira(amount: number) {
+  return `₦${amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** 12:04:32 */
+export function formatTime(value: string) {
+  return new Date(value).toLocaleTimeString("en-GB", { hour12: false });
+}
+
+// Month names are spelled out rather than taken from the browser locale,
+// which abbreviates them differently ("Sep" vs "Sept") from one runtime to
+// the next. The designs use both forms, in different places.
+const SHORT_MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const LONG_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"];
+
+/** 29 sep 2026 */
+export function formatShortDate(value: string) {
+  const date = new Date(value);
+  return `${date.getDate()} ${SHORT_MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+/** Sept 29, 2026 */
+export function formatLongDate(value: string) {
+  const date = new Date(value);
+  return `${LONG_MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+}

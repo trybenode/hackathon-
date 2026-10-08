@@ -3,7 +3,7 @@
 import { WorkerDialog } from "@/components/worker/WorkerDialog";
 import { Button, DotIcon, VerificationBadge } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { formatShortDate, initialsOf } from "@/lib/workerMock";
+import { formatShortDate, initialsOf } from "@/lib/workerFormat";
 import type { GuarantorCredential } from "@/lib/workerRecord";
 
 /**
