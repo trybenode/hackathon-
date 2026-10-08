@@ -281,6 +281,11 @@ class NormalizedOutcome(UUIDTimestampMixin, Base):
         Boolean, default=False, server_default="false", nullable=False
     )
 
+    available_signals: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    verification_method: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    verified_by_org_id: Mapped[UUID | None] = mapped_column(ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     worker: Mapped[Worker] = relationship(back_populates="outcomes")
     __table_args__ = (
         Index("ix_normalized_outcomes_worker_occurred", "worker_id", "occurred_at"),
@@ -374,6 +379,7 @@ class Job(UUIDTimestampMixin, Base):
     organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="RESTRICT"))
     job_type: Mapped[JobType] = mapped_column(Enum(JobType, name="job_type"))
     status: Mapped[JobStatus] = mapped_column(Enum(JobStatus, name="job_status"), default=JobStatus.DRAFT)
+    client_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=True)
     title: Mapped[str] = mapped_column(String(200))
     agreed_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

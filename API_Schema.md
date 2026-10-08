@@ -5,7 +5,10 @@ Base URL: `/api/v1`
 Authentication:
 
 - Platform routes use an API key in `X-API-Key`.
-- User-facing routes use a JWT Bearer token.
+- User-facing routes use the existing HTTP-only `guarantor_session` cookie.
+- Dedicated platform keys identify organizations; history and assessment access require worker approval. The legacy shared key is limited to development trust queries.
+
+Implemented portability, consent, restricted reviews, examples and handoff: [portable work history guide](docs/portable_work_history.md). Generated contract: [OpenAPI JSON](docs/openapi.json). Monitoring/configuration/job-provider endpoints described below remain design contracts unless registered in the generated OpenAPI schema.
 
 ## API Purpose
 

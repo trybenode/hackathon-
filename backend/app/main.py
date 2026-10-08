@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.guarantor import router as guarantor_router
@@ -17,6 +18,8 @@ from app.api.v1.endpoints.me import router as me_router
 from app.api.v1.endpoints.health import router as health_router
 from app.api.v1.endpoints.trust import router as trust_router
 from app.api.v1.endpoints.credentials import router as credentials_router
+from app.api.v1.endpoints.portability import router as portability_router, platform_router
+from app.core.feature_http import install_feature_http
 from app.api.v1.endpoints.worker_record import router as worker_record_router
 from app.core.config import get_settings
 from app.db.session import async_session_factory
@@ -66,10 +69,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=500)
+install_feature_http(app)
+
 app.include_router(health_router, prefix=settings.api_v1_prefix)
 app.include_router(guarantor_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(me_router, prefix=settings.api_v1_prefix)
 app.include_router(trust_router, prefix=settings.api_v1_prefix)
 app.include_router(credentials_router, prefix=settings.api_v1_prefix)
+app.include_router(portability_router, prefix=settings.api_v1_prefix)
+app.include_router(platform_router, prefix=settings.api_v1_prefix)
 app.include_router(worker_record_router, prefix=settings.api_v1_prefix)

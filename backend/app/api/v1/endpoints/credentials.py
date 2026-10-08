@@ -21,8 +21,9 @@ from app.schemas.api import (
 )
 from app.services import credentials as credential_service
 from app.services.trust_scoring.assessment import assess_worker
+from app.schemas.portability import ApiError
 
-router = APIRouter(prefix="/workers", tags=["credentials"])
+router = APIRouter(prefix="/workers", tags=["credentials"], responses={code: {"model": ApiError} for code in (401, 403, 404, 422, 503)})
 settings = get_settings()
 
 # Ensures workers only touch their own credentials, not someone else's. Raises 404 if the worker is not found or does not belong to the current user.
@@ -30,7 +31,7 @@ async def _require_own_worker(
     session: AsyncSession, worker_id: UUID, user: User
 ) -> Worker:
     worker = await session.scalar(
-        select(Worker).where(Worker.id == worker_id, Worker.user_id == user.id)
+        select(Worker).where(Worker.id == worker_id, Worker.user_id == user.id).with_for_update()
     )
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -48,6 +49,7 @@ async def export_worker_credentials(
     session: AsyncSession = Depends(get_db_session),
 ) -> CredentialsExportResponse:
     await _require_own_worker(session, worker_id, user)
+    await assess_worker(session, worker_id, "generic")
     try:
         response = await credential_service.export_credentials(
             session, worker_id, settings.credential_signing_secret

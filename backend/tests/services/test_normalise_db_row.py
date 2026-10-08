@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from app.services.normalisation import normalise_db_row
 
 
-def test_normalise_db_row_maps_scoring_fields_and_defaults_rating() -> None:
+def test_normalise_db_row_maps_scoring_fields_without_inventing_rating() -> None:
     occurred_at = datetime(2026, 10, 4, tzinfo=UTC)
     row = SimpleNamespace(
         outcome_key="source-job-17",
@@ -32,7 +32,7 @@ def test_normalise_db_row_maps_scoring_fields_and_defaults_rating() -> None:
         "cancelled_by": None,
         "dispute_resolution": "dismissed",
         "client_id": "client-1",
-        "rating": 0.0,
+        "rating": None,
         "flags": ["damage"],
         "source_platform": "native",
         "import_method": "api",
