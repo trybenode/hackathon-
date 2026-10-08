@@ -23,7 +23,7 @@ router = APIRouter(prefix="/me", tags=["worker record"])
 class RecordAssessment(ApiModel):
     decision: bool
     confidence: float
-    #: Not returned by the scoring service yet.
+    #: How good the record is, 0 to 1; null while building history.
     score: float | None = None
     band: str
     status: str

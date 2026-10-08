@@ -96,7 +96,7 @@ class WorkerRecord:
     status: str
     signals_used: list[str]
     explanation_summary: str
-    #: Not returned by the scoring service yet; the ring shows a dash.
+    #: The "Trust Score" ring, 0 to 1; None while building history.
     score: float | None
     verified_outcomes: int
     last_updated: datetime
@@ -239,7 +239,7 @@ async def load_record(session: AsyncSession, user: User) -> WorkerRecord:
         status=assessment.status,
         signals_used=assessment.signals_used,
         explanation_summary=assessment.explanation_summary,
-        score=None,
+        score=float(assessment.score) if assessment.score is not None else None,
         verified_outcomes=len(outcomes),
         last_updated=_as_aware(stored.assessed_at) if stored else datetime.now(tz=UTC),
         completed_jobs=len(completed),

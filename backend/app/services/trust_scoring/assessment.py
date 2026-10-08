@@ -37,6 +37,8 @@ class WorkerAssessment:
     worker_id: UUID
     decision: bool
     confidence: Decimal
+    #: How good the record is, 0 to 1; None when scoring stopped early.
+    score: Decimal | None
     #supposed to enums I think for band and status
     band: str 
     status: str
@@ -90,6 +92,7 @@ def _result_from_record(
         worker_id=record.worker_id,
         decision=record.decision,
         confidence=record.confidence,
+        score=record.score,
         band=record.band,
         status=(
             "Building History"
@@ -154,7 +157,11 @@ async def assess_worker(
             TrustAssessment.input_fingerprint == fingerprint,
         )
     )
-    if existing is not None:
+    # Assessments stored before the score was kept have none; work it out
+    # again once and keep it, so the next reuse has it.
+    if existing is not None and (
+        existing.score is not None or existing.status is AssessmentStatus.BUILDING_HISTORY
+    ):
         return _result_from_record(
             existing,
             platform_type=platform_type,
@@ -164,6 +171,12 @@ async def assess_worker(
     canonical_jobs = [normalise_db_row(row) for row in outcomes]
     signals, job_count = aggregate(canonical_jobs, tracked)
     result = score_worker(signals, job_count, config)
+    score = Decimal(str(result["score"])) if result["score"] is not None else None
+
+    if existing is not None:
+        existing.score = score
+        await session.flush()
+        return _result_from_record(existing, platform_type=platform_type)
 
     if result["band"] == "Building History":
         status = AssessmentStatus.BUILDING_HISTORY
@@ -177,6 +190,7 @@ async def assess_worker(
         policy_id=policy.id,
         decision=result["decision"],
         confidence=Decimal(str(result["confidence"])),
+        score=score,
         status=status,
         band=result["band"],
         signals_used=result["signals_used"],
@@ -192,6 +206,7 @@ async def assess_worker(
         worker_id=record.worker_id,
         decision=record.decision,
         confidence=record.confidence,
+        score=record.score,
         band=result["band"],
         status=result["status"],
         signals_used=result["signals_used"],

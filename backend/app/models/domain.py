@@ -330,6 +330,9 @@ class TrustAssessment(UUIDTimestampMixin, Base):
     policy_id: Mapped[UUID] = mapped_column(ForeignKey("trust_policies.id", ondelete="RESTRICT"))
     decision: Mapped[bool] = mapped_column(Boolean)
     confidence: Mapped[Decimal] = mapped_column(Numeric(5, 4))
+    #: The weighted score the band is cut from, 0 to 1. Empty when scoring
+    #: stopped early (Building History, a failed hard rule).
+    score: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     status: Mapped[AssessmentStatus] = mapped_column(Enum(AssessmentStatus, name="assessment_status"))
     band: Mapped[str] = mapped_column(
         String(24), default="Building History", server_default="Building History", nullable=False
@@ -349,6 +352,7 @@ class TrustAssessment(UUIDTimestampMixin, Base):
         Index("ix_trust_assessments_worker_assessed", "worker_id", "assessed_at"),
         UniqueConstraint("worker_id", "policy_id", "input_fingerprint"),
         CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
+        CheckConstraint("score IS NULL OR (score >= 0 AND score <= 1)", name="score_range"),
     )
 
 

@@ -56,7 +56,7 @@ def score_worker(signals: dict, n_jobs: int, cfg: PlatformConfig) -> dict:
     # just because the worker doesn't have much history yet.
     failed = [s for s, mx in cfg.hard_fail.items() if signals.get(s, 0) > mx]
     if failed:
-        return {"decision": False, "confidence": round(evidence, 2),
+        return {"decision": False, "confidence": round(evidence, 2), "score": None,
                 "band": "Low", "status": "Disqualified", "signals_used": used,
                 "explanation_summary": f"Failed hard rule: {failed[0]}"}
 
@@ -65,7 +65,7 @@ def score_worker(signals: dict, n_jobs: int, cfg: PlatformConfig) -> dict:
     # Without this, total_w below would be 0 and the division would crash.
     if n_jobs < cfg.min_jobs or missing or not used:
         return {"decision": cfg.building_history_decision,
-                "confidence": round(evidence, 2),
+                "confidence": round(evidence, 2), "score": None,
                 "band": "Building History", "status": "Building History",
                 "signals_used": used,
                 "explanation_summary": "Not enough verified job history yet"
@@ -85,8 +85,11 @@ def score_worker(signals: dict, n_jobs: int, cfg: PlatformConfig) -> dict:
     weakest = min(norm, key=norm.get)
     summary = f"Score {score:.2f} ({band}); weakest signal: {weakest}"
 
-    return {"decision": decision, "confidence": confidence, "band": band,
-            "status": "Scored", "signals_used": used, "explanation_summary": summary}
+    # score is how good the record is; confidence is how much evidence backs
+    # it. Neither stands in for the other.
+    return {"decision": decision, "confidence": confidence, "score": round(score, 4),
+            "band": band, "status": "Scored", "signals_used": used,
+            "explanation_summary": summary}
 
 
 def starting_rating(signals: dict, n_jobs: int) -> dict:

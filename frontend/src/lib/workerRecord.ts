@@ -14,8 +14,8 @@ export type RecordAssessment = {
   /** How much evidence backs the score, 0 to 1. Not the score itself. */
   confidence: number;
   /**
-   * How good the record is, 0 to 1: the "Trust Score" ring. The scoring
-   * service does not return it yet, so it is null and the ring shows a dash.
+   * How good the record is, 0 to 1: the "Trust Score" ring, and what the band
+   * is cut from. Null while the worker is still building history.
    */
   score: number | null;
   band: TrustBand;

@@ -111,8 +111,9 @@ async def test_record_counts_and_history(
     assert record.outcomes[0].status == "Client Confirmed"
     assert record.imported_record is not None
     assert record.imported_record.verified_outcomes == 1
-    assert record.band
-    assert record.score is None
+    # Six verified outcomes is enough history to be scored.
+    assert record.status == "Scored"
+    assert record.score is not None and 0 <= record.score <= 1
 
 
 async def test_credentials_come_from_checks_and_guarantees(
