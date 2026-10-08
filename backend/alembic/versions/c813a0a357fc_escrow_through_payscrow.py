@@ -22,7 +22,6 @@ def upgrade() -> None:
     op.add_column('escrow_transactions', sa.Column('provider_transaction_id', sa.String(length=64), nullable=True))
     op.add_column('escrow_transactions', sa.Column('payment_link', sa.String(length=500), nullable=True))
     op.add_column('escrow_transactions', sa.Column('total_payable', sa.Numeric(precision=12, scale=2), nullable=True))
-    op.add_column('escrow_transactions', sa.Column('escrow_code', sa.String(length=64), nullable=True))
     op.add_column('escrow_transactions', sa.Column('funded_at', sa.DateTime(timezone=True), nullable=True))
     op.add_column('escrow_transactions', sa.Column('released_at', sa.DateTime(timezone=True), nullable=True))
     op.add_column('escrow_transactions', sa.Column('in_dispute', sa.Boolean(), server_default='false', nullable=False))
@@ -34,9 +33,11 @@ def upgrade() -> None:
     op.add_column('jobs', sa.Column('location', sa.String(length=160), nullable=True))
     op.add_column('jobs', sa.Column('details', sa.JSON(), server_default='[]', nullable=False))
     op.add_column('jobs', sa.Column('completed_at', sa.DateTime(timezone=True), nullable=True))
+    op.add_column('jobs', sa.Column('confirmation_reminded_at', sa.DateTime(timezone=True), nullable=True))
 
 
 def downgrade() -> None:
+    op.drop_column('jobs', 'confirmation_reminded_at')
     op.drop_column('jobs', 'completed_at')
     op.drop_column('jobs', 'details')
     op.drop_column('jobs', 'location')
@@ -48,7 +49,6 @@ def downgrade() -> None:
     op.drop_column('escrow_transactions', 'in_dispute')
     op.drop_column('escrow_transactions', 'released_at')
     op.drop_column('escrow_transactions', 'funded_at')
-    op.drop_column('escrow_transactions', 'escrow_code')
     op.drop_column('escrow_transactions', 'total_payable')
     op.drop_column('escrow_transactions', 'payment_link')
     op.drop_column('escrow_transactions', 'provider_transaction_id')

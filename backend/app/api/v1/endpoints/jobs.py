@@ -57,9 +57,8 @@ class JobCreateResponse(ApiModel):
 
 class ClientConfirmRequest(ApiModel):
     #: The escrow code Payscrow sent the client when they paid. Giving it is
-    #: the client's consent to release. May be left out only when Payscrow
-    #: includes the code in its paid webhook.
-    code: str | None = Field(default=None, min_length=4, max_length=40)
+    #: the client's consent to release; it is passed to Payscrow, not kept.
+    code: str = Field(min_length=4, max_length=40)
 
 
 class EscrowView(ApiModel):
@@ -69,9 +68,6 @@ class EscrowView(ApiModel):
     funded_at: datetime | None = None
     released_at: datetime | None = None
     cover_active: bool = False
-    #: Whether Payscrow sent the code with the payment, so release needs no
-    #: code from the client and the auto-release window can run.
-    code_on_file: bool = False
     dispute_stage: str | None = None
     resolution_type: str | None = None
 
@@ -94,7 +90,8 @@ class JobView(ApiModel):
     stage: str
     assigned_at: datetime
     completed_at: datetime | None = None
-    auto_release_at: datetime | None = None
+    #: When the client was reminded to confirm; money never moves on a timer.
+    confirmation_reminded_at: datetime | None = None
     escrow: EscrowView | None = None
     dispute: DisputeView | None = None
 
@@ -130,7 +127,7 @@ async def _view(session: AsyncSession, job: Job, escrow: EscrowTransaction | Non
         stage=escrow_service.job_stage(job, escrow),
         assigned_at=job.created_at,
         completed_at=job.completed_at,
-        auto_release_at=job.auto_release_at,
+        confirmation_reminded_at=job.confirmation_reminded_at,
         escrow=EscrowView(
             transaction_number=escrow.provider_reference,
             payment_link=escrow.payment_link,
@@ -138,7 +135,6 @@ async def _view(session: AsyncSession, job: Job, escrow: EscrowTransaction | Non
             funded_at=escrow.funded_at,
             released_at=escrow.released_at,
             cover_active=escrow.cover_active,
-            code_on_file=bool(escrow.escrow_code),
             dispute_stage=escrow.dispute_stage,
             resolution_type=escrow.resolution_type,
         )
@@ -215,7 +211,7 @@ async def get_job(
 )
 async def confirm_for_client(
     job_id: UUID,
-    payload: ClientConfirmRequest | None = None,
+    payload: ClientConfirmRequest,
     _: None = Depends(require_platform_api_key),
     session: AsyncSession = Depends(get_db_session),
 ) -> JobView:
@@ -223,7 +219,7 @@ async def confirm_for_client(
 
     try:
         escrow = await escrow_service.release(
-            session, job_id, by="client", code=payload.code if payload else None
+            session, job_id, by="client", code=payload.code
         )
     except (escrow_service.EscrowError, EscrowProviderError) as error:
         raise _http_error(error) from error

@@ -389,6 +389,10 @@ class Job(UUIDTimestampMixin, Base):
     )
     #: When the worker said the work was done.
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: When the client was reminded to confirm. Money never moves on a timer.
+    confirmation_reminded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     worker: Mapped[Worker] = relationship(back_populates="jobs")
     confirmations: Mapped[list["JobConfirmation"]] = relationship(back_populates="job")
@@ -442,8 +446,6 @@ class EscrowTransaction(UUIDTimestampMixin, Base):
     payment_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     #: What the client pays: the job plus their share of the escrow charge.
     total_payable: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    #: The code that releases the funds. Never returned by the API.
-    escrow_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     funded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     in_dispute: Mapped[bool] = mapped_column(

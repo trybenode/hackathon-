@@ -5,21 +5,19 @@ Used by: demos to Payscrow and the team; it is the same code the API runs.
 
 Usage:
     cd backend
-    # Offline: nothing leaves the machine. Shows what happens when Payscrow's
-    # webhook does, and does not, include the escrow code.
+    # Offline: nothing leaves the machine; a stand-in plays Payscrow.
     .venv/bin/python scripts/simulate_escrow.py you@example.com --mode offline
-    .venv/bin/python scripts/simulate_escrow.py you@example.com --mode offline --no-code-in-webhook
 
     # Sandbox: real calls to api.payscrow.dev. Pay with the printed link; the
     # paid webhook must reach this API, so PAYSCROW_WEBHOOK_URL has to be a
-    # public address (e.g. a tunnel) and the API must be running.
+    # public address (e.g. a cloudflared tunnel) and the API must be running.
     .venv/bin/python scripts/simulate_escrow.py you@example.com --mode sandbox \\
-        --client-email client@example.com --client-phone 08012345678
+        --client-email inbox-you-can-read@example.com --client-phone 08012345678
 
 The email must be a worker (run seed_worker_record.py first). The worker is
-the merchant on Payscrow and the client is the customer. Payscrow emails the
-escrow code to the client (customer) when they pay; in sandbox mode, pass it
-with --code, or type it when asked.
+Payscrow's merchant and the client its customer. Payscrow emails the escrow
+code to the client when they pay; giving it to us is how the client confirms.
+In sandbox mode, pass it with --code or type it when asked.
 """
 
 import argparse
@@ -38,7 +36,7 @@ from sqlalchemy import select  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
-from app.models.domain import EscrowStatus, Job, User, Worker  # noqa: E402
+from app.models.domain import EscrowStatus, User, Worker  # noqa: E402
 from app.services import escrow as escrow_service  # noqa: E402
 from app.services import escrow_provider as provider_module  # noqa: E402
 from app.services.escrow_provider import (  # noqa: E402
@@ -80,10 +78,10 @@ async def run(args: argparse.Namespace) -> None:
     offline = args.mode == "offline"
     if offline:
         provider_module.default_escrow_provider = StubEscrowProvider()
-    provider = provider_module.default_escrow_provider
 
     engine = create_async_engine(SETTINGS.async_database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
+    days = SETTINGS.escrow_confirmation_reminder_days
 
     async with factory() as session:
         user = await session.scalar(select(User).where(User.email == args.worker_email.casefold()))
@@ -94,11 +92,12 @@ async def run(args: argparse.Namespace) -> None:
         say(
             "Setup",
             f"""
-            Mode:      {args.mode} ({'stand-in provider, nothing leaves this machine' if offline else 'Payscrow sandbox ' + SETTINGS.payscrow_base_url})
-            Worker:    {user.display_name} <{user.email}> (Payscrow merchant)
-            Client:    {args.client_name} <{args.client_email}> (Payscrow customer)
-            Job:       {args.title}, NGN {args.amount}
-            Auto-release after completion: {SETTINGS.escrow_auto_release_hours} hours
+            Mode:     {args.mode} ({'stand-in provider, nothing leaves this machine' if offline else 'Payscrow sandbox ' + SETTINGS.payscrow_base_url})
+            Worker:   {user.display_name} <{user.email}> (Payscrow merchant)
+            Client:   {args.client_name} <{args.client_email}> (Payscrow customer)
+            Job:      {args.title}, NGN {args.amount}
+            Rule:     only the client's escrow code releases money; an unconfirmed
+                      client is reminded after {days} days, nothing is paid out
             """,
         )
 
@@ -129,14 +128,12 @@ async def run(args: argparse.Namespace) -> None:
 
     # 2. The client pays; Payscrow tells us by signed webhook.
     if offline:
-        code = stub_escrow_code() if args.code_in_webhook else None
         payload = {
             "transactionId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
             "transactionNumber": escrow.provider_reference,
             "externalReference": f"JOB-{job.id}",
             "paymentStatus": "Paid",
             "escrowStatus": "InEscrow",
-            "escrowCode": code or "Restricted - contact PayScrow support to enable",
             "amountPaid": str(escrow.total_payable),
             "currency": "NGN",
             "status": "InProgress",
@@ -154,8 +151,9 @@ async def run(args: argparse.Namespace) -> None:
             "Client paid; Payscrow's 'Transaction Paid' webhook arrived",
             f"""
             Signature (HMAC-SHA256 over "timestamp.body"): {'valid' if verified else 'INVALID'}
-            escrowCode in webhook: {'yes' if code else 'no (restricted)'}
+            Amount and currency match the order: {'yes' if outcome == 'funded' else 'NO'}
             Result: {outcome}; funds held. Worker screen: "In progress / Protected"
+            Payscrow emails the escrow code to the client.
             """,
         )
     else:
@@ -175,11 +173,9 @@ async def run(args: argparse.Namespace) -> None:
             note("No payment seen. The job stays 'Awaiting client payment'.")
             await engine.dispose()
             return
-        async with factory() as session:
-            escrow = await escrow_service.latest_escrow(session, job.id)
         say(
-            "Payment confirmed by Payscrow's webhook",
-            f"escrowCode in webhook: {'yes' if escrow.escrow_code else 'no (restricted)'}",
+            "Payment confirmed by Payscrow's signed webhook",
+            "Funds held. Payscrow emails the escrow code to the client's inbox.",
         )
 
     # 3. The worker finishes.
@@ -187,63 +183,32 @@ async def run(args: argparse.Namespace) -> None:
         person = await session.get(User, worker.user_id)
         await escrow_service.mark_complete(session, person, job.id)
         await session.commit()
-        job = await session.get(Job, job.id)
-        held = await escrow_service.latest_escrow(session, job.id)
-    silence = (
-        f"If the client says nothing, funds release at {job.auto_release_at:%d %b %Y %H:%M} UTC."
-        if held.escrow_code
-        else "If the client says nothing, funds stay held: we have no code to release with."
-    )
     say(
         "Worker taps 'Mark as complete'",
         f"""
         Job status: Submitted; awaiting the client's confirmation.
-        {silence}
+        If the client says nothing, they are reminded after {days} days.
+        The money stays held: nothing is ever released on a timer.
         """,
     )
 
-    # 4. The client confirms; we release by applying the escrow code.
-    async with factory() as session:
-        escrow = await escrow_service.latest_escrow(session, job.id)
-        code_on_file = bool(escrow.escrow_code)
-
-    if code_on_file:
-        async with factory() as session:
-            await escrow_service.release(session, job.id, by="client")
-            await session.commit()
-        say(
-            "Client taps Confirm (POST /api/v1/jobs/{id}/client-confirmation, no code)",
-            """
-            The code came with the paid webhook, so we applied it ourselves
-            (POST /api/v3/escrow/escrowtransactions/applycode).
-            Funds released to the worker. Worker screen: "Released".
-            The client typed nothing, and had they stayed silent the 72-hour
-            auto-release would have done the same.
-            """,
-        )
+    # 4. The client confirms with their code; we apply it.
+    if offline:
+        code = stub_escrow_code()
+        note(f"(The stand-in issued the client the code {code}.)")
     else:
-        if offline:
-            code = stub_escrow_code()
-            note(f"(Payscrow emails the client their escrow code; here it is {code}.)")
-        else:
-            code = args.code or input("    Escrow code the client received from Payscrow: ").strip()
-        async with factory() as session:
-            await escrow_service.release(session, job.id, by="client", code=code)
-            await session.commit()
-        say(
-            "Client confirms by entering their escrow code",
-            """
-            POST /api/v1/jobs/{id}/client-confirmation {"code": "..."}
-            We applied the client's code (POST /api/v3/escrow/escrowtransactions/applycode).
-            Funds released to the worker. Worker screen: "Released".
-
-            This works with Payscrow's default settings. What it cannot do:
-            release when the client goes quiet, because without their code
-            nothing can be applied. With "escrow code in webhook" enabled for
-            our broker account, confirming needs no code and the 72-hour
-            auto-release runs.
-            """,
-        )
+        code = args.code or input("    Escrow code from the client's Payscrow email: ").strip()
+    async with factory() as session:
+        await escrow_service.release(session, job.id, by="client", code=code)
+        await session.commit()
+    say(
+        "Client confirms the job by giving their escrow code",
+        """
+        POST /api/v1/jobs/{id}/client-confirmation {"code": "..."}
+        We passed the code to Payscrow (POST /api/v3/escrow/escrowtransactions/applycode)
+        and did not keep it. Funds released to the worker. Worker screen: "Released".
+        """,
+    )
 
     await engine.dispose()
 
@@ -257,12 +222,6 @@ def main() -> None:
     parser.add_argument("--client-name", default="Peter James")
     parser.add_argument("--client-email", default="client.demo@example.com")
     parser.add_argument("--client-phone", default="08012345678")
-    parser.add_argument(
-        "--no-code-in-webhook",
-        dest="code_in_webhook",
-        action="store_false",
-        help="offline: simulate Payscrow's default, where the webhook withholds the code",
-    )
     parser.add_argument("--code", help="sandbox: the escrow code Payscrow emailed the client")
     parser.add_argument("--wait-minutes", type=int, default=15)
     asyncio.run(run(parser.parse_args()))

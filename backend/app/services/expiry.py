@@ -1,5 +1,5 @@
 """Purpose: Expire guarantor instruments whose validity period has ended, and
-release escrow for completed jobs whose client let the confirmation window pass.
+remind clients who have not confirmed a completed job. No money moves here.
 
 Dependencies: SQLAlchemy async sessions, app.services.guarantor and app.services.escrow.
 Used by: the background sweep started with the app, and the ops endpoint.
@@ -16,7 +16,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.services.escrow import release_due
+from app.services.escrow import remind_unconfirmed
 from app.services.guarantor import expire_due_instruments
 
 logger = logging.getLogger(__name__)
@@ -32,13 +32,13 @@ async def run_sweep(session_factory: async_sessionmaker) -> int:
     if expired:
         logger.info("Expired %d guarantor instrument(s)", len(expired))
 
-    # Separate session: a provider hiccup releasing escrow must not undo expiry.
+    # Separate session: an email hiccup must not undo expiry.
     async with session_factory() as session:
-        released = await release_due(session)
+        reminded = await remind_unconfirmed(session)
         await session.commit()
 
-    if released:
-        logger.info("Auto-released escrow for %d job(s)", len(released))
+    if reminded:
+        logger.info("Reminded %d client(s) to confirm a completed job", len(reminded))
 
     return len(expired)
 

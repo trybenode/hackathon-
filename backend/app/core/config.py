@@ -63,8 +63,9 @@ class Settings(BaseSettings):
     payscrow_webhook_url: str = Field("", alias="PAYSCROW_WEBHOOK_URL")
     #: Share of Payscrow's charge the worker bears, 0 to 100. 0: the client pays it.
     payscrow_merchant_charge_percentage: float = Field(0, alias="PAYSCROW_MERCHANT_CHARGE_PERCENTAGE")
-    #: Hours a client has to confirm a completed job before funds release anyway.
-    escrow_auto_release_hours: int = Field(72, alias="ESCROW_AUTO_RELEASE_HOURS")
+    #: Days after the worker completes a job before an unconfirmed client is
+    #: reminded. Funds never release on a timer: only the client's code does.
+    escrow_confirmation_reminder_days: int = Field(7, alias="ESCROW_CONFIRMATION_REMINDER_DAYS")
 
     @property
     def escrow_enabled(self) -> bool:

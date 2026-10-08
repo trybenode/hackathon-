@@ -27,8 +27,8 @@ export type WorkerJob = {
   stage: JobStage;
   assigned_at: string;
   completed_at: string | null;
-  /** When funds release if the client says nothing. */
-  auto_release_at: string | null;
+  /** When the client was reminded to confirm. Money never moves on a timer. */
+  confirmation_reminded_at: string | null;
   escrow: {
     /** Payscrow's transaction number, e.g. MKT-05893531. */
     transaction_number: string | null;
@@ -37,7 +37,6 @@ export type WorkerJob = {
     funded_at: string | null;
     released_at: string | null;
     cover_active: boolean;
-    code_on_file: boolean;
     dispute_stage: string | null;
     resolution_type: string | null;
   } | null;

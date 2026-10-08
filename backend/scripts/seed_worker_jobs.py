@@ -119,7 +119,6 @@ async def main() -> None:
                 location=location,
                 details=[{"label": label, "value": value} for label, value in details],
                 completed_at=completed,
-                auto_release_at=completed + timedelta(hours=72) if completed and stage != "released" else None,
                 created_at=assigned,
             )
             session.add(job)
@@ -139,7 +138,6 @@ async def main() -> None:
                         "awaiting_payment": EscrowStatus.PENDING,
                         "released": EscrowStatus.RELEASED,
                     }.get(stage, EscrowStatus.HELD),
-                    escrow_code=None if stage == "awaiting_payment" else "SEEDCODE01",
                     cover_active=stage == "held",
                     funded_at=None if stage == "awaiting_payment" else funded,
                     released_at=completed + timedelta(hours=2) if stage == "released" else None,

@@ -7,18 +7,16 @@ Used by: the jobs, worker jobs and Payscrow webhook endpoints, and the sweep.
 The lifecycle (SRS 3.6):
   open      -> job Accepted, escrow Pending: the client gets a payment link.
   paid      -> job In Progress, escrow Held (Payscrow's webhook says so).
-  complete  -> job Submitted: the worker says the work is done; the client has
-               ESCROW_AUTO_RELEASE_HOURS to confirm or object.
-  release   -> job Released, escrow Released: the client confirmed, or the
-               window passed. Releasing applies Payscrow's escrow code.
-
-The escrow code belongs to the paying client: Payscrow sends it to them, and
-handing it over is how they confirm (Payscrow's integration guide, step 9). A
-client confirms by giving us the code. If Payscrow is set to include the code
-in its paid webhook, we already hold it, so confirming needs no code and the
-auto-release window can run; otherwise nothing releases without the client.
+  complete  -> job Submitted: the worker says the work is done.
+  release   -> job Released, escrow Released: the client confirms by giving us
+               the escrow code Payscrow sent them when they paid, which we
+               apply (Payscrow's integration guide, step 9).
   dispute   -> job Disputed: raised through Payscrow, whose ruling arrives by
                webhook (Refund, Split or Close).
+
+Only the client releases money. Their code is used once and never stored, and
+nothing releases on a timer: a client who has not confirmed
+ESCROW_CONFIRMATION_REMINDER_DAYS after completion is reminded instead.
 """
 
 from __future__ import annotations
@@ -51,11 +49,13 @@ from app.models.domain import (
     User,
     Worker,
 )
+from app.services import email_sender as email_sender_module
 from app.services import escrow_provider as provider_module
+from app.services.email_sender import EmailMessage, EmailSender
 from app.services.escrow_provider import EscrowParty, EscrowProvider, EscrowStart
 
-#: Payscrow's code is 10 alphanumerics; anything else in that field (e.g. its
-#: "restricted" notice when code-in-webhook is off) is not a code.
+#: Payscrow's escrow code is 10 alphanumerics; this rejects obvious typos
+#: before we ask Payscrow.
 ESCROW_CODE = re.compile(r"^[A-Za-z0-9]{6,20}$")
 
 #: Payscrow's complaint length limits.
@@ -75,7 +75,7 @@ class EscrowStateError(EscrowError):
 
 
 class EscrowCodeMissingError(EscrowError):
-    """The funds cannot be released until Payscrow's escrow code is known."""
+    """Releasing needs the client's escrow code."""
 
 
 @dataclass(frozen=True)
@@ -273,17 +273,16 @@ def _apply_payment(
         _audit(session, job, "escrow.payment_mismatch", amount_paid=str(paid), currency=currency)
         return "amount mismatch"
 
+    # Any escrowCode in the payload is ignored: releasing is the client's call,
+    # made by giving us their code.
     escrow.provider_transaction_id = payload.get("transactionId") or escrow.provider_transaction_id
-    code = str(payload.get("escrowCode") or "").strip()
-    if ESCROW_CODE.match(code):
-        escrow.escrow_code = code
 
     if escrow.status is EscrowStatus.PENDING:
         escrow.status = EscrowStatus.HELD
         escrow.funded_at = _now()
         if job.status is JobStatus.ACCEPTED:
             job.status = JobStatus.IN_PROGRESS
-        _audit(session, job, "escrow.funded", code_received=escrow.escrow_code is not None)
+        _audit(session, job, "escrow.funded")
     return "funded"
 
 
@@ -338,7 +337,7 @@ async def worker_job(session: AsyncSession, user: User, job_id: UUID) -> tuple[J
 async def mark_complete(
     session: AsyncSession, user: User, job_id: UUID, *, now: datetime | None = None
 ) -> Job:
-    """The worker says the work is done; the client's window to respond opens."""
+    """The worker says the work is done; the client confirms or objects."""
 
     job, escrow = await worker_job(session, user, job_id)
     if escrow is None or escrow.status is not EscrowStatus.HELD or escrow.in_dispute:
@@ -349,7 +348,6 @@ async def mark_complete(
     moment = now or _now()
     job.status = JobStatus.SUBMITTED
     job.completed_at = moment
-    job.auto_release_at = moment + timedelta(hours=get_settings().escrow_auto_release_hours)
     _audit(session, job, "job.completed", actor=str(user.id))
     return job
 
@@ -395,14 +393,13 @@ async def release(
     job_id: UUID,
     *,
     by: str,
-    code: str | None = None,
+    code: str | None,
     provider: EscrowProvider | None = None,
     now: datetime | None = None,
 ) -> EscrowTransaction:
-    """Release the held money to the worker by applying the escrow code.
+    """Release the held money to the worker with the client's escrow code.
 
-    `code` is the one the client received from Payscrow; without it, the code
-    from the paid webhook is used if Payscrow included one.
+    The code is passed straight to Payscrow and not kept.
     """
 
     job = await session.get(Job, job_id)
@@ -411,15 +408,14 @@ async def release(
         raise JobNotFoundError(f"No job with id {job_id}.")
     if escrow.status is not EscrowStatus.HELD or escrow.in_dispute:
         raise EscrowStateError("There is no undisputed payment held for this job.")
-    supplied = (code or "").strip()
-    if supplied and not ESCROW_CODE.match(supplied):
-        raise EscrowStateError("That does not look like an escrow code.")
-    release_code = supplied or escrow.escrow_code
+    release_code = (code or "").strip()
     if not release_code:
         raise EscrowCodeMissingError(
             "The client's escrow code is needed to release the funds. Payscrow sent "
             "it to the client when they paid."
         )
+    if not ESCROW_CODE.match(release_code):
+        raise EscrowStateError("That does not look like an escrow code.")
     if not escrow.provider_transaction_id:
         raise EscrowStateError("Payscrow has not confirmed this payment yet.")
 
@@ -434,34 +430,68 @@ async def release(
     return escrow
 
 
-async def release_due(
+def _reminder(job: Job, escrow: EscrowTransaction, worker_name: str) -> EmailMessage:
+    amount = f"NGN {job.agreed_amount:,.2f}"
+    return EmailMessage(
+        to=job.client_email or "",
+        subject=f"Please confirm your {job.title.lower()} job",
+        body=(
+            f"Hello {job.client_name or ''},\n\n"
+            f"{worker_name} marked your {job.title.lower()} job complete on "
+            f"{job.completed_at:%d %B %Y}. Your payment of {amount} is still held "
+            f"safely in escrow (Payscrow {escrow.provider_reference}).\n\n"
+            "If the work was done, confirm it with the escrow code Payscrow sent you "
+            "when you paid; that releases the payment to the worker. If something is "
+            "wrong, raise an issue instead and the payment stays held while it is "
+            "reviewed.\n\n"
+            "Nothing is paid out until you confirm.\n"
+        ),
+    )
+
+
+async def remind_unconfirmed(
     session: AsyncSession,
     *,
-    provider: EscrowProvider | None = None,
+    sender: EmailSender | None = None,
     now: datetime | None = None,
 ) -> list[UUID]:
-    """Release every completed job whose client let the window pass.
+    """Remind clients who have not confirmed a completed job.
 
-    Called by the sweep, so it never raises: a job that cannot be released yet
-    (no code, a provider error) is tried again on the next run.
+    Called by the sweep. Moves no money: it emails the client once and records
+    that it did. A failed send is tried again on the next run.
     """
 
     moment = now or _now()
+    cutoff = moment - timedelta(days=get_settings().escrow_confirmation_reminder_days)
     due = (
         await session.scalars(
-            select(Job).where(Job.status == JobStatus.SUBMITTED, Job.auto_release_at <= moment)
+            select(Job).where(
+                Job.status == JobStatus.SUBMITTED,
+                Job.completed_at <= cutoff,
+                Job.confirmation_reminded_at.is_(None),
+                Job.client_email.is_not(None),
+            )
         )
     ).all()
 
-    released: list[UUID] = []
+    reminded: list[UUID] = []
     for job in due:
-        try:
-            async with session.begin_nested():
-                await release(session, job.id, by="auto-release", provider=provider, now=moment)
-            released.append(job.id)
-        except (EscrowError, provider_module.EscrowProviderError):
+        escrow = await latest_escrow(session, job.id)
+        if escrow is None or escrow.status is not EscrowStatus.HELD or escrow.in_dispute:
             continue
-    return released
+        worker = await session.get(Worker, job.worker_id)
+        person = await session.get(User, worker.user_id) if worker else None
+        try:
+            # Resolved at call time so tests can swap the sender.
+            await (sender or email_sender_module.default_email_sender).send(
+                _reminder(job, escrow, person.display_name if person else "Your worker")
+            )
+        except Exception:  # noqa: BLE001 - one bad send must not stop the rest
+            continue
+        job.confirmation_reminded_at = moment
+        _audit(session, job, "job.confirmation_reminder_sent")
+        reminded.append(job.id)
+    return reminded
 
 
 def job_stage(job: Job, escrow: EscrowTransaction | None) -> str:
