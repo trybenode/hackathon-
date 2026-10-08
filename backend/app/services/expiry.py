@@ -1,6 +1,7 @@
-"""Purpose: Expire guarantor instruments whose validity period has ended.
+"""Purpose: Expire guarantor instruments whose validity period has ended, and
+release escrow for completed jobs whose client let the confirmation window pass.
 
-Dependencies: SQLAlchemy async sessions and app.services.guarantor.
+Dependencies: SQLAlchemy async sessions, app.services.guarantor and app.services.escrow.
 Used by: the background sweep started with the app, and the ops endpoint.
 
 Expiry is time-based, so nothing in a request path can cause it. Without a
@@ -15,6 +16,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.services.escrow import release_due
 from app.services.guarantor import expire_due_instruments
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,14 @@ async def run_sweep(session_factory: async_sessionmaker) -> int:
 
     if expired:
         logger.info("Expired %d guarantor instrument(s)", len(expired))
+
+    # Separate session: a provider hiccup releasing escrow must not undo expiry.
+    async with session_factory() as session:
+        released = await release_due(session)
+        await session.commit()
+
+    if released:
+        logger.info("Auto-released escrow for %d job(s)", len(released))
 
     return len(expired)
 

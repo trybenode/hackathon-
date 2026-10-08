@@ -18,6 +18,11 @@ from app.api.v1.endpoints.health import router as health_router
 from app.api.v1.endpoints.trust import router as trust_router
 from app.api.v1.endpoints.credentials import router as credentials_router
 from app.api.v1.endpoints.worker_record import router as worker_record_router
+from app.api.v1.endpoints.jobs import (
+    platform_router as jobs_router,
+    webhook_router,
+    worker_router as my_jobs_router,
+)
 from app.core.config import get_settings
 from app.db.session import async_session_factory
 from app.services.expiry import sweep_forever
@@ -73,3 +78,6 @@ app.include_router(me_router, prefix=settings.api_v1_prefix)
 app.include_router(trust_router, prefix=settings.api_v1_prefix)
 app.include_router(credentials_router, prefix=settings.api_v1_prefix)
 app.include_router(worker_record_router, prefix=settings.api_v1_prefix)
+app.include_router(jobs_router, prefix=settings.api_v1_prefix)
+app.include_router(my_jobs_router, prefix=settings.api_v1_prefix)
+app.include_router(webhook_router, prefix=settings.api_v1_prefix)

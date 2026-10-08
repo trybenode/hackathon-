@@ -378,6 +378,17 @@ class Job(UUIDTimestampMixin, Base):
     agreed_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     auto_release_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Who hired the worker. Clients have no account yet; escrow needs these.
+    client_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    client_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    client_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    #: Label/value pairs shown on Job Details, e.g. {"label": "Bedrooms", "value": "2"}.
+    details: Mapped[list[dict[str, str]]] = mapped_column(
+        JSON, default=list, server_default="[]", nullable=False
+    )
+    #: When the worker said the work was done.
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     worker: Mapped[Worker] = relationship(back_populates="jobs")
     confirmations: Mapped[list["JobConfirmation"]] = relationship(back_populates="job")
@@ -424,6 +435,23 @@ class EscrowTransaction(UUIDTimestampMixin, Base):
     micro_premium: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     cover_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[EscrowStatus] = mapped_column(Enum(EscrowStatus, name="escrow_status"), default=EscrowStatus.PENDING)
+    #: Payscrow's GUID for the transaction; only the paid webhook carries it,
+    #: and releasing funds needs it.
+    provider_transaction_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Where the client pays.
+    payment_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    #: What the client pays: the job plus their share of the escrow charge.
+    total_payable: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    #: The code that releases the funds. Never returned by the API.
+    escrow_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    funded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    in_dispute: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+    #: Payscrow's dispute stage and, once ruled, how it was resolved.
+    dispute_stage: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    resolution_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     job: Mapped[Job] = relationship(back_populates="escrow_transactions")
     __table_args__ = (CheckConstraint("amount >= 0", name="amount_nonnegative"),)
