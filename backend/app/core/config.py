@@ -53,6 +53,22 @@ class Settings(BaseSettings):
     resend_from: str = Field("Trust Infrastructure <onboarding@resend.dev>", alias="RESEND_FROM")
     credential_signing_secret: str = Field("", alias="CREDENTIAL_SIGNING_SECRET")
     platform_api_key: str = Field("", alias="PLATFORM_API_KEY")
+    #: Payscrow escrow. Without a key, a local stand-in holds the money.
+    payscrow_api_key: str = Field("", alias="PAYSCROW_API_KEY")
+    #: The sandbox lives on .dev; production is https://api.payscrow.net.
+    payscrow_base_url: str = Field("https://api.payscrow.dev", alias="PAYSCROW_BASE_URL")
+    #: Verifies that webhooks really came from Payscrow.
+    payscrow_webhook_secret: str = Field("", alias="PAYSCROW_WEBHOOK_SECRET")
+    #: Public HTTPS address Payscrow posts to, e.g. a tunnel to this API.
+    payscrow_webhook_url: str = Field("", alias="PAYSCROW_WEBHOOK_URL")
+    #: Share of Payscrow's charge the worker bears, 0 to 100. 0: the client pays it.
+    payscrow_merchant_charge_percentage: float = Field(0, alias="PAYSCROW_MERCHANT_CHARGE_PERCENTAGE")
+    #: Hours a client has to confirm a completed job before funds release anyway.
+    escrow_auto_release_hours: int = Field(72, alias="ESCROW_AUTO_RELEASE_HOURS")
+
+    @property
+    def escrow_enabled(self) -> bool:
+        return bool(self.payscrow_api_key.strip())
 
     @property
     def email_enabled(self) -> bool:
