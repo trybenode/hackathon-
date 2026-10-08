@@ -109,7 +109,7 @@ export function PortableRecord() {
           </div>
 
           <div className="flex items-center gap-4 rounded-lg bg-primary-25 p-3">
-            <ScoreRing score={record.assessment.score} />
+            <ScoreRing score={record.assessment.score} size={68} thickness={7} />
             <div className="flex flex-col gap-1.5">
               <p className="text-body-md font-semibold text-grey-900">Trust Score</p>
               <p className="text-xs leading-5 text-grey-900">
