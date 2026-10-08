@@ -56,8 +56,10 @@ class JobCreateResponse(ApiModel):
 
 
 class ClientConfirmRequest(ApiModel):
-    #: Kept for the record; the platform vouches that the client confirmed.
-    note: str | None = Field(default=None, max_length=500)
+    #: The escrow code Payscrow sent the client when they paid. Giving it is
+    #: the client's consent to release. May be left out only when Payscrow
+    #: includes the code in its paid webhook.
+    code: str | None = Field(default=None, min_length=4, max_length=40)
 
 
 class EscrowView(ApiModel):
@@ -67,7 +69,8 @@ class EscrowView(ApiModel):
     funded_at: datetime | None = None
     released_at: datetime | None = None
     cover_active: bool = False
-    #: Whether we can release without asking the worker for the code.
+    #: Whether Payscrow sent the code with the payment, so release needs no
+    #: code from the client and the auto-release window can run.
     code_on_file: bool = False
     dispute_stage: str | None = None
     resolution_type: str | None = None
@@ -99,10 +102,6 @@ class JobView(ApiModel):
 class IssueRequest(ApiModel):
     reason: str = Field(min_length=3, max_length=120)
     complaint: str = Field(default="", max_length=900)
-
-
-class EscrowCodeRequest(ApiModel):
-    code: str = Field(min_length=4, max_length=40)
 
 
 def _http_error(error: Exception) -> HTTPException:
@@ -223,7 +222,9 @@ async def confirm_for_client(
     """No client screen exists yet; the platform calls this on the client's behalf."""
 
     try:
-        escrow = await escrow_service.release(session, job_id, by="client")
+        escrow = await escrow_service.release(
+            session, job_id, by="client", code=payload.code if payload else None
+        )
     except (escrow_service.EscrowError, EscrowProviderError) as error:
         raise _http_error(error) from error
 
@@ -328,21 +329,3 @@ async def report_my_issue(
     await session.commit()
     job = await session.get(Job, job_id)
     return await _view(session, job, await escrow_service.latest_escrow(session, job_id))
-
-
-@worker_router.post(
-    "/{job_id}/escrow-code",
-    status_code=204,
-    summary="Pass on the escrow code Payscrow emailed",
-)
-async def submit_escrow_code(
-    job_id: UUID,
-    payload: EscrowCodeRequest,
-    user: User = Depends(current_user),
-    session: AsyncSession = Depends(get_db_session),
-) -> None:
-    try:
-        await escrow_service.record_escrow_code(session, user, job_id, payload.code)
-    except escrow_service.EscrowError as error:
-        raise _http_error(error) from error
-    await session.commit()

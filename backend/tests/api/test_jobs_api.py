@@ -145,14 +145,13 @@ async def test_confirming_without_a_code_explains_why(session: AsyncSession, wor
         assert refused.status_code == 409
         assert "escrow code" in refused.json()["detail"]
 
-        await sign_in(client, "worker@example.com")
-        code = await client.post(
-            f"/api/v1/me/jobs/{created['job_id']}/escrow-code", json={"code": "XYZ789ABC1"}
-        )
-        assert code.status_code == 204
+        # The client confirms by handing over the code Payscrow sent them.
         released = await client.post(
-            f"/api/v1/jobs/{created['job_id']}/client-confirmation", json={}, headers=PLATFORM
+            f"/api/v1/jobs/{created['job_id']}/client-confirmation",
+            json={"code": "XYZ789ABC1"},
+            headers=PLATFORM,
         )
+        assert released.status_code == 200, released.text
         assert released.json()["stage"] == "released"
 
     app.dependency_overrides.clear()

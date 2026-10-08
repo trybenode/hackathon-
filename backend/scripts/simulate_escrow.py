@@ -16,9 +16,10 @@ Usage:
     .venv/bin/python scripts/simulate_escrow.py you@example.com --mode sandbox \\
         --client-email client@example.com --client-phone 08012345678
 
-The email must be a worker (run seed_worker_record.py first). The worker's
-email is the merchant on Payscrow, so in sandbox mode the escrow code email
-goes there.
+The email must be a worker (run seed_worker_record.py first). The worker is
+the merchant on Payscrow and the client is the customer. Payscrow emails the
+escrow code to the client (customer) when they pay; in sandbox mode, pass it
+with --code, or type it when asked.
 """
 
 import argparse
@@ -187,53 +188,62 @@ async def run(args: argparse.Namespace) -> None:
         await escrow_service.mark_complete(session, person, job.id)
         await session.commit()
         job = await session.get(Job, job.id)
+        held = await escrow_service.latest_escrow(session, job.id)
+    silence = (
+        f"If the client says nothing, funds release at {job.auto_release_at:%d %b %Y %H:%M} UTC."
+        if held.escrow_code
+        else "If the client says nothing, funds stay held: we have no code to release with."
+    )
     say(
         "Worker taps 'Mark as complete'",
         f"""
         Job status: Submitted; awaiting the client's confirmation.
-        If the client says nothing, funds release at {job.auto_release_at:%d %b %Y %H:%M} UTC.
+        {silence}
         """,
     )
 
     # 4. The client confirms; we release by applying the escrow code.
     async with factory() as session:
-        try:
+        escrow = await escrow_service.latest_escrow(session, job.id)
+        code_on_file = bool(escrow.escrow_code)
+
+    if code_on_file:
+        async with factory() as session:
             await escrow_service.release(session, job.id, by="client")
             await session.commit()
-            released = True
-        except escrow_service.EscrowCodeMissingError:
-            released = False
-
-    if released:
         say(
-            "Client confirms (POST /api/v1/jobs/{id}/client-confirmation)",
+            "Client taps Confirm (POST /api/v1/jobs/{id}/client-confirmation, no code)",
             """
-            We applied the escrow code (POST /api/v3/escrow/escrowtransactions/applycode).
+            The code came with the paid webhook, so we applied it ourselves
+            (POST /api/v3/escrow/escrowtransactions/applycode).
             Funds released to the worker. Worker screen: "Released".
-            Nobody had to type or forward a code.
+            The client typed nothing, and had they stayed silent the 72-hour
+            auto-release would have done the same.
             """,
         )
     else:
+        if offline:
+            code = stub_escrow_code()
+            note(f"(Payscrow emails the client their escrow code; here it is {code}.)")
+        else:
+            code = args.code or input("    Escrow code the client received from Payscrow: ").strip()
+        async with factory() as session:
+            await escrow_service.release(session, job.id, by="client", code=code)
+            await session.commit()
         say(
-            "Client confirms, but the release is BLOCKED",
+            "Client confirms by entering their escrow code",
             """
-            Payscrow's webhook did not include the escrow code, and releasing funds
-            requires it. Payscrow emailed the code to the worker instead, so today
-            the worker would have to forward it to us before the client's
-            confirmation can take effect, and auto-release cannot run without it.
+            POST /api/v1/jobs/{id}/client-confirmation {"code": "..."}
+            We applied the client's code (POST /api/v3/escrow/escrowtransactions/applycode).
+            Funds released to the worker. Worker screen: "Released".
 
-            Ask: enable "escrow code in webhook" for our broker account. The code
-            then arrives with the payment and release is automatic, with no code
-            changes on either side.
+            This works with Payscrow's default settings. What it cannot do:
+            release when the client goes quiet, because without their code
+            nothing can be applied. With "escrow code in webhook" enabled for
+            our broker account, confirming needs no code and the 72-hour
+            auto-release runs.
             """,
         )
-        if args.code:
-            async with factory() as session:
-                person = await session.get(User, worker.user_id)
-                await escrow_service.record_escrow_code(session, person, job.id, args.code)
-                await escrow_service.release(session, job.id, by="client")
-                await session.commit()
-            say("Worker forwarded the code (--code); funds released.")
 
     await engine.dispose()
 
@@ -251,9 +261,9 @@ def main() -> None:
         "--no-code-in-webhook",
         dest="code_in_webhook",
         action="store_false",
-        help="offline: simulate Payscrow withholding the escrow code (today's default)",
+        help="offline: simulate Payscrow's default, where the webhook withholds the code",
     )
-    parser.add_argument("--code", help="the escrow code the worker received by email, to finish a blocked release")
+    parser.add_argument("--code", help="sandbox: the escrow code Payscrow emailed the client")
     parser.add_argument("--wait-minutes", type=int, default=15)
     asyncio.run(run(parser.parse_args()))
 

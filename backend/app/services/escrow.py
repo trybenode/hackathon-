@@ -11,6 +11,12 @@ The lifecycle (SRS 3.6):
                ESCROW_AUTO_RELEASE_HOURS to confirm or object.
   release   -> job Released, escrow Released: the client confirmed, or the
                window passed. Releasing applies Payscrow's escrow code.
+
+The escrow code belongs to the paying client: Payscrow sends it to them, and
+handing it over is how they confirm (Payscrow's integration guide, step 9). A
+client confirms by giving us the code. If Payscrow is set to include the code
+in its paid webhook, we already hold it, so confirming needs no code and the
+auto-release window can run; otherwise nothing releases without the client.
   dispute   -> job Disputed: raised through Payscrow, whose ruling arrives by
                webhook (Refund, Split or Close).
 """
@@ -253,6 +259,20 @@ def _apply_payment(
     if str(payload.get("paymentStatus", "")).lower() != "paid":
         return "ignored"
 
+    # The guide asks for the paid amount and currency to match the order; a
+    # mismatch is recorded for an operator rather than treated as funded.
+    expected = escrow.total_payable
+    try:
+        paid = Decimal(str(payload.get("amountPaid"))) if payload.get("amountPaid") is not None else None
+    except (ArithmeticError, ValueError):
+        paid = None
+    currency = payload.get("currency")
+    if (expected is not None and paid is not None and paid != expected) or (
+        currency and currency != escrow.currency
+    ):
+        _audit(session, job, "escrow.payment_mismatch", amount_paid=str(paid), currency=currency)
+        return "amount mismatch"
+
     escrow.provider_transaction_id = payload.get("transactionId") or escrow.provider_transaction_id
     code = str(payload.get("escrowCode") or "").strip()
     if ESCROW_CODE.match(code):
@@ -367,21 +387,6 @@ async def report_issue(
     return dispute
 
 
-async def record_escrow_code(session: AsyncSession, user: User, job_id: UUID, code: str) -> None:
-    """The worker passes on the code Payscrow emailed them.
-
-    Needed only while Payscrow does not include the code in its webhook. The
-    code is kept, never shown back, and used only when the client confirms or
-    the confirmation window ends.
-    """
-
-    _, escrow = await worker_job(session, user, job_id)
-    cleaned = code.strip()
-    if escrow is None or not ESCROW_CODE.match(cleaned):
-        raise EscrowStateError("That does not look like an escrow code.")
-    escrow.escrow_code = cleaned
-
-
 # --- Release ----------------------------------------------------------------
 
 
@@ -390,10 +395,15 @@ async def release(
     job_id: UUID,
     *,
     by: str,
+    code: str | None = None,
     provider: EscrowProvider | None = None,
     now: datetime | None = None,
 ) -> EscrowTransaction:
-    """Release the held money to the worker by applying the escrow code."""
+    """Release the held money to the worker by applying the escrow code.
+
+    `code` is the one the client received from Payscrow; without it, the code
+    from the paid webhook is used if Payscrow included one.
+    """
 
     job = await session.get(Job, job_id)
     escrow = await latest_escrow(session, job_id) if job else None
@@ -401,12 +411,19 @@ async def release(
         raise JobNotFoundError(f"No job with id {job_id}.")
     if escrow.status is not EscrowStatus.HELD or escrow.in_dispute:
         raise EscrowStateError("There is no undisputed payment held for this job.")
-    if not escrow.escrow_code or not escrow.provider_transaction_id:
+    supplied = (code or "").strip()
+    if supplied and not ESCROW_CODE.match(supplied):
+        raise EscrowStateError("That does not look like an escrow code.")
+    release_code = supplied or escrow.escrow_code
+    if not release_code:
         raise EscrowCodeMissingError(
-            "Payscrow has not shared this transaction's escrow code yet."
+            "The client's escrow code is needed to release the funds. Payscrow sent "
+            "it to the client when they paid."
         )
+    if not escrow.provider_transaction_id:
+        raise EscrowStateError("Payscrow has not confirmed this payment yet.")
 
-    await _provider(provider).apply_code(escrow.provider_transaction_id, escrow.escrow_code)
+    await _provider(provider).apply_code(escrow.provider_transaction_id, release_code)
     moment = now or _now()
     escrow.status = EscrowStatus.RELEASED
     escrow.released_at = moment

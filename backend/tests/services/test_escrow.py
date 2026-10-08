@@ -37,7 +37,8 @@ def paid(escrow, *, code: str | None = "ABC123DEF4") -> dict:
         "paymentStatus": "Paid",
         "escrowStatus": "InEscrow",
         "escrowCode": code if code is not None else "Restricted: contact PayScrow to enable",
-        "amountPaid": "25500.00",
+        "amountPaid": str(escrow.total_payable),
+        "currency": "NGN",
         "status": "InProgress",
     }
 
@@ -100,18 +101,37 @@ async def test_complete_then_client_confirms_releases(
     assert service.job_stage(job, escrow) == "released"
 
 
-async def test_release_waits_for_the_code(session: AsyncSession, worker: Worker) -> None:
+async def test_client_confirms_with_their_code(
+    session: AsyncSession, worker: Worker, never_move_real_money: StubEscrowProvider
+) -> None:
+    """Payscrow's default: the code goes to the paying client, not into the webhook."""
+
     user = await session.get(User, worker.user_id)
     job, escrow = await funded_job(session, worker, code=None)
     await service.mark_complete(session, user, job.id)
 
     with pytest.raises(service.EscrowCodeMissingError):
         await service.release(session, job.id, by="client")
+    with pytest.raises(service.EscrowStateError):
+        await service.release(session, job.id, by="client", code="not a code!")
 
-    # The worker passes on the code Payscrow emailed them.
-    await service.record_escrow_code(session, user, job.id, "XYZ789ABC1")
-    await service.release(session, job.id, by="client")
+    await service.release(session, job.id, by="client", code="XYZ789ABC1")
+
+    assert never_move_real_money.applied == [(escrow.provider_transaction_id, "XYZ789ABC1")]
     assert escrow.status is EscrowStatus.RELEASED
+    # The client's code is used, never kept.
+    assert escrow.escrow_code is None
+
+
+async def test_paid_amount_must_match_the_order(session: AsyncSession, worker: Worker) -> None:
+    job, escrow = await service.open_job(session, job_request(worker))
+    payload = paid(escrow) | {"amountPaid": "100.00"}
+
+    outcome = await service.handle_webhook(session, payload, delivery_id="d-short")
+
+    assert outcome == "amount mismatch"
+    assert escrow.status is EscrowStatus.PENDING
+    assert job.status is JobStatus.ACCEPTED
 
 
 async def test_complete_needs_the_money_held(session: AsyncSession, worker: Worker) -> None:
