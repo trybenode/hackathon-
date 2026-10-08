@@ -45,11 +45,14 @@ export function ScoreRing({
           className="stroke-primary-400"
         />
       </svg>
+      {/* Small rings size the label to the ring, so "100%" still clears the
+          stroke with room to spare, as in the designs. */}
       <span
         className={cn(
-          "absolute text-grey-800",
-          size >= 64 ? "text-body-lg font-medium" : "text-body-sm",
+          "absolute leading-none text-grey-800 tabular-nums",
+          size >= 64 && "text-body-lg font-medium",
         )}
+        style={size >= 64 ? undefined : { fontSize: Math.round(size * 0.27) }}
       >
         {label}
       </span>
