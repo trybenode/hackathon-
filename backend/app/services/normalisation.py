@@ -23,6 +23,23 @@ def _filter_flags(raw_flags: list) -> list:
     return [f for f in (raw_flags or []) if f in KNOWN_FLAGS]
 
 
+def normalise_db_row(row: NormalizedOutcome) -> dict[str, object]:
+    """Convert a persisted normalized outcome into the scorer's common job shape."""
+
+    status = getattr(row.status, "value", row.status)
+    return {
+        "job_id": str(row.outcome_key),
+        "date": row.occurred_at,
+        "status": status,
+        "cancelled_by": row.cancelled_by,
+        "dispute_resolution": row.dispute_resolution,
+        "client_id": row.client_id,
+        "rating": float(row.rating or 0),
+        "flags": _filter_flags(row.quality_flags or []),
+        "source_platform": row.source_platform,
+        "import_method": row.import_method,
+        "verified": row.verified,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -174,38 +191,47 @@ def normalise_import(rows: list[dict], source_platform: str) -> list[dict]:
 # Engineer. This function is the one place that knows the real column names,
 # so the rest of this module and signals.py never have to.
 #
-# Accepts either the ORM row used by assessment callers or a column mapping
-# used by ingestion/tests. Both inputs follow the same persisted-column contract.
+# Deliberately takes a plain dict, not a SQLAlchemy model instance, to keep
+# this module free of any DB library dependency — the caller (wherever the
+# actual query happens) is responsible for converting a row to a dict first,
+# e.g. via a dict comprehension over the row's columns.
 # ---------------------------------------------------------------------------
 
-def normalise_db_row(row: NormalizedOutcome | dict) -> dict:
-    """Adapt persisted ORM objects or mappings without inventing missing evidence.
-
-    Source job identifiers survive exports/imports. Missing ratings remain
-    absent; available_signals distinguishes unknown facts from known zeros.
+def normalise_db_row(row: dict) -> dict:
     """
-    def value(name: str, default=None):
-        return row.get(name, default) if isinstance(row, dict) else getattr(row, name, default)
+    Maps one normalized_outcomes row into our internal job schema.
 
-    status = value("status")
-    rating = value("rating")
-    result = {
-        "job_id": str(value("outcome_key", value("id"))),
-        "date": value("occurred_at"),
-        "status": getattr(status, "value", status),
-        "cancelled_by": value("cancelled_by"),
-        "dispute_resolution": value("dispute_resolution"),
-        "client_id": value("client_id"),
-        "rating": float(rating) if rating is not None else None,
-        "flags": _filter_flags(value("quality_flags")),
-        "source_platform": value("source_platform", "legacy"),
-        "import_method": value("import_method", "native"),
-        "verified": value("verified", False),
+    Uses the outcome's own id as job_id, not the nullable jobs.id foreign
+    key, since the outcome's own id is always present and uniquely
+    identifies this record — the FK can be null (e.g. for imported/legacy
+    outcomes with no matching native Job row).
+
+    status is read as-is: the real OutcomeStatus enum includes "disputed"
+    as a possible value (used by Job.status, a separate concept), but in
+    practice normalized_outcomes rows written by our own ingestion code
+    should never actually be "disputed" here — see
+    docs/trust_scoring_decision_disputes_field.md. If one somehow is, it's
+    passed through rather than silently reinterpreted, since guessing
+    would hide a real data problem rather than surface it.
+    """
+    required = ("id", "occurred_at", "status")
+    missing = [f for f in required if f not in row]
+    if missing:
+        raise ValueError(f"normalized_outcomes row missing required fields: {missing}")
+
+    return {
+        "job_id": row["id"],
+        "date": row["occurred_at"],
+        "status": row["status"],
+        "cancelled_by": row.get("cancelled_by"),
+        "dispute_resolution": row.get("dispute_resolution"),
+        "client_id": row.get("client_id"),
+        "rating": row.get("rating"),
+        "flags": _filter_flags(row.get("quality_flags")),
+        "source_platform": row.get("source_platform", "legacy"),
+        "import_method": row.get("import_method", "native"),
+        "verified": row.get("verified", False),
     }
-    availability = value("available_signals")
-    if availability is not None:
-        result["available_signals"] = availability
-    return result
 
 
 def merge_imported_sources(*sources: list[dict]) -> list[dict]:
