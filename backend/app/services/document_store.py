@@ -35,6 +35,13 @@ class UnsupportedDocumentError(Exception):
     """The upload is not a format we accept."""
 
 
+class DocumentStorageError(Exception):
+    """The bucket could not be reached or refused the upload.
+
+    Nothing was written, so the guarantor can simply try again.
+    """
+
+
 @dataclass(frozen=True)
 class StoredDocument:
     """Where a document went. Never the document itself."""
@@ -129,8 +136,14 @@ class S3DocumentStore:
                 }[suffix],
             )
 
+        from botocore.exceptions import BotoCoreError, ClientError
+
         # boto3 is synchronous; keep it off the event loop.
-        await asyncio.to_thread(upload)
+        try:
+            await asyncio.to_thread(upload)
+        except (BotoCoreError, ClientError) as error:
+            logger.warning("Could not store document at %s: %s", key, error)
+            raise DocumentStorageError("We could not upload your document.") from error
         logger.info("Stored document at %s", key)
         return StoredDocument(reference=key, size=len(content))
 

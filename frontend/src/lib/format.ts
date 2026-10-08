@@ -30,15 +30,31 @@ export function formatNaira(amount: string | number | null | undefined) {
   })}`;
 }
 
+// Month names are spelled out rather than taken from the browser locale,
+// which abbreviates September as "Sep" in some runtimes and "Sept" in others.
+const SHORT_MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
 /** "23 sep 2026", matching the designs. */
 export function formatStartedOn(value: string | null | undefined) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
 
-  return date
-    .toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-    .replace(/(\w{3})/, (month) => month.toLowerCase());
+  return `${date.getDate()} ${SHORT_MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+const LONG_MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** "23 September, 2026", as on the guarantee details screen. */
+export function formatLongDay(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return `${date.getDate()} ${LONG_MONTHS[date.getMonth()]}, ${date.getFullYear()}`;
 }
 
 /** "20/2/2026· 12:04:32", matching the recent activity list. */
@@ -46,7 +62,21 @@ export function formatActivityTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
 
-  return `${date.toLocaleDateString("en-GB")}· ${date.toLocaleTimeString("en-GB")}`;
+  const day = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+  return `${day}· ${date.toLocaleTimeString("en-GB", { hour12: false })}`;
+}
+
+/** Requests closer than this to their deadline show how long is left. */
+const EXPIRY_WARNING_DAYS = 3;
+
+/** "Expires in 2 days" when a deadline is close, otherwise null. */
+export function formatExpiresIn(value: string, now: Date = new Date()) {
+  const left = new Date(value).getTime() - now.getTime();
+  if (Number.isNaN(left) || left <= 0) return null;
+
+  const days = Math.ceil(left / 86_400_000);
+  if (days > EXPIRY_WARNING_DAYS) return null;
+  return days === 1 ? "Expires within a day" : `Expires in ${days} days`;
 }
 
 /** "1 hour ago", "Yesterday", "2 days ago" for the alerts list. */
@@ -64,5 +94,5 @@ export function formatRelative(value: string, now: Date = new Date()) {
   if (days === 1) return "Yesterday";
   if (days < 30) return `${days} days ago`;
 
-  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  return formatStartedOn(value);
 }

@@ -183,57 +183,6 @@ def normalise_import(rows: list[dict], source_platform: str) -> list[dict]:
     return normalised
 
 
-# ---------------------------------------------------------------------------
-# Real normalized_outcomes database rows (backend/app/models/domain.py).
-# Column names differ slightly from our internal schema (occurred_at vs
-# date, quality_flags vs flags), and cancelled_by/client_id/dispute_resolution
-# now exist as real columns following the gap review with the Software
-# Engineer. This function is the one place that knows the real column names,
-# so the rest of this module and signals.py never have to.
-#
-# Deliberately takes a plain dict, not a SQLAlchemy model instance, to keep
-# this module free of any DB library dependency — the caller (wherever the
-# actual query happens) is responsible for converting a row to a dict first,
-# e.g. via a dict comprehension over the row's columns.
-# ---------------------------------------------------------------------------
-
-def normalise_db_row(row: dict) -> dict:
-    """
-    Maps one normalized_outcomes row into our internal job schema.
-
-    Uses the outcome's own id as job_id, not the nullable jobs.id foreign
-    key, since the outcome's own id is always present and uniquely
-    identifies this record — the FK can be null (e.g. for imported/legacy
-    outcomes with no matching native Job row).
-
-    status is read as-is: the real OutcomeStatus enum includes "disputed"
-    as a possible value (used by Job.status, a separate concept), but in
-    practice normalized_outcomes rows written by our own ingestion code
-    should never actually be "disputed" here — see
-    docs/trust_scoring_decision_disputes_field.md. If one somehow is, it's
-    passed through rather than silently reinterpreted, since guessing
-    would hide a real data problem rather than surface it.
-    """
-    required = ("id", "occurred_at", "status")
-    missing = [f for f in required if f not in row]
-    if missing:
-        raise ValueError(f"normalized_outcomes row missing required fields: {missing}")
-
-    return {
-        "job_id": row["id"],
-        "date": row["occurred_at"],
-        "status": row["status"],
-        "cancelled_by": row.get("cancelled_by"),
-        "dispute_resolution": row.get("dispute_resolution"),
-        "client_id": row.get("client_id"),
-        "rating": row.get("rating"),
-        "flags": _filter_flags(row.get("quality_flags")),
-        "source_platform": row.get("source_platform", "legacy"),
-        "import_method": row.get("import_method", "native"),
-        "verified": row.get("verified", False),
-    }
-
-
 def merge_imported_sources(*sources: list[dict]) -> list[dict]:
     """
     Combines job records from multiple imported sources into one unified
