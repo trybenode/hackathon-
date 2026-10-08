@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { Button, Input, NigeriaFlagIcon, PencilIcon } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -27,6 +27,7 @@ function withoutDialCode(phone: string | null) {
 
 export function EditProfile() {
   const router = useRouter();
+  const pathname = usePathname();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -43,7 +44,7 @@ export function EditProfile() {
       } catch (cause) {
         if (cancelled) return;
         if (cause instanceof ApiError && cause.status === 401) {
-          router.replace("/sign-in");
+          router.replace(`/sign-in?next=${encodeURIComponent(pathname)}`);
           return;
         }
         setError("Could not load your profile.");
@@ -54,7 +55,7 @@ export function EditProfile() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [pathname, router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

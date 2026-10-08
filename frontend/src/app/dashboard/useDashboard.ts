@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError, getDashboard, type DashboardData } from "@/lib/guarantor";
 
@@ -10,6 +10,7 @@ import { ApiError, getDashboard, type DashboardData } from "@/lib/guarantor";
  */
 export function useDashboard() {
   const router = useRouter();
+  const pathname = usePathname();
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,7 +25,7 @@ export function useDashboard() {
       } catch (cause) {
         if (cancelled) return;
         if (cause instanceof ApiError && cause.status === 401) {
-          router.replace("/sign-in");
+          router.replace(`/sign-in?next=${encodeURIComponent(pathname)}`);
           return;
         }
         setError("Could not load your dashboard.");
@@ -37,7 +38,7 @@ export function useDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [pathname, router]);
 
   return { data, error, loading };
 }
