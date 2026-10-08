@@ -257,7 +257,24 @@ export type SignedInUser = {
   user_id: string;
   email: string;
   display_name: string;
+  /** Has a worker profile. */
+  is_worker: boolean;
+  /** Has been asked to stand behind a worker. */
+  is_guarantor: boolean;
 };
+
+/**
+ * Where someone lands after signing in with nowhere else to go.
+ *
+ * Workers go to their side, even if they also guarantee someone: the worker
+ * home will carry a way across to the guarantor dashboard. Worker home is not
+ * designed yet, so Jobs stands in. Accounts with neither role keep the old
+ * landing until the developer sign-in decides where they belong.
+ */
+export function landingPathFor(user: SignedInUser) {
+  if (user.is_worker) return "/worker/jobs";
+  return "/dashboard";
+}
 
 /**
  * Asks the API to email a login code.

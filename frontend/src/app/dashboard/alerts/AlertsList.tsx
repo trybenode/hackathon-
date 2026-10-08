@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { BellIcon, CalendarIcon, CheckIcon } from "@/components/ui";
 import { formatRelative } from "@/lib/format";
@@ -17,6 +17,7 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function AlertsList() {
   const router = useRouter();
+  const pathname = usePathname();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,7 +33,7 @@ export function AlertsList() {
       } catch (cause) {
         if (cancelled) return;
         if (cause instanceof ApiError && cause.status === 401) {
-          router.replace("/sign-in");
+          router.replace(`/sign-in?next=${encodeURIComponent(pathname)}`);
           return;
         }
         setError("Could not load your notifications.");
@@ -45,7 +46,7 @@ export function AlertsList() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [pathname, router]);
 
   // Captured once on mount: reading the clock during render is impure and
   // would regroup items on every re-render.

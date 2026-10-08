@@ -5,17 +5,17 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { OtpInput } from "@/components/guarantor/OtpInput";
 import { Button, Input } from "@/components/ui";
-import { ApiError, requestLoginCode, verifyLoginCode } from "@/lib/guarantor";
+import { ApiError, landingPathFor, requestLoginCode, verifyLoginCode } from "@/lib/guarantor";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
 export function SignInFlow({
-  /** Where to go once signed in. */
+  /** Where to go once signed in; without it, the account's roles decide. */
   redirectTo,
   /** Pre-fills the address the instrument was sent to. */
   defaultEmail = "",
 }: {
-  redirectTo: string;
+  redirectTo?: string;
   defaultEmail?: string;
 }) {
   const router = useRouter();
@@ -57,8 +57,8 @@ export function SignInFlow({
     setError(null);
 
     try {
-      await verifyLoginCode(email.trim(), value);
-      router.push(redirectTo);
+      const user = await verifyLoginCode(email.trim(), value);
+      router.push(redirectTo ?? landingPathFor(user));
     } catch (cause) {
       setCode("");
       setError(cause instanceof ApiError ? cause.message : "Could not verify that code.");
