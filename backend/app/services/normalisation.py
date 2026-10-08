@@ -144,6 +144,22 @@ STATUS_MAPS = {
         "RIDER_CANCELED": "cancelled",
         "NO_SHOW": "no_show",
     },
+    "handyman_generic": {
+        "JOB_COMPLETED": "completed",
+        "PRO_CANCELLED": "cancelled",
+        "CLIENT_CANCELLED": "cancelled",
+        "NO_SHOW": "no_show",
+        # Deliberately NOT mapped: handyman platforms often report a
+        # separate "rework requested" status. We don't map it to any of
+        # our three statuses, since a rework isn't a completion/
+        # cancellation/no-show outcome — it's a vertical-specific flag
+        # (see docs/trust_scoring_flag_integrity.md). Per the existing
+        # rule, unmapped statuses are skipped rather than guessed at, and
+        # imported jobs never carry flags anyway (see
+        # docs/trust_scoring_schema_spec.md) — rework only applies to
+        # native jobs, reported through the dedicated "Request rework"
+        # action, not through an imported status value.
+    },
 }
 
 
