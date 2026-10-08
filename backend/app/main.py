@@ -20,6 +20,7 @@ from app.api.v1.endpoints.trust import router as trust_router
 from app.api.v1.endpoints.credentials import router as credentials_router
 from app.api.v1.endpoints.portability import router as portability_router, platform_router
 from app.core.feature_http import install_feature_http
+from app.api.v1.endpoints.worker_record import router as worker_record_router
 from app.core.config import get_settings
 from app.db.session import async_session_factory
 from app.services.expiry import sweep_forever
@@ -79,3 +80,4 @@ app.include_router(trust_router, prefix=settings.api_v1_prefix)
 app.include_router(credentials_router, prefix=settings.api_v1_prefix)
 app.include_router(portability_router, prefix=settings.api_v1_prefix)
 app.include_router(platform_router, prefix=settings.api_v1_prefix)
+app.include_router(worker_record_router, prefix=settings.api_v1_prefix)

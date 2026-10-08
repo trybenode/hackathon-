@@ -1,7 +1,7 @@
 /**
  * Purpose: Icons for the worker profile and portable record screens.
  * Dependencies: none.
- * Used by: the worker profile, portable record and share dialog.
+ * Used by: the worker profile, portable record and its credentials and outcomes.
  *
  * Kept apart from components/ui/icons.tsx for the same reason as ./icons.tsx;
  * move both into the shared set after the guarantor branch merges.
@@ -88,26 +88,6 @@ export function DownloadIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" width="24" height="24" {...stroke} {...props}>
       <path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4 15.5V19a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-3.5" />
-    </svg>
-  );
-}
-
-export function ShareIcon(props: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" width="24" height="24" {...stroke} {...props}>
-      <circle cx="18" cy="5.5" r="2.5" />
-      <circle cx="6" cy="12" r="2.5" />
-      <circle cx="18" cy="18.5" r="2.5" />
-      <path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1" />
-    </svg>
-  );
-}
-
-export function CopyIcon(props: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" width="20" height="20" {...stroke} {...props}>
-      <rect x="8" y="8" width="12" height="12" rx="2" />
-      <path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8" />
     </svg>
   );
 }

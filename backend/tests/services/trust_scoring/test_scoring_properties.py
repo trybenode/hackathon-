@@ -32,7 +32,7 @@ def test_score_worker_never_crashes(signals, n_jobs, cfg):
 @settings(suppress_health_check=[HealthCheck.too_slow], max_examples=300)
 def test_score_worker_always_returns_contract_keys(signals, n_jobs, cfg):
     result = score_worker(signals, n_jobs, cfg)
-    expected_keys = {"decision", "confidence", "band", "status",
+    expected_keys = {"decision", "confidence", "score", "band", "status",
                       "signals_used", "explanation_summary"}
     assert expected_keys.issubset(result.keys())
 
@@ -42,6 +42,26 @@ def test_score_worker_always_returns_contract_keys(signals, n_jobs, cfg):
 def test_confidence_always_in_valid_range(signals, n_jobs, cfg):
     result = score_worker(signals, n_jobs, cfg)
     assert 0.0 <= result["confidence"] <= 1.0
+
+
+@given(signals=signals_strategy, n_jobs=n_jobs_strategy, cfg=preset_strategy)
+@settings(suppress_health_check=[HealthCheck.too_slow], max_examples=300)
+def test_score_is_in_range_and_matches_the_band(signals, n_jobs, cfg):
+    """The band is cut from the score, so the two can never disagree."""
+    result = score_worker(signals, n_jobs, cfg)
+    if result["status"] != "Scored":
+        assert result["score"] is None
+        return
+
+    score = result["score"]
+    assert 0.0 <= score <= 1.0
+    # The thresholds apply to the unrounded score; allow for the rounding.
+    if result["band"] == "High":
+        assert score >= cfg.high_t - 1e-4
+    elif result["band"] == "Medium":
+        assert cfg.medium_t - 1e-4 <= score < cfg.high_t + 1e-4
+    else:
+        assert score < cfg.medium_t + 1e-4
 
 
 @given(signals=signals_strategy, cfg=preset_strategy)

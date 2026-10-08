@@ -168,3 +168,60 @@ async def test_profile_needs_a_session(session: AsyncSession) -> None:
         ).status_code == 401
 
     app.dependency_overrides.clear()
+
+
+async def test_sign_in_reports_which_sides_the_account_has(
+    session: AsyncSession, worker: Worker
+) -> None:
+    """Worker, guarantor, both, or neither: the screens route on these flags."""
+
+    from app.models.domain import AgreementStatus, GuarantorAgreement
+
+    guarantor = User(email="grace@example.com", display_name="Grace")
+    drafted = User(email="draft@example.com", display_name="Drafted")
+    session.add_all([guarantor, drafted])
+    await session.flush()
+    for person, status in ((guarantor, AgreementStatus.PENDING_SIGNATURE), (drafted, AgreementStatus.DRAFT)):
+        session.add(
+            GuarantorAgreement(
+                worker_id=worker.id,
+                guarantor_user_id=person.id,
+                scope="Cleaning",
+                conditions="No-show",
+                relationship_type="sibling",
+                status=status,
+                valid_until=datetime.now(tz=UTC) + timedelta(days=7),
+            )
+        )
+    # The worker also stands behind someone, so they are both.
+    session.add(
+        GuarantorAgreement(
+            worker_id=worker.id,
+            guarantor_user_id=worker.user_id,
+            scope="Cleaning",
+            conditions="No-show",
+            relationship_type="colleague",
+            status=AgreementStatus.ACTIVE,
+            valid_until=datetime.now(tz=UTC) + timedelta(days=300),
+        )
+    )
+    await session.flush()
+
+    async def roles(email: str) -> tuple[bool, bool]:
+        async with client_for(session) as client:
+            requested = await client.post("/api/v1/auth/code", json={"email": email})
+            verified = await client.post(
+                "/api/v1/auth/verify",
+                json={"email": email, "code": requested.json()["debug_code"]},
+            )
+            body = verified.json()
+            me = (await client.get("/api/v1/auth/me")).json()
+            assert (me["is_worker"], me["is_guarantor"]) == (body["is_worker"], body["is_guarantor"])
+            return body["is_worker"], body["is_guarantor"]
+
+    assert await roles("worker@example.com") == (True, True)
+    assert await roles("grace@example.com") == (False, True)
+    # A draft has not been sent, so it does not make anyone a guarantor yet.
+    assert await roles("draft@example.com") == (False, False)
+
+    app.dependency_overrides.clear()

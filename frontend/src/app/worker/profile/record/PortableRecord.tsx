@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { ArrowLeftIcon, ArrowRightIcon, BriefcaseIcon } from "@/components/worker/icons";
@@ -9,21 +10,19 @@ import {
   CredentialIcon,
   DownloadIcon,
   PeopleIcon,
-  ShareIcon,
   WarningIcon,
 } from "@/components/worker/recordIcons";
+import { OutcomeList } from "@/components/worker/OutcomeList";
+import { RecordGate } from "@/components/worker/RecordGate";
+import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
 import { ScoreRing } from "@/components/worker/ScoreRing";
 import { TrustBandBadge } from "@/components/worker/TrustBandBadge";
-import { Button, CheckIcon } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { formatShortDate, initialsOf } from "@/lib/workerMock";
-import {
-  formatNairaWhole,
-  formatNumericDate,
-  formatPercent,
-  workerRecord,
-  type WorkerRecord,
-} from "@/lib/workerRecordMock";
-import { ShareRecordDialog } from "./ShareRecordDialog";
+import { exportCredentials, formatPercent, shortName } from "@/lib/workerRecord";
+
+/** How many outcomes the record shows before "view all outcomes". */
+const OUTCOME_PREVIEW = 3;
 
 function Stat({
   icon,
@@ -50,25 +49,36 @@ function Stat({
   );
 }
 
-/**
- * Saves the record as JSON. A stand-in for the portable credentials export
- * (Abdul's side), whose signed format will replace this file.
- */
-function exportRecord(record: WorkerRecord) {
-  const blob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json" });
+/** Saves the signed export, ready to import on another platform. */
+async function saveExport(workerId: string, name: string) {
+  const exported = await exportCredentials(workerId);
+  const blob = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `portable-record-${record.name.toLowerCase().replace(/\s+/g, "-")}.json`;
+  anchor.download = `portable-record-${name.toLowerCase().replace(/\s+/g, "-")}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
 
 export function PortableRecord() {
   const router = useRouter();
-  const [sharing, setSharing] = useState(false);
-  const record = workerRecord;
-  const { stats } = record;
+  const { data: record, error, loading } = useWorkerRecord();
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function exportRecord() {
+    if (!record) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      await saveExport(record.worker_id, record.name);
+    } catch {
+      setExportError("Could not export your record. Try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <main className="flex flex-col">
@@ -79,6 +89,8 @@ export function PortableRecord() {
         <h1 className="text-body-lg font-semibold text-grey-900">Portable Record</h1>
       </header>
 
+      <RecordGate loading={loading} error={error}>
+      {record && (
       <div className="flex flex-col gap-6 px-6 pt-4">
         <section className="flex flex-col gap-4">
           <p className="text-xs leading-4 text-grey-900">Your verified work history</p>
@@ -90,14 +102,14 @@ export function PortableRecord() {
               {initialsOf(record.name)}
             </span>
             <span className="flex flex-1 flex-col">
-              <span className="text-body-lg text-grey-900">{record.shortName}</span>
+              <span className="text-body-lg text-grey-900">{shortName(record.name)}</span>
               <span className="text-body-sm text-grey-600">{record.role}</span>
             </span>
             <TrustBandBadge band={record.assessment.band} />
           </div>
 
           <div className="flex items-center gap-4 rounded-lg bg-primary-25 p-3">
-            <ScoreRing score={record.assessment.score} />
+            <ScoreRing score={record.assessment.score} size={68} thickness={7} />
             <div className="flex flex-col gap-1.5">
               <p className="text-body-md font-semibold text-grey-900">Trust Score</p>
               <p className="text-xs leading-5 text-grey-900">
@@ -107,99 +119,78 @@ export function PortableRecord() {
           </div>
 
           <p className="px-2 text-body-sm text-grey-900">
-            Last updated - {formatShortDate(record.lastUpdated)}
+            Last updated - {formatShortDate(record.last_updated)}
           </p>
         </section>
 
-        {/* No design yet for the credentials list, so the row is shown but
-            does not open anything. */}
-        <div
-          aria-disabled="true"
+        <Link
+          href="/worker/profile/record/credentials"
           className="flex items-center gap-4 rounded-xl border border-grey-400 px-6 py-4 text-grey-900"
         >
           <CredentialIcon className="shrink-0 text-info" />
-          <span className="flex-1 text-body-md">{record.credentials.length} verified credentials</span>
+          <span className="flex-1 text-body-md">Verified credentials</span>
           <ChevronRightIcon className="shrink-0" />
-        </div>
+        </Link>
 
         <div className="grid grid-cols-2 gap-2.5">
           <Stat
             icon={<BriefcaseIcon width={20} height={20} />}
             label="Work history"
-            value={String(stats.completedJobs)}
+            value={String(record.stats.completed_jobs)}
             caption="Completed jobs"
           />
           <Stat
             icon={<ChartIcon width={20} height={20} />}
             label="Performance"
-            value={formatPercent(stats.onTimeRate)}
-            caption="on-time"
+            // There is no on-time data to measure, so this is the completion
+            // rate: jobs completed out of those the worker was responsible for.
+            value={
+              record.stats.completion_rate === null ? "—" : formatPercent(record.stats.completion_rate)
+            }
+            caption="completed"
           />
           <Stat
             icon={<PeopleIcon width={20} height={20} />}
             label="Repeat hires"
-            value={String(stats.repeatHires)}
+            value={String(record.stats.repeat_hires)}
           />
           <Stat
             icon={<WarningIcon width={20} height={20} />}
             label="Dispute"
-            value={String(stats.disputes)}
+            value={String(record.stats.disputes)}
           />
         </div>
 
         <section className="flex flex-col gap-3">
-          <div className="overflow-hidden rounded-lg bg-white shadow-1">
-            <h2 className="bg-primary-25 px-3 py-4 text-body-md text-grey-900">Verified outcomes</h2>
-            <ul>
-              {record.outcomes.map((outcome) => (
-                <li
-                  key={outcome.id}
-                  className="flex items-center gap-3 border-t border-stroke px-3 py-2"
-                >
-                  <CheckIcon className="shrink-0 text-grey-900" />
-                  <span className="flex flex-1 flex-col">
-                    <span className="text-body-sm font-medium text-grey-900">{outcome.title}</span>
-                    <span className="text-body-sm text-grey-800">
-                      {formatNumericDate(outcome.date)}· {formatNairaWhole(outcome.amount)}
-                    </span>
-                  </span>
-                  <span className="text-xs leading-4 text-grey-900">{outcome.status}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          {/* No design yet for the full list. */}
-          <span
-            aria-disabled="true"
+          <OutcomeList outcomes={record.outcomes.slice(0, OUTCOME_PREVIEW)} />
+          <Link
+            href="/worker/profile/record/outcomes"
             className="flex items-center gap-2 self-end text-body-sm font-medium text-grey-900"
           >
             view all outcomes
             <ArrowRightIcon width={20} height={20} />
-          </span>
+          </Link>
         </section>
 
         <div className="flex flex-col items-center gap-3 pb-4">
+          {exportError && (
+            <p role="alert" className="text-body-sm text-error">
+              {exportError}
+            </p>
+          )}
           <Button
             size="lg"
             className="w-56 rounded-xl px-0 text-body-lg font-semibold"
-            onClick={() => exportRecord(record)}
+            disabled={exporting}
+            onClick={exportRecord}
           >
             <DownloadIcon />
-            Export record
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            className="w-56 rounded-xl px-0 text-body-lg font-semibold"
-            onClick={() => setSharing(true)}
-          >
-            <ShareIcon />
-            Share record
+            {exporting ? "Exporting…" : "Export record"}
           </Button>
         </div>
       </div>
-
-      <ShareRecordDialog open={sharing} onClose={() => setSharing(false)} />
+      )}
+      </RecordGate>
     </main>
   );
 }

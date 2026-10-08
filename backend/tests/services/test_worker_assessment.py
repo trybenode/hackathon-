@@ -1,6 +1,7 @@
 """Verify persisted-history scoring and assessment reuse."""
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -64,6 +65,9 @@ async def test_assess_worker_scores_persisted_verified_history(
     assert result.band == "High"
     assert result.confidence > 0
     assert result.status == "Scored"
+    assert result.score is not None and result.score >= Decimal("0.80")
+    stored = await session.get(TrustAssessment, result.id)
+    assert stored.score == result.score
 
 
 @pytest.mark.asyncio
@@ -89,3 +93,27 @@ async def test_assess_worker_reuses_assessment_when_inputs_unchanged(
     assert calls == 1
     assert assessment_count == 1
     assert second.id == first.id
+    assert second.score == first.score
+
+
+@pytest.mark.asyncio
+async def test_assessment_stored_without_a_score_gets_one_on_reuse(
+    session: AsyncSession, worker
+) -> None:
+    """Assessments saved before the score column existed are filled in once."""
+
+    await add_outcomes(session, worker.id)
+    first = await assessment_service.assess_worker(session, worker.id, "generic")
+    stored = await session.get(TrustAssessment, first.id)
+    stored.score = None
+    await session.flush()
+
+    again = await assessment_service.assess_worker(session, worker.id, "generic")
+
+    assessment_count = await session.scalar(
+        select(func.count()).select_from(TrustAssessment)
+    )
+    assert again.id == first.id
+    assert again.score == first.score
+    assert stored.score == first.score
+    assert assessment_count == 1

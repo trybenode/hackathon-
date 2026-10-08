@@ -6,12 +6,13 @@ import { ArrowLeftIcon } from "@/components/worker/icons";
 import { ChevronRightIcon, RecordIcon, VerifiedIcon } from "@/components/worker/recordIcons";
 import { ScoreRing } from "@/components/worker/ScoreRing";
 import { TrustBandBadge } from "@/components/worker/TrustBandBadge";
+import { RecordGate } from "@/components/worker/RecordGate";
+import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
 import { initialsOf } from "@/lib/workerMock";
-import { workerRecord } from "@/lib/workerRecordMock";
 
 export function Profile() {
   const router = useRouter();
-  const record = workerRecord;
+  const { data: record, error, loading } = useWorkerRecord();
 
   return (
     <main className="flex flex-col">
@@ -22,6 +23,8 @@ export function Profile() {
         <h1 className="text-body-lg font-semibold text-grey-900">Profile</h1>
       </header>
 
+      <RecordGate loading={loading} error={error}>
+      {record && (
       <div className="flex flex-col gap-8 px-6 pt-8">
         <section className="flex flex-col items-center gap-1 border-b border-stroke pb-5">
           <span className="mb-3 flex h-20 w-20 items-center justify-center rounded-pill bg-primary-500 text-h3 font-medium text-white">
@@ -29,24 +32,24 @@ export function Profile() {
           </span>
           <p className="flex items-center gap-1.5 text-body-md font-medium text-grey-900">
             {record.name}
-            {record.identityVerified && (
+            {record.identity_verified && (
               <VerifiedIcon className="text-success" aria-label="Identity verified" role="img" />
             )}
           </p>
           <p className="text-body-sm text-grey-900">{record.role}</p>
         </section>
 
-        <section className="flex flex-col gap-4 rounded-xl border border-stroke bg-white p-4">
+        <section className="flex flex-col gap-5 rounded-xl border border-stroke bg-white px-4 pt-5 pb-7">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-body-sm font-medium text-grey-900">Trust Band</h2>
+            <h2 className="text-body-md text-grey-900">Trust Band</h2>
             <TrustBandBadge band={record.assessment.band} />
           </div>
-          <div className="flex items-center gap-3">
-            <ScoreRing score={record.assessment.score} size={44} thickness={5} />
-            <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-4">
+            <ScoreRing score={record.assessment.score} size={48} thickness={5} />
+            <div className="flex flex-col gap-1">
               <p className="text-body-sm text-grey-900">Trust Score</p>
               <p className="text-xs leading-4 text-grey-900">
-                Based on {record.verifiedOutcomes} verified outcomes
+                Based on {record.verified_outcomes} verified outcomes
               </p>
             </div>
           </div>
@@ -64,6 +67,8 @@ export function Profile() {
           <ChevronRightIcon className="shrink-0 text-grey-900" />
         </Link>
       </div>
+      )}
+      </RecordGate>
     </main>
   );
 }

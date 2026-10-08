@@ -8,11 +8,12 @@ The session is carried by an HTTP-only cookie, so page scripts cannot read it.
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from pydantic import EmailStr, Field
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.session import get_db_session
-from app.models.domain import User
+from app.models.domain import AgreementStatus, GuarantorAgreement, User, Worker
 from app.schemas.api import ApiModel
 from app.services import auth as auth_service
 from app.services.auth import (
@@ -49,6 +50,35 @@ class SignedInUser(ApiModel):
     user_id: str
     email: str
     display_name: str
+    #: Has a worker profile.
+    is_worker: bool = False
+    #: Has been asked to stand behind a worker. Drafts the platform has not
+    #: sent yet do not count.
+    is_guarantor: bool = False
+
+
+async def _signed_in(session: AsyncSession, user: User) -> SignedInUser:
+    """Who signed in, and which sides of the app they have, so the screens
+    can send them to the right place."""
+
+    is_worker = await session.scalar(select(exists().where(Worker.user_id == user.id)))
+    is_guarantor = await session.scalar(
+        select(
+            exists().where(
+                GuarantorAgreement.guarantor_user_id == user.id,
+                GuarantorAgreement.status.not_in(
+                    (AgreementStatus.DRAFT, AgreementStatus.REQUESTED)
+                ),
+            )
+        )
+    )
+    return SignedInUser(
+        user_id=str(user.id),
+        email=user.email,
+        display_name=user.display_name,
+        is_worker=bool(is_worker),
+        is_guarantor=bool(is_guarantor),
+    )
 
 
 def _http_error(error: AuthError) -> HTTPException:
@@ -124,16 +154,15 @@ async def verify_code(
         max_age=int(auth_service.SESSION_TTL.total_seconds()),
         path="/",
     )
-    return SignedInUser(
-        user_id=str(user.id), email=user.email, display_name=user.display_name
-    )
+    return await _signed_in(session, user)
 
 
 @router.get("/me", response_model=SignedInUser, summary="Who is signed in")
-async def me(user: User = Depends(current_user)) -> SignedInUser:
-    return SignedInUser(
-        user_id=str(user.id), email=user.email, display_name=user.display_name
-    )
+async def me(
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> SignedInUser:
+    return await _signed_in(session, user)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, summary="End the session")

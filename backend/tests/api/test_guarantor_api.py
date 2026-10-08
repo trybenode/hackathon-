@@ -28,7 +28,6 @@ def create_payload(worker: Worker, **overrides: object) -> dict:
         },
         "scope": "Domestic cleaning jobs up to NGN 50,000",
         "conditions": "Covers no-show and property damage claims.",
-        "valid_until": (datetime.now(tz=UTC) + timedelta(days=30)).isoformat(),
     }
     payload.update(overrides)
     return payload
@@ -284,5 +283,37 @@ async def test_expire_due_endpoint_closes_overdue_instruments(
 
         detail = await client.get(f"/api/v1/guarantor-instruments/{instrument_id}")
         assert detail.json()["status"] == "Expired"
+
+    app.dependency_overrides.clear()
+
+
+async def test_unreachable_storage_returns_503(
+    session: AsyncSession, worker: Worker, monkeypatch
+) -> None:
+    """A dropped connection to the bucket asks the guarantor to retry, not a 500."""
+
+    from app.services import document_store as document_store_module
+    from app.services.document_store import DocumentStorageError
+
+    class Unreachable:
+        name = "unreachable"
+
+        async def store(self, *, filename: str, content: bytes, prefix: str):
+            raise DocumentStorageError("We could not upload your document.")
+
+    monkeypatch.setattr(document_store_module, "default_document_store", Unreachable())
+
+    async with client_for(session) as client:
+        created = await client.post("/api/v1/guarantor-instruments", json=create_payload(worker))
+        instrument_id = created.json()["instrument_id"]
+        await client.post(f"/api/v1/guarantor-instruments/{instrument_id}/sign", json=SIGN_PAYLOAD)
+
+        response = await pass_identity(client, instrument_id)
+
+        assert response.status_code == 503
+        assert "Try again" in response.json()["detail"]
+        # Still waiting on the checks, so the guarantor can resubmit.
+        detail = (await client.get(f"/api/v1/guarantor-instruments/{instrument_id}")).json()
+        assert detail["status"] == "Pending Verification"
 
     app.dependency_overrides.clear()

@@ -166,7 +166,6 @@ class GuarantorInstrumentCreateRequest(ApiModel):
     job_id: UUID | None = None
     scope: str = Field(min_length=1, max_length=1000)
     conditions: str = Field(min_length=1, max_length=2000)
-    valid_until: datetime
     #: Keep the instrument in Draft instead of sending it for signature.
     as_draft: bool = False
 
