@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.models.domain import Dispute, DisputeStatus, EscrowStatus, EscrowTransaction, IdentityVerification, InsurancePolicy, InsuranceStatus, Job, JobConfirmation, JobStatus, JobType, NormalizedOutcome, OutcomeStatus, ProviderOperation, ProviderOperationStatus, User, Worker
 from app.models.portability import Review
 from app.schemas.portability import ReviewEligibility, ReviewRequest, ReviewResponse
+from app.schemas.portability import CustomerJobPage
 from app.services.portability import FeatureError, audit, aware, digest, now
 from app.services.trust_scoring.assessment import assess_worker
 
@@ -116,3 +117,12 @@ async def submit_review(session: AsyncSession, user: User, job_id: UUID, payload
     audit(session, user.id, "review", row.id, "submitted", {"job_id": str(job_id), "sandbox_identity": result.sandbox_identity})
     await assess_worker(session, outcome.worker_id, "generic")
     return review_response(row)
+
+
+async def customer_jobs(session: AsyncSession, user: User, page: int, size: int) -> "CustomerJobPage":
+    """Paginate jobs attributed to the current hiring customer only."""
+    from math import ceil
+    from app.schemas.portability import CustomerJob, CustomerJobPage
+    total = await session.scalar(select(func.count()).select_from(Job).where(Job.client_id == user.id))
+    rows = (await session.scalars(select(Job).where(Job.client_id == user.id).order_by(Job.created_at.desc(), Job.id).offset((page-1)*size).limit(size))).all()
+    return CustomerJobPage(items=[CustomerJob(id=job.id, title=job.title, status=job.status.value, created_at=job.created_at) for job in rows], total=total, page=page, size=size, pages=ceil(total/size))

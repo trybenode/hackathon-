@@ -25,11 +25,11 @@ from app.models.domain import (
     TrustPolicy,
     Worker,
 )
-from app.services.normalisation import normalise_db_row
+from app.services.trust_scoring.evidence import scoring_inputs
 from app.services.trust_scoring.scoring import PRESETS, PlatformConfig, score_worker
 from app.services.trust_scoring.signals import aggregate
 
-SCORING_VERSION = "2"
+SCORING_VERSION = "3"
 
 # blank template that defines exactly what information will be handed back at the end
 @dataclass(frozen=True)
@@ -138,7 +138,8 @@ async def assess_worker(
         ).all()
     )
 
-    fingerprint = _fingerprint(outcomes, platform_type, config)
+    canonical_jobs = await scoring_inputs(session, outcomes)
+    fingerprint = hashlib.sha256(f"{_fingerprint(outcomes, platform_type, config)}:{json.dumps(canonical_jobs, sort_keys=True, default=str)}".encode()).hexdigest()
     if job_context:
         fingerprint = hashlib.sha256(
             f"{fingerprint}:{json.dumps(job_context, sort_keys=True)}".encode()
@@ -177,7 +178,6 @@ async def assess_worker(
         )
 
     tracked = set(config.weights)
-    canonical_jobs = [normalise_db_row(row) for row in outcomes]
     signals, job_count = aggregate(canonical_jobs, tracked)
     result = score_worker(signals, job_count, config)
     score = Decimal(str(result["score"])) if result["score"] is not None else None

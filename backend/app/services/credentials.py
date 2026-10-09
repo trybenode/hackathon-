@@ -30,6 +30,8 @@ from app.models.domain import (
     TrustAssessment,
     Worker,
 )
+from app.services.trust_scoring.evidence import scoring_inputs
+
 from app.schemas.api import (
     CredentialsExportResponse,
     TrustSummary,
@@ -174,20 +176,21 @@ async def export_credentials(
     credential_id = uuid4()
     outcome_claims: list[dict[str, Any]] = []
     response_outcomes: list[VerifiedOutcome] = []
-    for outcome in outcomes:
+    inputs = await scoring_inputs(session, outcomes)
+    for outcome, evidence in zip(outcomes, inputs, strict=True):
         outcome_claim = {
             "outcome_id": str(outcome.id),
             "outcome_key": outcome.outcome_key,
             "job_id": str(outcome.job_id) if outcome.job_id else None,
             "source_platform": outcome.source_platform,
-            "status": outcome.status.value,
+            "status": evidence["status"],
             "occurred_at": outcome.occurred_at.isoformat(),
             "rating": float(outcome.rating) if outcome.rating is not None else None,
             "cancelled_by": outcome.cancelled_by,
             "dispute_resolution": outcome.dispute_resolution,
             "flags": outcome.quality_flags or [],
             "client_id": outcome.client_id,
-            "available_signals": outcome.available_signals,
+            "available_signals": evidence["available_signals"],
             "verification_method": outcome.verification_method,
             "verified_by_org_id": str(outcome.verified_by_org_id) if outcome.verified_by_org_id else None,
             "verified_at": outcome.verified_at.isoformat() if outcome.verified_at else None,
@@ -198,14 +201,14 @@ async def export_credentials(
                 outcome_id=outcome.id,
                 job_id=outcome.job_id,
                 source_platform=outcome.source_platform,
-                status=outcome.status.value,
+                status=evidence["status"],
                 occurred_at=outcome.occurred_at,
                 rating=float(outcome.rating) if outcome.rating is not None else None,
             )
         )
 
-    completed_count = sum(item.status is OutcomeStatus.COMPLETED for item in outcomes)
-    completion_rate = completed_count / len(outcomes) if outcomes else 0.0
+    responsible = [item for item in inputs if "completion_rate" in item["available_signals"] and not (item["status"] == "cancelled" and item["cancelled_by"] in {"client", "platform"})]
+    completion_rate = sum(item["status"] == "completed" for item in responsible) / len(responsible) if responsible else None
     token = sign_bundle(
         {
             "iss": "dynamic-trust-infrastructure",
