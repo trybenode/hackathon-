@@ -10,6 +10,7 @@ import { formatShortDate } from "@/lib/workerMock";
 import { RecordGate } from "@/components/worker/RecordGate";
 import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
 import type { Credentials } from "@/lib/workerRecord";
+import { ImportRecordDialog } from "./ImportRecordDialog";
 import { GuarantorDialog } from "./GuarantorDialog";
 
 function Check({ children }: { children: ReactNode }) {
@@ -26,12 +27,16 @@ function CredentialCard({
   checks,
   footer,
   onOpen,
+  verified = false,
+  label = "Recorded",
 }: {
   title: string;
   checks: ReactNode;
   footer: string;
   /** Makes the footer a button that opens more detail. */
   onOpen?: () => void;
+  verified?: boolean;
+  label?: string;
 }) {
   const footerText = <span className="text-xs leading-4 text-grey-900">{footer}</span>;
 
@@ -39,7 +44,7 @@ function CredentialCard({
     <article className="flex flex-col gap-4 rounded-xl border border-stroke bg-white p-4 pt-6">
       <header className="flex items-center justify-between gap-3">
         <h2 className="text-body-md font-semibold text-grey-900">{title}</h2>
-        <VerificationBadge status="verified" className="py-0.5 text-body-sm" />
+        {verified ? <VerificationBadge status="verified" className="py-0.5 text-body-sm" /> : <span className="text-body-sm text-grey-600">{label}</span>}
       </header>
       <ul className="flex flex-col gap-1">{checks}</ul>
       <div className="border-t border-stroke pt-4 pb-2">
@@ -66,7 +71,8 @@ function CredentialCard({
  */
 export function CredentialList() {
   const router = useRouter();
-  const { data, error, loading } = useWorkerRecord();
+  const { data, error, loading, refresh } = useWorkerRecord();
+  const [importOpen, setImportOpen] = useState(false);
 
   return (
     <main className="flex flex-col">
@@ -77,14 +83,15 @@ export function CredentialList() {
         <h1 className="text-body-lg font-semibold text-grey-900">Verified Credentials</h1>
       </header>
 
-      <RecordGate loading={loading} error={error}>
-        {data && <CredentialCards credentials={data.credentials} />}
+      <RecordGate loading={loading} error={error} onRetry={refresh} hasData={!!data}>
+        {data && <><CredentialCards credentials={data.credentials} onImport={() => setImportOpen(true)} />{data.self_declared_outcomes > 0 && <p className="px-6 py-4 text-body-sm">{data.self_declared_outcomes} self-declared records are listed separately in your work history.</p>}</>}
       </RecordGate>
+      {data && <ImportRecordDialog workerId={data.worker_id} open={importOpen} onClose={() => setImportOpen(false)} onImported={refresh} />}
     </main>
   );
 }
 
-function CredentialCards({ credentials }: { credentials: Credentials }) {
+function CredentialCards({ credentials, onImport }: { credentials: Credentials; onImport: () => void }) {
   const [guarantorOpen, setGuarantorOpen] = useState(false);
   const { identity, guarantor, imported_record: importedRecord } = credentials;
   const none = !identity && !guarantor && !importedRecord;
@@ -98,28 +105,34 @@ function CredentialCards({ credentials }: { credentials: Credentials }) {
         {identity && (
           <CredentialCard
             title="Identity Verification"
+            verified={identity.status === "verified"}
+            label={identity.status === "sandbox" ? "Sandbox · demo" : "Not verified"}
             checks={
               <>
+                <li className="text-body-sm">{identity.status === "sandbox" ? "Successful sandbox check" : identity.status === "verified" ? "Identity provider check passed" : "Latest identity check did not verify identity"}</li>
                 {identity.nin_verified && <Check>NIN verified</Check>}
                 {identity.bvn_verified && <Check>BVN verified</Check>}
               </>
             }
-            footer={`Verified - ${formatShortDate(identity.verified_at)}`}
+            footer={`Checked - ${formatShortDate(identity.verified_at)}`}
           />
         )}
 
         {guarantor && (
           <CredentialCard
-            title="Active Guarantor"
+            title="Guarantor Agreement"
+            verified={guarantor.verified && guarantor.status === "Active"}
+            label={guarantor.sandbox ? "Sandbox · demo" : guarantor.status}
             checks={
               <>
                 <Check>Guarantor linked</Check>
+                {!guarantor.verified && !guarantor.sandbox && <li className="text-body-sm text-grey-600">Identity/liveness evidence is not verified</li>}
                 {guarantor.status === "Active" ? (
                   <Check>Agreement active</Check>
                 ) : (
                   <li className="flex items-center gap-2 text-body-sm text-grey-900">
                     <ClockIcon className="shrink-0 text-grey-600" />
-                    Agreement expired
+                    Agreement {guarantor.status.toLowerCase()}
                   </li>
                 )}
               </>
@@ -127,7 +140,7 @@ function CredentialCards({ credentials }: { credentials: Credentials }) {
             footer={
               guarantor.status === "Active"
                 ? `Activated - ${formatShortDate(guarantor.activated_at)}`
-                : `Expired - ${formatShortDate(guarantor.valid_until)}`
+                : `${guarantor.status} · Term ends ${formatShortDate(guarantor.valid_until)}`
             }
             onOpen={() => setGuarantorOpen(true)}
           />
@@ -136,14 +149,14 @@ function CredentialCards({ credentials }: { credentials: Credentials }) {
         {importedRecord && (
           <CredentialCard
             title="Imported Work Record"
+            verified={true}
             checks={<Check>{importedRecord.verified_outcomes} verified outcomes</Check>}
             footer={`Updated - ${formatRelative(importedRecord.updated_at)}`}
           />
         )}
 
-        {/* Importing is the portable credentials import (Abdul's side) and has
-            no screen yet, so the button is in place but does nothing. */}
         <Button
+          onClick={onImport}
           variant="outline"
           size="lg"
           className="mt-4 mb-4 w-46 self-center rounded-xl px-0 text-body-md font-semibold"
