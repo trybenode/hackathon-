@@ -17,6 +17,9 @@ import { RecordGate } from "@/components/worker/RecordGate";
 import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
 import { ScoreRing } from "@/components/worker/ScoreRing";
 import { TrustBandBadge } from "@/components/worker/TrustBandBadge";
+import { AssessmentConfidence } from "@/components/worker/AssessmentConfidence";
+import { ShareVerification } from "./ShareVerification";
+import { PlatformApprovals } from "./PlatformApprovals";
 import { Button } from "@/components/ui";
 import { formatShortDate, initialsOf } from "@/lib/workerMock";
 import { exportCredentials, formatPercent, shortName } from "@/lib/workerRecord";
@@ -41,7 +44,7 @@ function Stat({
         {icon}
       </span>
       <div className="flex min-w-0 flex-col gap-1.5 pt-0.5">
-        <p className="text-body-md whitespace-nowrap text-grey-900">{label}</p>
+        <p className="text-body-md text-grey-900">{label}</p>
         <p className="text-body-lg font-semibold text-grey-900">{value}</p>
         {caption && <p className="text-body-sm text-grey-600">{caption}</p>}
       </div>
@@ -63,7 +66,7 @@ async function saveExport(workerId: string, name: string) {
 
 export function PortableRecord() {
   const router = useRouter();
-  const { data: record, error, loading } = useWorkerRecord();
+  const { data: record, error, loading, refresh } = useWorkerRecord();
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -89,7 +92,7 @@ export function PortableRecord() {
         <h1 className="text-body-lg font-semibold text-grey-900">Portable Record</h1>
       </header>
 
-      <RecordGate loading={loading} error={error}>
+      <RecordGate loading={loading} error={error} onRetry={refresh} hasData={!!record}>
       {record && (
       <div className="flex flex-col gap-6 px-6 pt-4">
         <section className="flex flex-col gap-4">
@@ -118,6 +121,8 @@ export function PortableRecord() {
             </div>
           </div>
 
+          <AssessmentConfidence assessment={record.assessment} />
+          <p className="text-body-sm text-grey-600">{record.self_declared_outcomes} self-declared records · {record.starting_rating_label ?? "No starting-history assessment"}. Self-declared history does not establish verified trust.</p>
           <p className="px-2 text-body-sm text-grey-900">
             Last updated - {formatShortDate(record.last_updated)}
           </p>
@@ -151,13 +156,13 @@ export function PortableRecord() {
           />
           <Stat
             icon={<PeopleIcon width={20} height={20} />}
-            label="Repeat hires"
-            value={String(record.stats.repeat_hires)}
+            label="Known repeat hires"
+            value={record.stats.repeat_hires === null ? "Unknown" : String(record.stats.repeat_hires)}
           />
           <Stat
             icon={<WarningIcon width={20} height={20} />}
-            label="Dispute"
-            value={String(record.stats.disputes)}
+            label="Reported disputes"
+            value={record.stats.disputes === null ? "Unknown" : String(record.stats.disputes)}
           />
         </div>
 
@@ -172,6 +177,8 @@ export function PortableRecord() {
           </Link>
         </section>
 
+        <ShareVerification summary={record.public_summary} refresh={refresh} />
+        <PlatformApprovals />
         <div className="flex flex-col items-center gap-3 pb-4">
           {exportError && (
             <p role="alert" className="text-body-sm text-error">

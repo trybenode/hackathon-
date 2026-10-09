@@ -46,7 +46,7 @@ export function WorkerDialog({
         if (event.target === ref.current) onClose();
       }}
       className={cn(
-        "m-auto w-[min(26rem,calc(100vw-2rem))] rounded-xl bg-white p-6 text-grey-900 shadow-3",
+        "m-auto max-h-[90dvh] overflow-y-auto w-[min(26rem,calc(100vw-2rem))] rounded-xl bg-white p-6 text-grey-900 shadow-3",
         "backdrop:bg-navy-500/40",
         className,
       )}

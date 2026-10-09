@@ -37,6 +37,7 @@ class VerificationSummary(ApiModel):
 
 
 class HistoryItem(ApiModel):
+    completion_status: str = "Recorded work"
     outcome_id: UUID
     source_record_id: str
     source_platform: str
@@ -60,6 +61,7 @@ class WorkerRecord(VerificationSummary):
 
 
 class GrantResponse(ApiModel):
+    operation_id: UUID | None = None
     id: UUID
     created_at: datetime
     expires_at: datetime
@@ -173,3 +175,18 @@ class ApiError(ApiModel):
     model_config = ConfigDict(extra="forbid", json_schema_extra={"examples": [{"detail": "Worker approval has expired or been revoked.", "code": "CONSENT_EXPIRED"}]})
     detail: str
     code: str
+
+
+class CustomerJob(ApiModel):
+    id: UUID
+    title: str
+    status: str
+    created_at: datetime
+
+
+class CustomerJobPage(ApiModel):
+    items: list[CustomerJob]
+    total: int
+    page: int
+    size: int
+    pages: int

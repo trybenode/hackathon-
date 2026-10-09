@@ -56,6 +56,10 @@ jobs:
         working-directory: backend
         run: pip install -r requirements.txt
 
+      - name: Check upgrades from both previous heads
+        working-directory: backend
+        run: python scripts/check_migration_paths.py
+
       - name: Apply migrations
         working-directory: backend
         # Proves the migrations build the schema from scratch, which a local

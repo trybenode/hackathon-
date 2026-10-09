@@ -3,19 +3,18 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from math import ceil
 import secrets
+import json
 import re
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.domain import AgreementStatus, AuditEvent, GuarantorAgreement, IdentityVerification, NormalizedOutcome, Organization, TrustAssessment, User, Worker
+from app.models.domain import AuditEvent, NormalizedOutcome, Organization, User, Worker
+from app.services.worker_record import WorkerRecord as RecordSnapshot, load_record, completion_labels
+from app.services.trust_scoring.evidence import scoring_inputs
 from app.models.portability import PlatformGrant, PlatformKey, ShareGrant
-from app.schemas.portability import EvidenceAssessment, GrantList, GrantResponse, HistoryItem, IdentitySummary, VerificationSummary, WorkerRecord
-from app.services.normalisation import normalise_db_row
-from app.services.trust_scoring.assessment import assess_worker
-from app.services.trust_scoring.scoring import starting_rating
-from app.services.trust_scoring.signals import aggregate
+from app.schemas.portability import EvidenceAssessment, GrantList, GrantResponse, HistoryItem, HistoryPage, IdentitySummary, VerificationSummary, WorkerRecord
 
 
 class FeatureError(Exception):
@@ -90,59 +89,42 @@ async def history_items(session: AsyncSession, rows: list[NormalizedOutcome]) ->
     if source_ids:
         organizations = (await session.scalars(select(Organization).where(Organization.id.in_(source_ids.values())))).all()
         names = {org.id: org.name for org in organizations}
-    return [history_item(row, names.get(source_ids.get(row.source_platform))) for row in rows]
+    labels = await completion_labels(session, rows)
+    inputs = await scoring_inputs(session, rows)
+    return [history_item(row, names.get(source_ids.get(row.source_platform))).model_copy(update={"completion_status": labels[row.id], "status": evidence["status"], "available_signals": evidence["available_signals"]}) for row, evidence in zip(rows, inputs, strict=True)]
+
+
+def summary_from_record(record: RecordSnapshot) -> VerificationSummary:
+    """Explicit public whitelist; private score, names and history stay private."""
+    parts = record.name.split()
+    name = parts[0] + (f" {parts[-1][0]}." if len(parts) > 1 else "") if parts else "Worker"
+    return VerificationSummary(display_name=name, role=record.role, location=general_area(record.location), identity=IdentitySummary(status=record.identity_status),
+        assessment=EvidenceAssessment(decision=record.decision, band=record.band, confidence=float(record.confidence), status=record.status, explanation_summary=record.explanation_summary, signals_used=record.signals_used, assessed_at=record.assessed_at),
+        verified_outcomes=record.verified_outcomes, self_declared_outcomes=record.self_declared_outcomes, completed_jobs=record.completed_jobs, completion_rate=record.completion_rate,
+        active_guarantor=bool(record.guarantor and record.guarantor.status == "Active" and (record.guarantor.verified or record.guarantor.sandbox)), guarantor_sandbox=bool(record.guarantor and record.guarantor.status == "Active" and record.guarantor.sandbox), updated_at=record.last_updated)
 
 
 async def worker_record(session: AsyncSession, worker: Worker, *, page: int = 1, size: int = 20) -> WorkerRecord:
-    """Build current private/public evidence using the shared assessment service."""
-    # Serialize mutations/assessment refreshes for this worker across endpoints.
-    await session.execute(select(Worker.id).where(Worker.id == worker.id).with_for_update())
-    result = await assess_worker(session, worker.id, "generic")
-    assessment_row = await session.get(TrustAssessment, result.id)
+    """Compatibility projection of the canonical worker snapshot."""
     user = await session.get(User, worker.user_id)
-    if user is None or not user.is_active:
-        raise FeatureError(404, "WORKER_NOT_FOUND", "Worker record is unavailable.")
-    counts = (await session.execute(select(func.count(NormalizedOutcome.id),
-        func.count(NormalizedOutcome.id).filter(NormalizedOutcome.verified.is_(True)),
-        func.count(NormalizedOutcome.id).filter(NormalizedOutcome.verified.is_(True), NormalizedOutcome.status == "COMPLETED")
-        ).where(NormalizedOutcome.worker_id == worker.id))).one()
-    total, verified, completed = counts
-    rows = list((await session.scalars(select(NormalizedOutcome).where(NormalizedOutcome.worker_id == worker.id)
-        .order_by(NormalizedOutcome.occurred_at.desc(), NormalizedOutcome.id).offset((page-1)*size).limit(size))).all())
-    identity = await session.scalar(select(IdentityVerification).where(IdentityVerification.user_id == user.id,
-        IdentityVerification.check_type == "identity").order_by(IdentityVerification.created_at.desc(), IdentityVerification.id.desc()).limit(1))
-    identity_status = "not_verified"
-    if identity and identity.status == "verified":
-        identity_status = "sandbox" if identity.provider == "stub" else "verified"
-    guarantors = list((await session.scalars(select(GuarantorAgreement).where(GuarantorAgreement.worker_id == worker.id,
-        GuarantorAgreement.status == AgreementStatus.ACTIVE, GuarantorAgreement.valid_until > now()))).all())
-    guarantor_sandbox = False
-    for guarantor in guarantors:
-        check = await session.scalar(select(IdentityVerification).where(IdentityVerification.user_id == guarantor.guarantor_user_id,
-            IdentityVerification.check_type == "identity").order_by(IdentityVerification.created_at.desc()).limit(1))
-        guarantor_sandbox = guarantor_sandbox or check is None or check.provider == "stub" or check.status != "verified"
-    imported = list((await session.scalars(select(NormalizedOutcome).where(NormalizedOutcome.worker_id == worker.id,
-        NormalizedOutcome.verified.is_(False)))).all())
-    initial = None
-    if imported:
-        signals, n = aggregate([normalise_db_row(r) for r in imported], {"completion_rate", "cancellation_rate"})
-        initial = starting_rating(signals, n)
-    parts = user.display_name.split()
-    short_name = parts[0] + (f" {parts[-1][0]}." if len(parts) > 1 else "") if parts else "Worker"
-    return WorkerRecord(worker_id=worker.id, display_name=short_name, role=worker.role, location=general_area(worker.location),
-        identity=IdentitySummary(status=identity_status),
-        assessment=EvidenceAssessment(decision=result.decision, band=result.band, confidence=float(result.confidence),
-            status=result.status, explanation_summary=result.explanation_summary, signals_used=result.signals_used,
-            assessed_at=assessment_row.assessed_at),
-        verified_outcomes=verified, self_declared_outcomes=total-verified, completed_jobs=completed,
-        completion_rate=completed/verified if verified else None, active_guarantor=bool(guarantors), guarantor_sandbox=guarantor_sandbox,
-        updated_at=now(), outcomes=await history_items(session, rows), total_outcomes=total,
-        starting_rating=initial["starting_rating"] if initial else None, starting_rating_label=initial["label"] if initial else None)
+    snapshot = await load_record(session, user, include_history=False)
+    rows = list((await session.scalars(select(NormalizedOutcome).where(NormalizedOutcome.worker_id == worker.id).order_by(NormalizedOutcome.occurred_at.desc(), NormalizedOutcome.id).offset((page-1)*size).limit(size))).all())
+    return WorkerRecord(**summary_from_record(snapshot).model_dump(), worker_id=worker.id, outcomes=await history_items(session, rows), total_outcomes=snapshot.total_outcomes, starting_rating=snapshot.starting_rating, starting_rating_label=snapshot.starting_rating_label)
 
 
-async def issue_grant(session: AsyncSession, user: User, *, organization_id: UUID | None = None, permissions: list[str] | None = None) -> GrantResponse:
+async def issue_grant(session: AsyncSession, user: User, *, organization_id: UUID | None = None, permissions: list[str] | None = None, operation_id: UUID | None = None) -> GrantResponse:
     """Issue a seven-day grant; disclose its random token only once."""
     worker = await own_worker(session, user)
+    await session.execute(select(Worker.id).where(Worker.id == worker.id).with_for_update())
+    model = ShareGrant if organization_id is None else PlatformGrant
+    payload_hash = digest(json.dumps({"organization_id": str(organization_id) if organization_id else None, "permissions": sorted(set(permissions or []))}, sort_keys=True))
+    if operation_id is not None:
+        existing = await session.scalar(select(model).where(model.worker_id == worker.id, model.operation_id == operation_id))
+        if existing is not None:
+            if existing.payload_hash != payload_hash:
+                raise FeatureError(409, "IDEMPOTENCY_CONFLICT", "This operation identifier was already used with different approval details.")
+            organization = await session.get(Organization, organization_id) if organization_id else None
+            return grant_response(existing, organization_name=organization.name if organization else None)
     organization = None
     if organization_id is not None:
         organization = await session.get(Organization, organization_id)
@@ -150,7 +132,7 @@ async def issue_grant(session: AsyncSession, user: User, *, organization_id: UUI
         if not organization or not enabled:
             raise FeatureError(404, "PLATFORM_NOT_FOUND", "This platform is not available for consent.")
     token = secrets.token_urlsafe(32)
-    fields = dict(worker_id=worker.id, token_hash=digest(token), expires_at=now()+timedelta(days=7))
+    fields = dict(worker_id=worker.id, operation_id=operation_id, payload_hash=payload_hash, token_hash=digest(token), expires_at=now()+timedelta(days=7))
     grant = ShareGrant(**fields) if organization is None else PlatformGrant(**fields, organization_id=organization.id, permissions=sorted(set(permissions or [])))
     session.add(grant)
     await session.flush()
@@ -160,7 +142,7 @@ async def issue_grant(session: AsyncSession, user: User, *, organization_id: UUI
 
 def grant_response(grant: ShareGrant | PlatformGrant, *, token: str | None = None, organization_name: str | None = None) -> GrantResponse:
     """Return metadata without retaining or recovering a bearer token."""
-    return GrantResponse(id=grant.id, created_at=grant.created_at, expires_at=grant.expires_at, revoked_at=grant.revoked_at,
+    return GrantResponse(operation_id=grant.operation_id, id=grant.id, created_at=grant.created_at, expires_at=grant.expires_at, revoked_at=grant.revoked_at,
         token=token, organization_id=getattr(grant, "organization_id", None), organization_name=organization_name,
         permissions=getattr(grant, "permissions", None))
 
@@ -199,5 +181,27 @@ async def public_summary(session: AsyncSession, token: str) -> VerificationSumma
     if grant.revoked_at is not None or aware(grant.expires_at) <= now():
         raise FeatureError(410, "LINK_UNAVAILABLE", "This link has expired or been revoked.")
     worker = await session.get(Worker, grant.worker_id)
-    record = await worker_record(session, worker)
-    return VerificationSummary.model_validate(record.model_dump(include=set(VerificationSummary.model_fields)))
+    if worker is None:
+        raise FeatureError(404, "WORKER_NOT_FOUND", "Worker record is unavailable.")
+    user = await session.get(User, worker.user_id)
+    if user is None or not user.is_active:
+        raise FeatureError(404, "WORKER_NOT_FOUND", "Worker record is unavailable.")
+    return summary_from_record(await load_record(session, user, include_history=False, include_starting_history=False))
+
+
+async def grant_operation(session: AsyncSession, user: User, model: type[ShareGrant] | type[PlatformGrant], operation_id: UUID) -> GrantResponse:
+    """Reconcile an owned operation; hashes cannot recover the returned secret."""
+    worker = await own_worker(session, user)
+    grant = await session.scalar(select(model).where(model.worker_id == worker.id, model.operation_id == operation_id))
+    if grant is None:
+        raise FeatureError(404, "OPERATION_NOT_FOUND", "This operation has not completed. Retry using the same identifier.")
+    organization = await session.get(Organization, grant.organization_id) if isinstance(grant, PlatformGrant) else None
+    return grant_response(grant, organization_name=organization.name if organization else None)
+
+
+async def own_history(session: AsyncSession, user: User, page: int, size: int) -> HistoryPage:
+    """Paginate every outcome belonging to the signed-in worker."""
+    worker = await own_worker(session, user)
+    total = await session.scalar(select(func.count()).select_from(NormalizedOutcome).where(NormalizedOutcome.worker_id == worker.id))
+    rows = list((await session.scalars(select(NormalizedOutcome).where(NormalizedOutcome.worker_id == worker.id).order_by(NormalizedOutcome.occurred_at.desc(), NormalizedOutcome.id).offset((page-1)*size).limit(size))).all())
+    return HistoryPage(items=await history_items(session, rows), total=total, page=page, size=size, pages=ceil(total/size))

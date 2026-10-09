@@ -104,11 +104,11 @@ async def test_record_counts_and_history(
     # c1 hired twice.
     assert record.repeat_hires == 1
     assert record.disputes == 1
-    # Completed jobs only, newest first, labelled by how they were confirmed.
+    # Completed records without attributable native confirmations stay recorded work.
     assert len(record.outcomes) == 5
     assert record.outcomes[0].occurred_at > record.outcomes[1].occurred_at
-    assert record.outcomes[1].status == "Auto-released"
-    assert record.outcomes[0].status == "Client Confirmed"
+    assert record.outcomes[1].status == "Recorded work"
+    assert record.outcomes[0].status == "Recorded work"
     assert record.imported_record is not None
     assert record.imported_record.verified_outcomes == 1
     # Six verified outcomes is enough history to be scored.
@@ -150,8 +150,9 @@ async def test_credentials_come_from_checks_and_guarantees(
 
     record = await service.load_record(session, user)
 
-    assert record.identity is not None and record.identity.nin_verified
-    assert record.identity_verified
+    assert record.identity is not None and not record.identity.nin_verified
+    assert record.identity.status == "sandbox"
+    assert not record.identity_verified
     assert record.guarantor is not None
     assert record.guarantor.name == "John Parker"
     assert record.guarantor.status == "Expired"
@@ -165,3 +166,62 @@ async def test_a_user_without_a_worker_profile(session: AsyncSession) -> None:
 
     with pytest.raises(service.NotAWorkerError):
         await service.load_record(session, user)
+
+
+async def test_latest_failed_identity_supersedes_pass(session, worker):
+    user = await session.get(User, worker.user_id)
+    session.add_all([
+        IdentityVerification(user_id=user.id, provider="real", provider_reference="old", status="verified", check_type="identity", created_at=NOW-timedelta(days=1)),
+        IdentityVerification(user_id=user.id, provider="real", provider_reference="new", status="failed", check_type="identity", created_at=NOW),
+    ])
+    await session.flush()
+    record = await service.load_record(session, user)
+    assert record.identity_status == "not_verified"
+    assert not record.identity_verified
+
+
+@pytest.mark.parametrize("status, expires, expected", [
+    (AgreementStatus.SUSPENDED, 7, "Suspended"),
+    (AgreementStatus.REVOKED, 7, "Revoked"),
+    (AgreementStatus.TRIGGERED, 7, "Triggered"),
+    (AgreementStatus.DISPUTED, 7, "Disputed"),
+    (AgreementStatus.ACTIVE, -1, "Expired"),
+])
+async def test_guarantor_preserves_lifecycle(session, worker, status, expires, expected):
+    person = User(email="support@example.com", display_name="Support")
+    session.add(person)
+    await session.flush()
+    session.add(GuarantorAgreement(worker_id=worker.id, guarantor_user_id=person.id, scope="Work", conditions="No show", relationship_type="employer", status=status, verified_at=NOW-timedelta(days=30), valid_until=NOW+timedelta(days=expires)))
+    await session.flush()
+    record = await service.load_record(session, await session.get(User, worker.user_id))
+    assert record.guarantor.status == expected
+    assert not record.guarantor.verified
+
+
+async def test_completed_preview_is_bounded(session, worker, source):
+    for index in range(23):
+        await add_outcome(session, worker, source, days_ago=index)
+    record = await service.load_record(session, await session.get(User, worker.user_id))
+    assert record.completed_jobs == 23
+    assert len(record.outcomes) == 20
+    assert record.disputes is None
+    assert record.repeat_hires is None
+    assert record.band == "Building History"
+
+
+async def test_active_guarantor_requires_both_checks_for_public_support(session, worker):
+    from app.services.portability import summary_from_record
+    person = User(email="sandbox-guarantor@example.com", display_name="Support")
+    session.add(person); await session.flush()
+    session.add_all([
+        GuarantorAgreement(worker_id=worker.id, guarantor_user_id=person.id, scope="Work", conditions="No show", relationship_type="employer", status=AgreementStatus.ACTIVE, verified_at=NOW-timedelta(days=1), valid_until=NOW+timedelta(days=7)),
+        IdentityVerification(user_id=person.id, provider="stub", provider_reference="identity", status="verified", check_type="identity"),
+    ])
+    await session.flush()
+    user = await session.get(User, worker.user_id)
+    record = await service.load_record(session, user)
+    assert not summary_from_record(record).active_guarantor
+    session.add(IdentityVerification(user_id=person.id, provider="stub", provider_reference="liveness", status="verified", check_type="liveness"))
+    await session.flush()
+    summary = summary_from_record(await service.load_record(session, user))
+    assert summary.active_guarantor and summary.guarantor_sandbox

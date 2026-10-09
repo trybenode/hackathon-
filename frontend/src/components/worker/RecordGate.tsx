@@ -5,24 +5,58 @@ export function RecordGate({
   loading,
   error,
   children,
+  onRetry,
+  hasData = false,
 }: {
   loading: boolean;
   error: string | null;
   children: ReactNode;
+  onRetry?: () => void;
+  hasData?: boolean;
 }) {
-  if (loading) {
+  if (loading && !hasData) {
     return (
       <p role="status" className="px-6 pt-8 text-body-sm text-grey-600">
         Loading…
       </p>
     );
   }
-  if (error) {
+  if (error && !hasData) {
     return (
-      <p role="alert" className="px-6 pt-8 text-body-sm text-error">
-        {error}
-      </p>
+      <div className="px-6 pt-8">
+        <p role="alert" className="text-body-sm text-error">
+          {error}
+        </p>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-3 min-h-11 rounded-lg border border-stroke px-4"
+          >
+            Retry record
+          </button>
+        )}
+      </div>
     );
   }
-  return <>{children}</>;
+  return (
+    <>
+      {loading && (
+        <p role="status" className="px-6 pt-3 text-body-sm">
+          Refreshing current evidence…
+        </p>
+      )}
+      {error && (
+        <div role="alert" className="px-6 pt-3 text-body-sm text-error">
+          Current evidence could not be refreshed: {error}.{" "}
+          {onRetry && (
+            <button className="min-h-11 underline" onClick={onRetry}>
+              Retry
+            </button>
+          )}
+        </div>
+      )}
+      {children}
+    </>
+  );
 }

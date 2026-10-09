@@ -9,7 +9,7 @@ from app.core.platform_auth import require_tenant
 from app.db.session import get_db_session
 from app.models.domain import Organization, User
 from app.models.portability import PlatformGrant, PlatformKey, ShareGrant
-from app.schemas.portability import ApiError, GrantList, GrantResponse, HistoryImportRequest, HistoryImportResponse, HistoryPage, PlatformCatalog, PlatformGrantRequest, PlatformOption, ReviewEligibility, ReviewRequest, ReviewResponse, VerificationSummary, WorkerLinkRequest, WorkerLinkResponse, WorkerRecord
+from app.schemas.portability import CustomerJobPage, ApiError, GrantList, GrantResponse, HistoryImportRequest, HistoryImportResponse, HistoryPage, PlatformCatalog, PlatformGrantRequest, PlatformOption, ReviewEligibility, ReviewRequest, ReviewResponse, VerificationSummary, WorkerLinkRequest, WorkerLinkResponse, WorkerRecord
 from app.services import platform_history, portability, reviews
 
 ERRORS = {code: {"model": ApiError} for code in [401, 403, 404, 409, 410, 422, 429, 503]}
@@ -26,8 +26,8 @@ async def record(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100)
 
 
 @router.post("/me/worker/shares", response_model=GrantResponse, status_code=201, summary="Share a standard verification summary")
-async def issue_share(user: User = Depends(current_user), session: AsyncSession = Depends(get_db_session)):
-    result = await portability.issue_grant(session, user)
+async def issue_share(operation_id: UUID | None = Header(None, alias="Idempotency-Key"), user: User = Depends(current_user), session: AsyncSession = Depends(get_db_session)):
+    result = await portability.issue_grant(session, user, operation_id=operation_id)
     await session.commit()
     return result
 
@@ -60,8 +60,8 @@ async def platforms(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=1
 
 
 @router.post("/me/worker/platform-grants", response_model=GrantResponse, status_code=201, summary="Approve a named platform", description="Worker approves read_history, import_history, or both for seven days. The random consent token is returned once; it must be sent privately to the named platform.")
-async def issue_platform_grant(payload: PlatformGrantRequest, user: User = Depends(current_user), session: AsyncSession = Depends(get_db_session)):
-    result = await portability.issue_grant(session, user, organization_id=payload.organization_id, permissions=payload.permissions)
+async def issue_platform_grant(payload: PlatformGrantRequest, operation_id: UUID | None = Header(None, alias="Idempotency-Key"), user: User = Depends(current_user), session: AsyncSession = Depends(get_db_session)):
+    result = await portability.issue_grant(session, user, organization_id=payload.organization_id, permissions=payload.permissions, operation_id=operation_id)
     await session.commit()
     return result
 
@@ -108,3 +108,18 @@ async def review(job_id: UUID, payload: ReviewRequest, request: Request, idempot
     result = await reviews.submit_review(session, user, job_id, payload, idempotency_key)
     await session.commit()
     return result
+
+
+@router.get("/me/worker/shares/operations/{operation_id}", response_model=GrantResponse, summary="Reconcile share creation without recovering its token")
+async def share_operation(operation_id: UUID, user: User = Depends(current_user), session: AsyncSession = Depends(get_db_session)) -> GrantResponse:
+    return await portability.grant_operation(session, user, ShareGrant, operation_id)
+
+
+@router.get("/me/worker/platform-grants/operations/{operation_id}", response_model=GrantResponse, summary="Reconcile platform approval without recovering its token")
+async def platform_operation(operation_id: UUID, user: User = Depends(current_user), session: AsyncSession = Depends(get_db_session)) -> GrantResponse:
+    return await portability.grant_operation(session, user, PlatformGrant, operation_id)
+
+
+@router.get("/me/client/jobs", response_model=CustomerJobPage, summary="List your hiring-customer jobs")
+async def customer_jobs(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100), user: User = Depends(current_user), session: AsyncSession = Depends(get_db_session)) -> CustomerJobPage:
+    return await reviews.customer_jobs(session, user, page, size)

@@ -349,3 +349,112 @@ async def test_explicit_absence_and_unknown_evidence_are_different_payloads(api,
     assert changed.status_code == 409 and changed.json()["code"] == "SOURCE_RECORD_CONFLICT"
     row = await session.scalar(select(NormalizedOutcome))
     assert "dispute_rate" not in row.available_signals
+
+
+@pytest.mark.asyncio
+async def test_canonical_record_and_compatibility_agree_and_history_paginates(api, session):
+    client, _ = api
+    org, headers = await platform(session, attest=True)
+    await link(client, org, headers)
+    payload = {"outcomes": [{"source_record_id": f"past-{i}", "occurred_at": now().isoformat(), "status": "completed", "attest": i % 2 == 0} for i in range(25)]}
+    imported = await client.post("/api/v1/platform/workers/worker-1/history/import", headers={**headers, "Idempotency-Key": "pages"}, json=payload)
+    assert imported.status_code == 200, imported.text
+    canonical = await client.get("/api/v1/me/record")
+    compat = await client.get("/api/v1/me/worker/record")
+    assert canonical.status_code == compat.status_code == 200
+    assert "no-store" in canonical.headers["cache-control"]
+    a, b = canonical.json(), compat.json()
+    for key in ("verified_outcomes", "self_declared_outcomes", "total_outcomes", "starting_rating"):
+        assert a[key] == b[key]
+    assert a["public_summary"] == {key: b[key] for key in a["public_summary"] if key != "updated_at"} | {"updated_at": a["public_summary"]["updated_at"]}
+    page = (await client.get("/api/v1/me/record/history?page=2&size=20")).json()
+    assert page["total"] == 25 and page["pages"] == 2 and len(page["items"]) == 5
+    assert all(item["completion_status"] in {"Recorded work", "Self-declared record"} for item in page["items"])
+    assert (await client.get("/api/v1/me/record/history?size=101")).status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["shares", "platform-grants"])
+async def test_grant_operation_receipts_are_idempotent_owned_and_secret_free(api, session, kind):
+    client, actor = api
+    payload = None
+    if kind == "platform-grants":
+        org, _ = await platform(session)
+        payload = {"organization_id": str(org.id), "permissions": ["read_history"]}
+    operation = str(uuid4())
+    path = f"/api/v1/me/worker/{kind}"
+    first = await client.post(path, headers={"Idempotency-Key": operation}, json=payload)
+    assert first.status_code == 201, first.text
+    grant = first.json()
+    assert grant["token"] and grant["operation_id"] == operation
+    receipt = await client.get(f"{path}/operations/{operation}")
+    assert receipt.status_code == 200
+    assert receipt.json()["id"] == grant["id"] and receipt.json()["token"] is None
+    replay = await client.post(path, headers={"Idempotency-Key": operation}, json=payload)
+    assert replay.json()["id"] == grant["id"] and replay.json()["token"] is None
+    if payload:
+        changed = await client.post(path, headers={"Idempotency-Key": operation}, json={**payload, "permissions": ["import_history"]})
+        assert changed.status_code == 409
+    await client.delete(f"{path}/{grant['id']}")
+    assert (await client.get(f"{path}/operations/{operation}")).json()["revoked_at"] is not None
+    other = User(email="other-owner@example.com", display_name="Other worker")
+    session.add(other); await session.flush()
+    session.add(Worker(user_id=other.id)); await session.commit()
+    actor["user"] = other
+    assert (await client.get(f"{path}/operations/{operation}")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_public_summary_skips_history_and_stays_small(api, monkeypatch):
+    import json
+    from app.services import portability as service
+    client, _ = api
+    grant = (await client.post("/api/v1/me/worker/shares")).json()
+    async def forbidden(*args, **kwargs):
+        raise AssertionError("Public summary must not build private history")
+    monkeypatch.setattr(service, "worker_record", forbidden)
+    result = await client.get(f"/api/v1/verification/{grant['token']}")
+    assert result.status_code == 200, result.text
+    assert len(json.dumps(result.json()).encode()) < 20_000
+    assert "score" not in result.json()["assessment"]
+
+
+@pytest.mark.asyncio
+async def test_session_cookie_security_covers_canonical_record():
+    schema = app.openapi()
+    assert schema["paths"]["/api/v1/me/record"]["get"]["security"] == [{"UserSession": []}]
+    assert schema["paths"]["/api/v1/me/record/history"]["get"]["security"] == [{"UserSession": []}]
+
+
+@pytest.mark.asyncio
+async def test_hiring_customer_job_entry_is_owned_and_paginated(api, session, worker):
+    client, actor = api
+    customer, job, _, _ = await protected_job(session, worker)
+    actor["user"] = customer
+    result = await client.get("/api/v1/me/client/jobs?size=1")
+    assert result.status_code == 200, result.text
+    assert result.json()["items"][0]["id"] == str(job.id)
+    assert result.json()["total"] == 1 and result.json()["pages"] == 1
+    actor["user"] = await session.get(User, worker.user_id)
+    assert (await client.get("/api/v1/me/client/jobs")).json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_export_legacy_evidence_keeps_unknown_signal_availability(api, session, worker, monkeypatch):
+    from types import SimpleNamespace
+    from app.api.v1.endpoints import credentials as routes
+    from app.services.credentials import verify_bundle
+    monkeypatch.setattr(routes, "settings", SimpleNamespace(credential_signing_secret="test-secret-"*4))
+    client, _ = api
+    source = OutcomeSource(name="legacy-unknown", normalization_version="1")
+    session.add(source); await session.flush()
+    raw = RawOutcome(source_id=source.id, external_outcome_id="legacy", payload={"status": "completed"}, payload_checksum="0"*64)
+    session.add(raw); await session.flush()
+    session.add(NormalizedOutcome(worker_id=worker.id, raw_outcome_id=raw.id, outcome_key="legacy", status=OutcomeStatus.COMPLETED, occurred_at=now(), normalization_version="1", source_platform="legacy", verified=True))
+    await session.commit()
+    result = await client.get(f"/api/v1/workers/{worker.id}/credentials/export")
+    assert result.status_code == 200, result.text
+    item = verify_bundle(result.json()["credential_token"], "test-secret-"*4)["outcomes"][0]
+    assert item["rating"] is None
+    assert "dispute_rate" not in item["available_signals"]
+    assert "safety_incident_rate" not in item["available_signals"]

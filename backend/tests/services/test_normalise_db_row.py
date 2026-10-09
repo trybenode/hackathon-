@@ -5,9 +5,10 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.services.normalisation import normalise_db_row
+from app.services.trust_scoring.evidence import scoring_input
 
 
-def test_normalise_db_row_maps_scoring_fields_without_inventing_rating() -> None:
+def test_scoring_adapter_maps_fields_without_inventing_rating() -> None:
     occurred_at = datetime(2026, 10, 4, tzinfo=UTC)
     row = SimpleNamespace(
         outcome_key="source-job-17",
@@ -23,15 +24,16 @@ def test_normalise_db_row_maps_scoring_fields_without_inventing_rating() -> None
         verified=True,
     )
 
-    result = normalise_db_row(row)
+    result = scoring_input(row)
 
     assert result == {
+        "available_signals": ["cancellation_rate", "completion_rate", "damage_report_rate", "dispute_rate", "no_show_rate", "repeat_hire_rate"],
         "job_id": "source-job-17",
         "date": occurred_at,
         "status": "completed",
         "cancelled_by": None,
         "dispute_resolution": "dismissed",
-        "client_id": "client-1",
+        "client_id": "native:client-1",
         "rating": None,
         "flags": ["damage"],
         "source_platform": "native",
