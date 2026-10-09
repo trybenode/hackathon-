@@ -57,3 +57,15 @@ the walkthrough and review product claims.
 Assignments and Figma requirements: [integration_handoff.md](integration_handoff.md).
 API contracts and instructions: [portable_work_history.md](portable_work_history.md),
 [feature_examples.http](feature_examples.http), [openapi.json](openapi.json).
+
+## OpenAPI CI reproducibility — 9 October 2026
+
+Pinned Pydantic to 2.13.5 and stabilized the standard HTTP 422 description across
+Python versions. Custom response descriptions remain unchanged. The existing
+OpenAPI snapshot matches generation on both Python 3.14.2 and a fresh Python
+3.12.13 environment installed from `backend/requirements.txt`; `git diff
+--exit-code -- docs/openapi.json` passes in both environments. Each SQLite suite
+reports 167 passed and two PostgreSQL/Redis-dependent skips, including four new
+description regressions. The fresh environment's `pip check` also passes.
+The earlier PostgreSQL/Redis results above remain the 8 October validation;
+these schema-only fixes do not change migrations or authentication.

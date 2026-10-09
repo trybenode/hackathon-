@@ -64,6 +64,12 @@ def install_feature_http(app) -> None:
             for method, operation in operations.items():
                 if not isinstance(operation, dict) or method not in ("get", "post", "delete", "patch", "put"):
                     continue
+                # Python 3.12 and 3.14 use different phrases for HTTP 422.
+                # Keep the published contract stable without overriding custom
+                # descriptions or FastAPI's "Validation Error" response.
+                invalid_input = operation.get("responses", {}).get("422", {})
+                if invalid_input.get("description") in {"Unprocessable Entity", "Unprocessable Content"}:
+                    invalid_input["description"] = "Unprocessable Content"
                 if "/platform/" in path or path.endswith("/trust/query"):
                     operation["security"] = [{"PlatformKey": []}]
                 elif "/me/" in path or "/review" in path or "/credentials/" in path:

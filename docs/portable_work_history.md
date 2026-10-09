@@ -5,6 +5,12 @@ verification results, and consent-backed developer history APIs. Interactive
 OpenAPI is served at `/docs`; JSON is available at `/openapi.json`. A checked-in
 snapshot is `docs/openapi.json` (regenerate with the command below).
 
+Schema generation uses the Pydantic version pinned in `backend/requirements.txt`.
+Install those dependencies before regenerating the snapshot. HTTP 422's standard
+description is fixed to `Unprocessable Content` across Python versions; custom
+error descriptions are preserved. CI uses Python 3.12 and checks the generated
+file against the committed snapshot.
+
 ## Product boundaries
 
 Workers can carry evidence earned outside this service into participating
