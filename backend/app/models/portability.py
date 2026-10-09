@@ -19,6 +19,9 @@ class PlatformKey(UUIDTimestampMixin, Base):
 
 class ShareGrant(UUIDTimestampMixin, Base):
     __tablename__ = "share_grants"
+    operation_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    payload_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    __table_args__ = (UniqueConstraint("worker_id", "operation_id", name="uq_share_grants_worker_operation"),)
     worker_id: Mapped[UUID] = mapped_column(ForeignKey("workers.id", ondelete="CASCADE"), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -27,6 +30,9 @@ class ShareGrant(UUIDTimestampMixin, Base):
 
 class PlatformGrant(UUIDTimestampMixin, Base):
     __tablename__ = "platform_grants"
+    operation_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    payload_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    __table_args__ = (UniqueConstraint("worker_id", "operation_id", name="uq_platform_grants_worker_operation"),)
     worker_id: Mapped[UUID] = mapped_column(ForeignKey("workers.id", ondelete="CASCADE"), index=True)
     organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"))
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
