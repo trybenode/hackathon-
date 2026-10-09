@@ -39,6 +39,7 @@ from app.core.config import get_settings  # noqa: E402
 from app.models.domain import EscrowStatus, User, Worker  # noqa: E402
 from app.services import escrow as escrow_service  # noqa: E402
 from app.services import escrow_provider as provider_module  # noqa: E402
+from app.services import insurance  # noqa: E402
 from app.services.escrow_provider import (  # noqa: E402
     StubEscrowProvider,
     sign_webhook,
@@ -120,7 +121,9 @@ async def run(args: argparse.Namespace) -> None:
             "Job opened; escrow started on Payscrow (POST /api/v3/marketplace/transactions/start)",
             f"""
             Transaction: {escrow.provider_reference}
-            Client pays: NGN {escrow.total_payable} (job + client's share of the escrow charge)
+            Client pays: NGN {escrow.total_payable} (job + NGN {escrow.micro_premium} micro-insurance
+                         premium + the client's share of Payscrow's charge)
+            Cover: pending until the premium is paid
             Payment link for the client: {escrow.payment_link}
             Worker screen: "Awaiting client payment"
             """,
@@ -147,12 +150,14 @@ async def run(args: argparse.Namespace) -> None:
                 session, payload, delivery_id=headers["X-PayScrow-Delivery-Id"]
             )
             await session.commit()
+            policy = await insurance.policy_for(session, job.id)
         say(
             "Client paid; Payscrow's 'Transaction Paid' webhook arrived",
             f"""
             Signature (HMAC-SHA256 over "timestamp.body"): {'valid' if verified else 'INVALID'}
             Amount and currency match the order: {'yes' if outcome == 'funded' else 'NO'}
             Result: {outcome}; funds held. Worker screen: "In progress / Protected"
+            Premium paid, so cover is now: {policy.status.value if policy else 'n/a'} ("no premium, no cover")
             Payscrow emails the escrow code to the client.
             """,
         )
@@ -207,6 +212,7 @@ async def run(args: argparse.Namespace) -> None:
         POST /api/v1/jobs/{id}/client-confirmation {"code": "..."}
         We passed the code to Payscrow (POST /api/v3/escrow/escrowtransactions/applycode)
         and did not keep it. Funds released to the worker. Worker screen: "Released".
+        The job is settled, so its cover has run its course.
         """,
     )
 

@@ -51,6 +51,7 @@ from app.models.domain import (
 )
 from app.services import email_sender as email_sender_module
 from app.services import escrow_provider as provider_module
+from app.services import insurance
 from app.services.email_sender import EmailMessage, EmailSender
 from app.services.escrow_provider import EscrowParty, EscrowProvider, EscrowStart
 
@@ -166,6 +167,7 @@ async def open_job(
     await session.flush()
 
     settings = get_settings()
+    premium = insurance.premium_for(request.amount)
     active = _provider(provider)
     started = await active.start(
         EscrowStart(
@@ -176,6 +178,7 @@ async def open_job(
             worker=EscrowParty(person.display_name if person else "", person.email if person else "", person.phone if person else None),
             webhook_url=settings.payscrow_webhook_url or None,
             return_url=request.return_url,
+            premium=premium,
         )
     )
     escrow = EscrowTransaction(
@@ -185,9 +188,12 @@ async def open_job(
         payment_link=started.payment_link,
         total_payable=started.total_payable,
         amount=request.amount,
+        micro_premium=premium,
         status=EscrowStatus.PENDING,
     )
     session.add(escrow)
+    # Cover is quoted now and starts only once the premium is paid.
+    insurance.quote(session, job.id, request.amount, premium)
     await session.flush()
     _audit(session, job, "escrow.opened", transaction_number=started.transaction_number)
     return job, escrow
@@ -247,13 +253,13 @@ async def handle_webhook(session: AsyncSession, payload: dict, *, delivery_id: s
     if payload.get("event") == "dispute.status_changed":
         outcome = await _apply_dispute_update(session, escrow, job, payload)
     else:
-        outcome = _apply_payment(session, escrow, job, payload)
+        outcome = await _apply_payment(session, escrow, job, payload)
 
     operation.status = ProviderOperationStatus.SUCCEEDED
     return outcome
 
 
-def _apply_payment(
+async def _apply_payment(
     session: AsyncSession, escrow: EscrowTransaction, job: Job, payload: dict
 ) -> str:
     if str(payload.get("paymentStatus", "")).lower() != "paid":
@@ -283,6 +289,9 @@ def _apply_payment(
         if job.status is JobStatus.ACCEPTED:
             job.status = JobStatus.IN_PROGRESS
         _audit(session, job, "escrow.funded")
+        # The payment included the premium: no premium, no cover, so only now.
+        if await insurance.activate(session, escrow):
+            _audit(session, job, "insurance.activated")
     return "funded"
 
 
@@ -317,6 +326,8 @@ async def _apply_dispute_update(
         escrow.status = EscrowStatus.RELEASED
         escrow.released_at = _now()
         job.status = JobStatus.RELEASED
+    # A refund means the protected flow was abandoned: the cover is voided.
+    await insurance.end(session, escrow, voided=resolution == "Refund")
     _audit(session, job, "escrow.dispute_resolved", resolution=resolution)
     return f"dispute resolved: {resolution}"
 
@@ -426,6 +437,7 @@ async def release(
     job.status = JobStatus.RELEASED
     if job.completed_at is None:
         job.completed_at = moment
+    await insurance.end(session, escrow, voided=False)
     _audit(session, job, "escrow.released", by=by)
     return escrow
 

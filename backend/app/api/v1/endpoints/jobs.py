@@ -52,7 +52,9 @@ class JobCreateResponse(ApiModel):
     job_id: UUID
     transaction_number: str
     payment_link: str
+    #: Job + micro-insurance premium + the client's share of Payscrow's charge.
     total_payable: Decimal
+    premium: Decimal
 
 
 class ClientConfirmRequest(ApiModel):
@@ -67,6 +69,9 @@ class EscrowView(ApiModel):
     total_payable: Decimal | None = None
     funded_at: datetime | None = None
     released_at: datetime | None = None
+    #: The micro-insurance premium the client paid on top of the job.
+    premium: Decimal | None = None
+    #: Cover runs only between the premium being paid and the job settling.
     cover_active: bool = False
     dispute_stage: str | None = None
     resolution_type: str | None = None
@@ -134,6 +139,7 @@ async def _view(session: AsyncSession, job: Job, escrow: EscrowTransaction | Non
             total_payable=escrow.total_payable,
             funded_at=escrow.funded_at,
             released_at=escrow.released_at,
+            premium=escrow.micro_premium,
             cover_active=escrow.cover_active,
             dispute_stage=escrow.dispute_stage,
             resolution_type=escrow.resolution_type,
@@ -189,6 +195,7 @@ async def create_job(
         transaction_number=escrow.provider_reference or "",
         payment_link=escrow.payment_link or "",
         total_payable=escrow.total_payable or job.agreed_amount,
+        premium=escrow.micro_premium,
     )
 
 

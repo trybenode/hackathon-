@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     payscrow_webhook_url: str = Field("", alias="PAYSCROW_WEBHOOK_URL")
     #: Share of Payscrow's charge the worker bears, 0 to 100. 0: the client pays it.
     payscrow_merchant_charge_percentage: float = Field(0, alias="PAYSCROW_MERCHANT_CHARGE_PERCENTAGE")
+    #: Micro-insurance premium (SRS 3.6): a share of the job, kept between a
+    #: floor and a cap, paid by the client on top of the job. 0 turns it off.
+    insurance_premium_rate: float = Field(0.02, alias="INSURANCE_PREMIUM_RATE")
+    insurance_premium_min: float = Field(200, alias="INSURANCE_PREMIUM_MIN")
+    insurance_premium_max: float = Field(2000, alias="INSURANCE_PREMIUM_MAX")
     #: Days after the worker completes a job before an unconfirmed client is
     #: reminded. Funds never release on a timer: only the client's code does.
     escrow_confirmation_reminder_days: int = Field(7, alias="ESCROW_CONFIRMATION_REMINDER_DAYS")

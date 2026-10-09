@@ -5,6 +5,7 @@ Used by: the backend test suite and CI. Never reaches Payscrow.
 """
 
 import json
+from dataclasses import replace
 from decimal import Decimal
 
 import httpx
@@ -75,6 +76,30 @@ async def test_start_sends_the_job_and_reads_the_payment_link() -> None:
     assert "merchantPhoneNo" not in body
     assert started.transaction_number == "MKT-00012345"
     assert started.total_payable == Decimal("25500.0")
+
+
+async def test_premium_is_a_second_checkout_line() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["items"] = json.loads(request.content)["items"]
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "data": {
+                    "transactionNumber": "MKT-1",
+                    "paymentLink": "https://payscrow.dev/pay",
+                    "totalPayable": 26010.0,
+                    "isSuccessful": True,
+                },
+            },
+        )
+
+    await provider_with(handler).start(replace(START, premium=Decimal("500.00")))
+
+    assert [item["name"] for item in seen["items"]] == ["Home cleaning", "Job protection"]
+    assert seen["items"][1]["price"] == 500.0
 
 
 async def test_payscrow_errors_surface_with_their_message() -> None:

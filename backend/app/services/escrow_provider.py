@@ -50,6 +50,8 @@ class EscrowStart:
     worker: EscrowParty
     webhook_url: str | None = None
     return_url: str | None = None
+    #: Micro-insurance premium the client pays on top; 0 for none.
+    premium: Decimal = Decimal("0")
 
 
 @dataclass(frozen=True)
@@ -134,6 +136,16 @@ class PayscrowProvider:
                 }
             ],
         }
+        if request.premium > 0:
+            # A second line, so the client sees exactly what the cover costs.
+            body["items"].append(
+                {
+                    "name": "Job protection",
+                    "description": "Micro-insurance for this job",
+                    "quantity": 1,
+                    "price": float(request.premium),
+                }
+            )
         if request.webhook_url:
             body["webhookNotificationUrl"] = request.webhook_url
         if request.return_url:
@@ -199,7 +211,7 @@ class StubEscrowProvider:
             provider=self.name,
             transaction_number=number,
             payment_link=f"https://example.invalid/pay/{number}",
-            total_payable=request.amount,
+            total_payable=request.amount + request.premium,
         )
 
     async def apply_code(self, transaction_id: str, code: str) -> None:

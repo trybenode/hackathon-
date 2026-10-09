@@ -36,6 +36,9 @@ export type WorkerJob = {
     total_payable: string | null;
     funded_at: string | null;
     released_at: string | null;
+    /** Micro-insurance premium the client paid on top of the job. */
+    premium: string | null;
+    /** Cover runs from the premium being paid until the job settles. */
     cover_active: boolean;
     dispute_stage: string | null;
     resolution_type: string | null;
