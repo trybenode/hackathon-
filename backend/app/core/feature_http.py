@@ -24,7 +24,7 @@ class PrivateResponses(BaseHTTPMiddleware):
     """Never cache mutable consent/records and do not send bearer URLs as referrers."""
     async def dispatch(self, request, call_next):
         response = await call_next(request)
-        if any(segment in request.url.path for segment in ("/me/worker", "/verification/", "/platform/", "/credentials/", "/review")):
+        if any(segment in request.url.path for segment in ("/me/", "/verification/", "/platform/", "/credentials/", "/review")):
             response.headers["Cache-Control"] = "no-store, private"
             response.headers["Referrer-Policy"] = "no-referrer"
             response.headers["X-Robots-Tag"] = "noindex, nofollow"
@@ -66,7 +66,7 @@ def install_feature_http(app) -> None:
                     continue
                 if "/platform/" in path or path.endswith("/trust/query"):
                     operation["security"] = [{"PlatformKey": []}]
-                elif "/me/worker" in path or "/review" in path or "/credentials/" in path:
+                elif "/me/" in path or "/review" in path or "/credentials/" in path:
                     operation["security"] = [{"UserSession": []}]
         app.openapi_schema = schema
         return schema

@@ -274,7 +274,7 @@ class TrustSummary(ApiModel):
     band: str
     confidence: float = Field(ge=0, le=1)
     total_jobs: int = Field(ge=0)
-    completion_rate: float = Field(ge=0, le=1)
+    completion_rate: float | None = Field(default=None, ge=0, le=1)
 
 
 class VerifiedOutcome(ApiModel):
