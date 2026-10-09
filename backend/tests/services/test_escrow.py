@@ -70,6 +70,15 @@ async def test_open_job_starts_an_escrow_awaiting_payment(
     assert service.job_stage(job, escrow) == "awaiting_payment"
 
 
+async def test_worker_needs_a_phone_for_escrow(session: AsyncSession, worker: Worker) -> None:
+    user = await session.get(User, worker.user_id)
+    user.phone = None
+    await session.flush()
+
+    with pytest.raises(service.EscrowStateError, match="phone number"):
+        await service.open_job(session, job_request(worker))
+
+
 async def test_paid_webhook_holds_the_money_once(session: AsyncSession, worker: Worker) -> None:
     job, escrow = await funded_job(session, worker)
 

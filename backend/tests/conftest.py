@@ -91,7 +91,7 @@ async def session() -> AsyncGenerator[AsyncSession, None]:
 async def worker(session: AsyncSession) -> Worker:
     """Create a worker with its owning user."""
 
-    user = User(email="worker@example.com", display_name="Jane A.")
+    user = User(email="worker@example.com", display_name="Jane A.", phone="08087654321")
     session.add(user)
     await session.flush()
 

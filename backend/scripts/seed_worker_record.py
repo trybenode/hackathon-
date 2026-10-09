@@ -150,6 +150,8 @@ async def main() -> None:
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         user = await get_or_create_user(session, email, "Jane Adams")
+        # Payscrow needs the worker's (merchant's) phone to open escrow.
+        user.phone = user.phone or "08087654321"
         worker = await session.scalar(select(Worker).where(Worker.user_id == user.id))
         if worker is None:
             worker = Worker(user_id=user.id)

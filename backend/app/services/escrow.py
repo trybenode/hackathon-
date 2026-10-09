@@ -149,6 +149,11 @@ async def open_job(
     if worker is None:
         raise JobNotFoundError(f"No worker with id {request.worker_id}.")
     person = await session.get(User, worker.user_id)
+    # Payscrow requires the merchant's phone, whatever its docs say.
+    if person is None or not (person.phone or "").strip():
+        raise EscrowStateError(
+            "The worker needs a phone number on their profile before escrow can start."
+        )
 
     job = Job(
         worker_id=worker.id,
@@ -175,7 +180,7 @@ async def open_job(
             description=request.title,
             amount=request.amount,
             client=EscrowParty(request.client_name, request.client_email, request.client_phone),
-            worker=EscrowParty(person.display_name if person else "", person.email if person else "", person.phone if person else None),
+            worker=EscrowParty(person.display_name, person.email, person.phone),
             webhook_url=settings.payscrow_webhook_url or None,
             return_url=request.return_url,
             premium=premium,

@@ -25,7 +25,7 @@ START = EscrowStart(
     description="Home cleaning",
     amount=Decimal("25000.00"),
     client=EscrowParty("Peter James", "peter@example.com", "08012345678"),
-    worker=EscrowParty("Jane Adams", "jane@example.com", None),
+    worker=EscrowParty("Jane Adams", "jane@example.com", "08087654321"),
     webhook_url="https://api.example.com/api/v1/webhooks/payscrow",
 )
 
@@ -72,8 +72,8 @@ async def test_start_sends_the_job_and_reads_the_payment_link() -> None:
         {"name": "Home cleaning", "description": "Home cleaning", "quantity": 1, "price": 25000.0}
     ]
     assert body["webhookNotificationUrl"].endswith("/webhooks/payscrow")
-    # No phone for the worker: the optional field is left out, not sent empty.
-    assert "merchantPhoneNo" not in body
+    # Payscrow's docs call it optional; its API requires it.
+    assert body["merchantPhoneNo"] == "08087654321"
     assert started.transaction_number == "MKT-00012345"
     assert started.total_payable == Decimal("25500.0")
 
