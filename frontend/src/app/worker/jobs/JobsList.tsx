@@ -39,10 +39,10 @@ function JobCard({ job }: { job: WorkerJob }) {
               toneFor(job.client_name ?? ""),
             )}
           >
-            {initialsOf(job.client_name ?? "Client")}
+            {job.client_name ? initialsOf(job.client_name) : "?"}
           </span>
           <span className="flex flex-col">
-            <span className="text-body-md text-grey-900">{job.client_name ?? "Client"}</span>
+            <span className="text-body-md text-grey-900">{job.client_name ?? "Awaiting customer"}</span>
             <span className="text-body-sm text-grey-600">Client</span>
           </span>
         </div>

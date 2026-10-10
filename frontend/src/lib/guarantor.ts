@@ -266,13 +266,13 @@ export type SignedInUser = {
 /**
  * Where someone lands after signing in with nowhere else to go.
  *
- * Workers go to their side, even if they also guarantee someone: the worker
- * home will carry a way across to the guarantor dashboard. Worker home is not
- * designed yet, so Jobs stands in. Accounts with neither role keep the old
- * landing until the developer sign-in decides where they belong.
+ * Workers go to their home, even if they also guarantee someone: the worker
+ * home will carry a way across to the guarantor dashboard. Accounts with
+ * neither role keep the old landing until the developer sign-in decides where
+ * they belong.
  */
 export function landingPathFor(user: SignedInUser) {
-  if (user.is_worker) return "/worker/jobs";
+  if (user.is_worker) return "/worker";
   return "/dashboard";
 }
 

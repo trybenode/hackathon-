@@ -45,3 +45,23 @@ export function formatLongDate(value: string) {
   const date = new Date(value);
   return `${LONG_MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
+
+/** 12:00PM */
+export function formatClock(value: string) {
+  const date = new Date(value);
+  const hours = date.getHours() % 12 || 12;
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}${date.getHours() < 12 ? "AM" : "PM"}`;
+}
+
+/** 29, Sep */
+export function formatDayMonth(value: string) {
+  const date = new Date(value);
+  return `${date.getDate()}, ${LONG_MONTHS[date.getMonth()].slice(0, 3)}`;
+}
+
+/** 20 Nov, 2026 */
+export function formatDayMonthYear(value: string) {
+  const date = new Date(value);
+  return `${date.getDate()} ${LONG_MONTHS[date.getMonth()].slice(0, 3)}, ${date.getFullYear()}`;
+}
