@@ -20,26 +20,28 @@ function SecretField({ label, value, revealed }: { label: string; value: string;
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-2">
       <span className="text-body-sm font-medium text-grey-900">{label}</span>
+      {/* Shown in full, wrapping, so the whole value can be read and copied. */}
       <p
-        className="flex h-12 items-center overflow-hidden rounded-xl border border-stroke px-4 text-body-md text-grey-900 select-all"
+        className="flex min-h-12 items-center rounded-xl border border-stroke px-4 py-3 font-mono text-body-sm break-all text-grey-900 select-all"
         aria-label={label}
       >
-        <span className="truncate">{revealed ? value : "•".repeat(11)}</span>
+        {revealed ? value : "•".repeat(11)}
       </p>
     </div>
   );
 }
 
 function CredentialsReady({ credentials, onDone }: { credentials: GeneratedCredentials; onDone: () => void }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"key" | "secret" | null>(null);
   const [showSecret, setShowSecret] = useState(false);
 
-  async function copyKey() {
+  async function copy(which: "key" | "secret") {
     try {
-      await navigator.clipboard.writeText(credentials.key_id);
-      setCopied(true);
+      await navigator.clipboard.writeText(which === "key" ? credentials.key_id : credentials.secret);
+      setCopied(which);
     } catch {
-      // Clipboard access can be refused; the key can still be selected.
+      // Clipboard access can be refused; show the value so it can be selected.
+      if (which === "secret") setShowSecret(true);
     }
   }
 
@@ -62,9 +64,9 @@ function CredentialsReady({ credentials, onDone }: { credentials: GeneratedCrede
         </div>
 
         <div className="flex items-end gap-4">
-          <SecretField label="API Key" value={credentials.key_id} revealed={copied} />
-          <Button variant="outline" className="h-12 shrink-0 rounded-xl px-6" onClick={copyKey}>
-            {copied ? "Copied" : "Copy"}
+          <SecretField label="API Key" value={credentials.key_id} revealed={copied === "key"} />
+          <Button variant="outline" className="h-12 shrink-0 rounded-xl px-6" onClick={() => copy("key")}>
+            {copied === "key" ? "Copied" : "Copy"}
           </Button>
         </div>
 
@@ -79,6 +81,9 @@ function CredentialsReady({ credentials, onDone }: { credentials: GeneratedCrede
             <EyeIcon open={showSecret} />
           </button>
         </div>
+        <Button variant="outline" fullWidth className="-mt-2 rounded-xl" onClick={() => copy("secret")}>
+          {copied === "secret" ? "Secret copied" : "Copy secret"}
+        </Button>
 
         <div className="flex flex-col gap-1 rounded-lg bg-grey-50 p-3">
           <p className="flex items-center gap-2 text-body-sm font-medium text-grey-900">
