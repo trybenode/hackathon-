@@ -180,16 +180,18 @@ async def main() -> None:
             session.add(organization)
             await session.flush()
 
-        # Start clean so re-running does not pile up duplicates.
+        # Start clean so re-running does not pile up duplicates. Only what this
+        # script seeded goes: outcomes from real jobs (released through escrow,
+        # or imported) belong to the worker and are kept.
         old_raw = (
             await session.scalars(
-                select(NormalizedOutcome.raw_outcome_id).where(
-                    NormalizedOutcome.worker_id == worker.id
-                )
+                select(RawOutcome.id).where(RawOutcome.source_id.in_((native.id, imported_source.id)))
             )
         ).all()
-        await session.execute(delete(NormalizedOutcome).where(NormalizedOutcome.worker_id == worker.id))
         if old_raw:
+            await session.execute(
+                delete(NormalizedOutcome).where(NormalizedOutcome.raw_outcome_id.in_(old_raw))
+            )
             await session.execute(delete(RawOutcome).where(RawOutcome.id.in_(old_raw)))
         old_assessments = (
             await session.scalars(
