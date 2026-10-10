@@ -264,6 +264,8 @@ class GuarantorInstrumentResponse(ApiModel):
     triggered_at: datetime | None = None
     status_reason: str | None = None
     created_at: datetime | None = None
+    #: False while an invite link waits for its guarantor to sign in.
+    claimed: bool = True
 
 
 class GuarantorInstrumentListResponse(ApiModel):
