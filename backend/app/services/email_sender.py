@@ -10,6 +10,7 @@ would have been sent so the flow can be exercised end to end.
 from __future__ import annotations
 
 import logging
+import ssl
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -68,6 +69,8 @@ class ResendEmailSender:
     name = "resend"
     endpoint = "https://api.resend.com/emails"
     timeout = httpx.Timeout(10.0)
+    #: One retry rides out a dropped connection.
+    attempts = 2
 
     def __init__(self, api_key: str, sender: str) -> None:
         self.api_key = api_key
@@ -83,12 +86,21 @@ class ResendEmailSender:
         if message.html:
             payload["html"] = message.html
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(
-                self.endpoint,
-                json=payload,
-                headers={"Authorization": f"Bearer {self.api_key}"},
-            )
+        response = None
+        for attempt in range(1, self.attempts + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(
+                        self.endpoint,
+                        json=payload,
+                        headers={"Authorization": f"Bearer {self.api_key}"},
+                    )
+                break
+            # A dropped connection can surface as an httpx error or, mid-TLS,
+            # as a raw SSL/OS error; either way it is "not sent", not a crash.
+            except (httpx.HTTPError, ssl.SSLError, OSError) as error:
+                if attempt == self.attempts:
+                    raise EmailDeliveryError(f"Could not reach Resend: {error}") from error
 
         if response.status_code >= 400:
             # The body explains refusals such as an unverified domain; it does

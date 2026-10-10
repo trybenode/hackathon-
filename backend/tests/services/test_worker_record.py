@@ -165,3 +165,34 @@ async def test_a_user_without_a_worker_profile(session: AsyncSession) -> None:
 
     with pytest.raises(service.NotAWorkerError):
         await service.load_record(session, user)
+
+
+async def test_released_job_shows_its_rating_on_the_record(session: AsyncSession, worker: Worker) -> None:
+    from datetime import timedelta as _td
+
+    from app.services import escrow
+
+    user = await session.get(User, worker.user_id)
+    job = await escrow.create_job_link(
+        session, user, title="Home cleaning", address="Lekki, Lagos",
+        scheduled_at=NOW + _td(days=1), price=Decimal("25000.00"),
+    )
+    pending = await escrow.start_payment(
+        session, job.link_token, name="Peter James", email="peter@example.com", phone="08012345678"
+    )
+    await escrow.handle_webhook(
+        session,
+        {"transactionId": "g", "transactionNumber": pending.provider_reference, "paymentStatus": "Paid"},
+        delivery_id="d-record",
+    )
+    await escrow.mark_complete(session, user, job.id)
+    await escrow.release_by_customer(session, job.link_token, code="5Z093S", rating=5)
+
+    record = await service.load_record(session, user)
+    outcome = record.outcomes[0]
+
+    assert outcome.title == "Home cleaning"
+    assert outcome.location == "Lekki, Lagos"
+    assert outcome.client_name == "Peter James"
+    assert outcome.rating == 5.0
+    assert outcome.dispute == "none"

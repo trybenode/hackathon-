@@ -44,6 +44,12 @@ class RecordOutcomeItem(ApiModel):
     occurred_at: datetime
     amount: Decimal | None = None
     status: str
+    location: str | None = None
+    client_name: str | None = None
+    rating: float | None = None
+    #: "none", "dismissed" or "upheld".
+    dispute: str = "none"
+    source: str = "native"
 
 
 class IdentityCredentialItem(ApiModel):
@@ -129,6 +135,11 @@ async def worker_record(
                 occurred_at=item.occurred_at,
                 amount=item.amount,
                 status=item.status,
+                location=item.location,
+                client_name=item.client_name,
+                rating=item.rating,
+                dispute=item.dispute,
+                source=item.source,
             )
             for item in record.outcomes
         ],

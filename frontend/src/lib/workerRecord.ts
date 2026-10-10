@@ -30,6 +30,14 @@ export type RecordOutcome = {
   occurred_at: string;
   amount: string | null;
   status: "Client Confirmed" | "Auto-released";
+  location: string | null;
+  client_name: string | null;
+  /** The customer's 1-5 stars; null for outcomes imported from elsewhere. */
+  rating: number | null;
+  /** "none", or how a dispute on the job ended. */
+  dispute: "none" | "dismissed" | "upheld";
+  /** "native" here, else the platform it was imported from. */
+  source: string;
 };
 
 export type IdentityCredential = {

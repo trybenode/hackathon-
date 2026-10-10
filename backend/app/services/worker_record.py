@@ -59,6 +59,14 @@ class RecordOutcome:
     amount: Decimal | None
     #: "Client Confirmed" when the client signed off, else "Auto-released".
     status: str
+    location: str | None = None
+    client_name: str | None = None
+    #: The customer's 1-5 stars, given when they released the payment.
+    rating: float | None = None
+    #: "none", or how a dispute on this job ended: "dismissed" or "upheld".
+    dispute: str = "none"
+    #: Where the outcome was verified: "native" here, else the importing platform.
+    source: str = "native"
 
 
 @dataclass(frozen=True)
@@ -220,6 +228,11 @@ async def load_record(session: AsyncSession, user: User) -> WorkerRecord:
             if item.amount is not None
             else (jobs[item.job_id].agreed_amount if item.job_id in jobs else None),
             status="Client Confirmed" if item.completion_confirmed else "Auto-released",
+            location=jobs[item.job_id].location if item.job_id in jobs else None,
+            client_name=jobs[item.job_id].client_name if item.job_id in jobs else None,
+            rating=float(item.rating) if item.rating is not None else None,
+            dispute=item.dispute_resolution if item.dispute_resolution in ("dismissed", "upheld") else "none",
+            source=item.source_platform,
         )
         for item in completed
     ]

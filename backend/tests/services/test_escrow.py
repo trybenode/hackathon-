@@ -341,3 +341,28 @@ async def test_a_dropped_email_is_retried_once(monkeypatch: pytest.MonkeyPatch) 
     await job_notifications._send("sarah@example.com", "Subject", "Body")
 
     assert attempts == ["sarah@example.com", "sarah@example.com"]
+
+
+async def test_resend_connection_drop_is_a_delivery_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A flaky network must surface as EmailDeliveryError (a 502), never a 500."""
+
+    import ssl
+
+    import httpx
+
+    from app.services.email_sender import EmailDeliveryError, EmailMessage, ResendEmailSender
+
+    calls = 0
+
+    async def broken_post(self, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        raise ssl.SSLError("bad record mac")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", broken_post)
+
+    with pytest.raises(EmailDeliveryError):
+        await ResendEmailSender("key", "from@example.com").send(
+            EmailMessage(to="a@example.com", subject="s", body="b")
+        )
+    assert calls == 2
