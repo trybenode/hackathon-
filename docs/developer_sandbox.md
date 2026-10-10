@@ -12,12 +12,14 @@ Sandbox credentials work against the same API as production, but they can only r
 
 Each demo worker has a fixed history shaped to land in one trust band, so the same call always gets the same answer. Link one with its consent token; any external id you choose works.
 
-| Worker | Role | Band | Consent token |
-| --- | --- | --- | --- |
-| Ada Okafor | Cleaner | High | `sandbox-consent-ada-demo-worker-token` |
-| Tunde Bello | Electrician | Medium | `sandbox-consent-tunde-demo-worker-token` |
-| Bisi Adeyemi | Plumber | Low | `sandbox-consent-bisi-demo-worker-token` |
-| Chidi Eze | Painter | Building History | `sandbox-consent-chidi-demo-worker-token` |
+| Worker | Role | Band | Guarantor | Consent token |
+| --- | --- | --- | --- | --- |
+| Ada Okafor | Cleaner | High | active | `sandbox-consent-ada-demo-worker-token` |
+| Tunde Bello | Electrician | Medium | pending | `sandbox-consent-tunde-demo-worker-token` |
+| Bisi Adeyemi | Plumber | Low | expired (none) | `sandbox-consent-bisi-demo-worker-token` |
+| Chidi Eze | Painter | Building History | none | `sandbox-consent-chidi-demo-worker-token` |
+
+All four have passed identity and liveness checks.
 
 The dashboard API (`GET /api/v1/me/developer`) lists the same workers under `sandbox_workers`.
 
@@ -38,9 +40,47 @@ curl -X POST "$API/api/v1/trust/query" \
 curl "$API/api/v1/platform/workers/user-42/history" -H "X-API-Key: $SANDBOX_SECRET"
 ```
 
-## Imports in the sandbox
+## What the trust query tells you
 
-`POST /platform/workers/{external_id}/history/import` runs in full and answers exactly as production would, but nothing is kept: the demo workers are shared by every developer, so their histories never change.
+Besides the decision, confidence and band, every trust query returns what has been verified about the worker. It never includes identity numbers or documents.
+
+```json
+"verification": {
+  "identity": "verified",
+  "liveness": "verified",
+  "guarantor": "active",
+  "guarantor_valid_until": "2027-08-07T10:00:00Z"
+}
+```
+
+`identity` and `liveness` are `verified`, `sandbox` (passed with a stand-in provider) or `not_verified`. `guarantor` is `active`, `pending` or `none`.
+
+## Guarantees
+
+With the worker's approval you can work with their guarantees:
+
+- `GET /guarantor-instruments?worker_id=…` lists a worker's guarantees (needs approval to read).
+- `POST /guarantor-instruments` asks a person to stand behind a worker (needs approval to write).
+- `POST /guarantor-instruments/{id}/send | trigger | resolve | revoke` work only on guarantees your platform asked for.
+- `GET /guarantor-instruments` without a worker lists the guarantees your platform asked for.
+
+## Your own scoring settings
+
+Each platform can set its own weights, thresholds and rules per platform type. Settings belong to the key's environment, so sandbox experiments never change production scores.
+
+- `GET /platform/scoring-config` returns the settings for every platform type (`custom: false` while the preset applies) and the signals you can use.
+- `PUT /platform/scoring-config/{platform_type}` saves your settings. Weights must add up to 1 and thresholds must satisfy 0 < medium < high ≤ 1.
+- `DELETE /platform/scoring-config/{platform_type}` goes back to the preset.
+
+```bash
+curl -X PUT "$API/api/v1/platform/scoring-config/domestic" \
+  -H "X-API-Key: $SANDBOX_SECRET" -H "Content-Type: application/json" \
+  -d '{"weights": {"completion_rate": 0.4, "dispute_rate": 0.3, "no_show_rate": 0.3}, "required_signals": ["completion_rate"], "min_jobs": 10, "high_threshold": 0.85, "medium_threshold": 0.65}'
+```
+
+## Changes in the sandbox
+
+History imports and guarantee changes run in full and answer exactly as production would, but nothing is kept: the demo workers are shared by every developer, so their histories and guarantees never change.
 
 ## Usage
 
