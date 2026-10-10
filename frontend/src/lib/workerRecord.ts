@@ -65,6 +65,7 @@ export type Credentials = {
 };
 
 export type WorkerRecord = {
+  informal_history: import("./history").HistoryCounts;
   worker_id: string;
   name: string;
   role: string | null;

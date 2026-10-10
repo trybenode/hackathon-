@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { LanguageSelector, useLanguage } from "@/components/history/LanguageProvider";
+import { HistoryCounts } from "@/components/history/HistoryCounts";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { ArrowLeftIcon, ArrowRightIcon, BriefcaseIcon } from "@/components/worker/icons";
@@ -65,6 +67,7 @@ async function saveExport(workerId: string, name: string) {
 }
 
 export function PortableRecord() {
+  const { t, dictionary } = useLanguage();
   const router = useRouter();
   const { data: record, error, loading, refresh } = useWorkerRecord();
   const [exporting, setExporting] = useState(false);
@@ -85,18 +88,19 @@ export function PortableRecord() {
 
   return (
     <main className="flex flex-col">
+      <div className="px-6 pt-4"><LanguageSelector /></div>
       <header className="flex items-center gap-3 border-b border-stroke px-6 pt-8 pb-5">
         <button type="button" aria-label="Back" onClick={() => router.back()} className="text-grey-900">
           <ArrowLeftIcon />
         </button>
-        <h1 className="text-body-lg font-semibold text-grey-900">Portable Record</h1>
+        <h1 className="text-body-lg font-semibold text-grey-900">{t("portable")}</h1>
       </header>
 
       <RecordGate loading={loading} error={error} onRetry={refresh} hasData={!!record}>
       {record && (
       <div className="flex flex-col gap-6 px-6 pt-4">
         <section className="flex flex-col gap-4">
-          <p className="text-xs leading-4 text-grey-900">Your verified work history</p>
+          <p className="text-xs leading-4 text-grey-900">{t("verifiedRecords")}</p>
 
           <div className="flex items-center gap-4">
             {/* The frame shows a photo; there is no upload yet, so initials
@@ -114,9 +118,9 @@ export function PortableRecord() {
           <div className="flex items-center gap-4 rounded-lg bg-primary-25 p-3">
             <ScoreRing score={record.assessment.score} size={68} thickness={7} />
             <div className="flex flex-col gap-1.5">
-              <p className="text-body-md font-semibold text-grey-900">Trust Score</p>
+              <p className="text-body-md font-semibold text-grey-900">{t("trustScore")}</p>
               <p className="text-xs leading-5 text-grey-900">
-                Based on your verified work history and performance
+                {t("basedVerified")}
               </p>
             </div>
           </div>
@@ -133,20 +137,20 @@ export function PortableRecord() {
           className="flex items-center gap-4 rounded-xl border border-grey-400 px-6 py-4 text-grey-900"
         >
           <CredentialIcon className="shrink-0 text-info" />
-          <span className="flex-1 text-body-md">Verified credentials</span>
+          <span className="flex-1 text-body-md">{t("credentials")}</span>
           <ChevronRightIcon className="shrink-0" />
         </Link>
 
         <div className="grid grid-cols-2 gap-2.5">
           <Stat
             icon={<BriefcaseIcon width={20} height={20} />}
-            label="Work history"
+            label={t("workHistory")}
             value={String(record.stats.completed_jobs)}
-            caption="Completed jobs"
+            caption={t("completedVerified")}
           />
           <Stat
             icon={<ChartIcon width={20} height={20} />}
-            label="Performance"
+            label={t("performance")}
             // There is no on-time data to measure, so this is the completion
             // rate: jobs completed out of those the worker was responsible for.
             value={
@@ -156,13 +160,13 @@ export function PortableRecord() {
           />
           <Stat
             icon={<PeopleIcon width={20} height={20} />}
-            label="Known repeat hires"
-            value={record.stats.repeat_hires === null ? "Unknown" : String(record.stats.repeat_hires)}
+            label={t("repeatHires")}
+            value={record.stats.repeat_hires === null ? t("unknown") : String(record.stats.repeat_hires)}
           />
           <Stat
             icon={<WarningIcon width={20} height={20} />}
-            label="Reported disputes"
-            value={record.stats.disputes === null ? "Unknown" : String(record.stats.disputes)}
+            label={t("disputes")}
+            value={record.stats.disputes === null ? t("unknown") : String(record.stats.disputes)}
           />
         </div>
 
@@ -177,8 +181,10 @@ export function PortableRecord() {
           </Link>
         </section>
 
+        <HistoryCounts counts={record.informal_history} dictionary={dictionary} />
         <ShareVerification summary={record.public_summary} refresh={refresh} />
-        <PlatformApprovals />
+        <Link href="/worker/profile/record/history" className="rounded-xl border border-stroke p-4">{t("newHistory")}</Link>
+        {process.env.NEXT_PUBLIC_PLATFORM_APPROVALS_ENABLED === "true" && <PlatformApprovals />}
         <div className="flex flex-col items-center gap-3 pb-4">
           {exportError && (
             <p role="alert" className="text-body-sm text-error">
@@ -192,7 +198,7 @@ export function PortableRecord() {
             onClick={exportRecord}
           >
             <DownloadIcon />
-            {exporting ? "Exporting…" : "Export record"}
+            {exporting ? t("processing") : t("export")}
           </Button>
         </div>
       </div>
