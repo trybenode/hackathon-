@@ -180,6 +180,14 @@ class IdentityCheckMissingError(GuarantorError):
     """The guarantor's identity details have not been verified yet."""
 
 
+class UnclaimedInviteError(GuarantorError):
+    """Nobody has signed in through the invite link yet."""
+
+
+class InviteClaimedError(GuarantorError):
+    """Someone else already signed in through this invite link."""
+
+
 class InvalidTransitionError(GuarantorError):
     """The requested lifecycle move is not allowed from the current status."""
 
@@ -195,6 +203,10 @@ class InvalidTransitionError(GuarantorError):
 #: How long a guarantor has to answer a request, and then to finish the
 #: identity checks, before it lapses.
 REQUEST_WINDOW = timedelta(days=7)
+
+#: What a worker's own invite covers; the onboarding form asks for no terms.
+INVITE_SCOPE = "The worker's jobs on Credly"
+INVITE_CONDITIONS = "Covers no-show and property damage claims on the worker's jobs."
 
 
 def term_end(start: datetime) -> datetime:
@@ -329,6 +341,14 @@ async def _get_agreement(session: AsyncSession, instrument_id: UUID) -> Guaranto
     return agreement
 
 
+def _require_guarantor(agreement: GuarantorAgreement) -> UUID:
+    """The guarantor's user id, once someone has claimed the invite."""
+
+    if agreement.guarantor_user_id is None:
+        raise UnclaimedInviteError("Sign in through the invite link before continuing.")
+    return agreement.guarantor_user_id
+
+
 async def _resolve_guarantor_user(
     session: AsyncSession, *, email: str, full_name: str
 ) -> User:
@@ -411,6 +431,85 @@ async def send_for_signature(
     return agreement
 
 
+async def invite_guarantor(
+    session: AsyncSession,
+    worker: Worker,
+    *,
+    first_name: str,
+    last_name: str,
+    relationship: str,
+    now: datetime | None = None,
+) -> GuarantorAgreement:
+    """Open an invite link a worker can send to the person who will vouch for them.
+
+    No guarantor account exists yet: whoever signs in through the link claims
+    it. Any earlier invite still waiting to be claimed is withdrawn, so the
+    worker has one live link at a time.
+    """
+
+    moment = now or _now()
+    waiting = (
+        await session.scalars(
+            select(GuarantorAgreement).where(
+                GuarantorAgreement.worker_id == worker.id,
+                GuarantorAgreement.guarantor_user_id.is_(None),
+                GuarantorAgreement.status == AgreementStatus.PENDING_SIGNATURE,
+            )
+        )
+    ).all()
+    for old in waiting:
+        apply_transition(old, AgreementStatus.REVOKED, reason="Replaced by a new invite.", at=moment)
+        _record_audit(session, agreement=old, action="guarantor.revoked")
+
+    agreement = GuarantorAgreement(
+        worker_id=worker.id,
+        guarantor_user_id=None,
+        guarantor_name=f"{first_name.strip()} {last_name.strip()}".strip(),
+        scope=INVITE_SCOPE,
+        conditions=INVITE_CONDITIONS,
+        relationship_type=relationship,
+        status=AgreementStatus.PENDING_SIGNATURE,
+        valid_until=moment + REQUEST_WINDOW,
+    )
+    session.add(agreement)
+    await session.flush()
+    _record_audit(
+        session,
+        agreement=agreement,
+        action="guarantor.created",
+        actor_id=worker.user_id,
+        metadata={"status": status_label(agreement.status), "invite": True},
+    )
+    return agreement
+
+
+async def claim_invite(
+    session: AsyncSession, instrument_id: UUID, user: User
+) -> GuarantorAgreement:
+    """Make the signed-in person the guarantor on an invite link.
+
+    Claiming again as the same person is a no-op, so a refresh is harmless.
+    """
+
+    agreement = await _get_agreement(session, instrument_id)
+    if agreement.guarantor_user_id == user.id:
+        return agreement
+    if agreement.guarantor_user_id is not None:
+        raise InviteClaimedError("Someone else has already accepted this request.")
+    if agreement.status is not AgreementStatus.PENDING_SIGNATURE:
+        raise InvalidTransitionError(agreement.status, AgreementStatus.PENDING_SIGNATURE)
+
+    worker = await session.get(Worker, agreement.worker_id)
+    if worker is not None and worker.user_id == user.id:
+        raise SelfGuaranteeError("A worker cannot act as their own guarantor.")
+
+    agreement.guarantor_user_id = user.id
+    if not user.display_name.strip() and agreement.guarantor_name:
+        user.display_name = agreement.guarantor_name
+    _record_audit(session, agreement=agreement, action="guarantor.claimed", actor_id=user.id)
+    return agreement
+
+
 async def sign_instrument(
     session: AsyncSession,
     instrument_id: UUID,
@@ -442,6 +541,7 @@ async def sign_instrument(
         _record_audit(session, agreement=agreement, action="guarantor.expired")
         raise InvalidTransitionError(AgreementStatus.EXPIRED, AgreementStatus.PENDING_VERIFICATION)
 
+    signer_id = _require_guarantor(agreement)
     target = (
         AgreementStatus.PENDING_VERIFICATION if request.accepted else AgreementStatus.DECLINED
     )
@@ -451,7 +551,7 @@ async def sign_instrument(
     session.add(
         ElectronicSignature(
             agreement_id=agreement.id,
-            signer_id=agreement.guarantor_user_id,
+            signer_id=signer_id,
             signer_name=request.signer_name,
             signer_phone=request.signer_phone,
             accepted=request.accepted,
@@ -499,6 +599,7 @@ async def submit_identity_check(
     agreement = await _get_agreement(session, instrument_id)
     if agreement.status is not AgreementStatus.PENDING_VERIFICATION:
         raise InvalidTransitionError(agreement.status, AgreementStatus.ACTIVE)
+    _require_guarantor(agreement)
 
     document_reference: str | None = None
     if document is not None:
@@ -559,6 +660,7 @@ async def complete_liveness_check(
     agreement = await _get_agreement(session, instrument_id)
     if agreement.status is not AgreementStatus.PENDING_VERIFICATION:
         raise InvalidTransitionError(agreement.status, AgreementStatus.ACTIVE)
+    _require_guarantor(agreement)
 
     passed_identity = await session.scalar(
         select(IdentityVerification).where(
