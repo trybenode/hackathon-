@@ -145,3 +145,33 @@ async def test_the_trust_query_reports_what_was_verified(api, session):
         checks = scored.json()["verification"]
         assert (checks["identity"], checks["liveness"], checks["guarantor"]) == expected[demo.slug], demo.slug
         assert (checks["guarantor_valid_until"] is not None) == (demo.slug == "ada")
+
+
+async def test_a_platform_scores_with_its_own_settings(api, session):
+    client, _ = api
+    _, headers = await keyed(session, "sandbox")
+    linked = await client.post(
+        "/api/v1/platform/worker-links", headers=headers,
+        json={"external_worker_id": "user-1", "consent_token": ADA.consent_token},
+    )
+    query = {"worker_id": linked.json()["worker_id"], **QUERY}
+
+    listed = await client.get("/api/v1/platform/scoring-config", headers=headers)
+    assert listed.status_code == 200
+    assert "completion_rate" in listed.json()["signals"]
+    assert all(not item["custom"] for item in listed.json()["items"])
+
+    strict = {"weights": {"completion_rate": 0.5, "dispute_rate": 0.5}, "required_signals": ["completion_rate"],
+              "min_jobs": 100, "high_threshold": 0.9, "medium_threshold": 0.7}
+    saved = await client.put("/api/v1/platform/scoring-config/generic", headers=headers, json=strict)
+    assert saved.status_code == 200, saved.text and saved.json()["custom"]
+    scored = await client.post("/api/v1/trust/query", headers=headers, json=query)
+    assert scored.json()["band"] == "Building History"
+
+    bad = await client.put("/api/v1/platform/scoring-config/generic", headers=headers,
+                           json={**strict, "weights": {"completion_rate": 0.2}})
+    assert bad.status_code == 422
+
+    await client.delete("/api/v1/platform/scoring-config/generic", headers=headers)
+    rescored = await client.post("/api/v1/trust/query", headers=headers, json=query)
+    assert rescored.json()["band"] == "High"

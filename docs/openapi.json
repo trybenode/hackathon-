@@ -37,7 +37,26 @@
           "guarantor"
         ],
         "summary": "Create a guarantor instrument",
+        "description": "Ask a person to stand behind a worker who approved this platform to write.",
         "operationId": "create_instrument_api_v1_guarantor_instruments_post",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -76,6 +95,7 @@
           "guarantor"
         ],
         "summary": "List guarantor instruments",
+        "description": "A worker's guarantees, with their approval to read; without a worker,\nthe guarantees this platform asked for.",
         "operationId": "list_instruments_api_v1_guarantor_instruments_get",
         "parameters": [
           {
@@ -109,6 +129,22 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
             }
           }
         ],
@@ -144,17 +180,45 @@
         "summary": "Expire instruments whose validity period has ended",
         "description": "Run the expiry sweep on demand.\n\nThe app also sweeps on a timer; this exists so an external scheduler can\nown it instead, and so the sweep can be triggered in a demo.",
         "operationId": "expire_due_api_v1_guarantor_instruments_expire_due_post",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "object",
                   "additionalProperties": {
                     "type": "integer"
                   },
-                  "type": "object",
                   "title": "Response Expire Due Api V1 Guarantor Instruments Expire Due Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -221,6 +285,22 @@
               "type": "string",
               "format": "uuid",
               "title": "Instrument Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
             }
           }
         ],
@@ -319,6 +399,22 @@
               "format": "uuid",
               "title": "Instrument Id"
             }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
           }
         ],
         "requestBody": {
@@ -373,6 +469,22 @@
               "format": "uuid",
               "title": "Instrument Id"
             }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
           }
         ],
         "requestBody": {
@@ -425,6 +537,22 @@
               "type": "string",
               "format": "uuid",
               "title": "Instrument Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
             }
           }
         ],
@@ -479,6 +607,22 @@
               "format": "uuid",
               "title": "Instrument Id"
             }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
           }
         ],
         "requestBody": {
@@ -531,6 +675,22 @@
               "type": "string",
               "format": "uuid",
               "title": "Instrument Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
             }
           }
         ],
@@ -1049,6 +1209,193 @@
         "security": [
           {
             "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/platform/scoring-config": {
+      "get": {
+        "tags": [
+          "platform scoring"
+        ],
+        "summary": "Read your scoring settings",
+        "operationId": "read_settings_api_v1_platform_scoring_config_get",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoringSettingsList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "PlatformKey": []
+          }
+        ]
+      }
+    },
+    "/api/v1/platform/scoring-config/{platform_type}": {
+      "put": {
+        "tags": [
+          "platform scoring"
+        ],
+        "summary": "Set your scoring settings",
+        "description": "Weights must add up to 1 and thresholds satisfy 0 < medium < high \u2264 1.",
+        "operationId": "save_settings_api_v1_platform_scoring_config__platform_type__put",
+        "parameters": [
+          {
+            "name": "platform_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/PlatformType"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScoringSettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoringSettingsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "PlatformKey": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "platform scoring"
+        ],
+        "summary": "Go back to the preset",
+        "operationId": "reset_settings_api_v1_platform_scoring_config__platform_type__delete",
+        "parameters": [
+          {
+            "name": "platform_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/PlatformType"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoringSettingsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "PlatformKey": []
           }
         ]
       }
@@ -6983,6 +7330,134 @@
         ],
         "title": "SandboxWorkerView"
       },
+      "ScoringSettingsList": {
+        "properties": {
+          "signals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Signals"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScoringSettingsView"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "signals",
+          "items"
+        ],
+        "title": "ScoringSettingsList"
+      },
+      "ScoringSettingsUpdate": {
+        "properties": {
+          "weights": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Weights"
+          },
+          "required_signals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Signals"
+          },
+          "hard_fail": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Hard Fail"
+          },
+          "min_jobs": {
+            "type": "integer",
+            "title": "Min Jobs"
+          },
+          "high_threshold": {
+            "type": "number",
+            "title": "High Threshold"
+          },
+          "medium_threshold": {
+            "type": "number",
+            "title": "Medium Threshold"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "weights",
+          "min_jobs",
+          "high_threshold",
+          "medium_threshold"
+        ],
+        "title": "ScoringSettingsUpdate"
+      },
+      "ScoringSettingsView": {
+        "properties": {
+          "platform_type": {
+            "$ref": "#/components/schemas/PlatformType"
+          },
+          "custom": {
+            "type": "boolean",
+            "title": "Custom"
+          },
+          "weights": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Weights"
+          },
+          "required_signals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Signals"
+          },
+          "hard_fail": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Hard Fail"
+          },
+          "min_jobs": {
+            "type": "integer",
+            "title": "Min Jobs"
+          },
+          "high_threshold": {
+            "type": "number",
+            "title": "High Threshold"
+          },
+          "medium_threshold": {
+            "type": "number",
+            "title": "Medium Threshold"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "platform_type",
+          "custom",
+          "weights",
+          "required_signals",
+          "hard_fail",
+          "min_jobs",
+          "high_threshold",
+          "medium_threshold"
+        ],
+        "title": "ScoringSettingsView"
+      },
       "SignatureMetadata": {
         "properties": {
           "ip": {
@@ -7109,6 +7584,9 @@
           },
           "platform_type_applied": {
             "$ref": "#/components/schemas/PlatformType"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/WorkerVerification"
           }
         },
         "additionalProperties": false,
@@ -7121,7 +7599,8 @@
           "status",
           "signals_used",
           "explanation_summary",
-          "platform_type_applied"
+          "platform_type_applied",
+          "verification"
         ],
         "title": "TrustQueryResponse"
       },
@@ -7787,6 +8266,43 @@
           "credentials"
         ],
         "title": "WorkerRecordResponse"
+      },
+      "WorkerVerification": {
+        "properties": {
+          "identity": {
+            "type": "string",
+            "title": "Identity"
+          },
+          "liveness": {
+            "type": "string",
+            "title": "Liveness"
+          },
+          "guarantor": {
+            "type": "string",
+            "title": "Guarantor"
+          },
+          "guarantor_valid_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guarantor Valid Until"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "identity",
+          "liveness",
+          "guarantor"
+        ],
+        "title": "WorkerVerification",
+        "description": "What has been checked about the worker; never the identity data itself."
       }
     },
     "securitySchemes": {
