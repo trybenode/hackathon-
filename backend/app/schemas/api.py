@@ -77,6 +77,17 @@ class TrustQueryRequest(ApiModel):
     job_context: JobContext
 
 
+class WorkerVerification(ApiModel):
+    """What has been checked about the worker; never the identity data itself."""
+
+    #: "verified", "sandbox" (passed with a stand-in provider) or "not_verified".
+    identity: str
+    liveness: str
+    #: "active", "pending" (asked, not live yet) or "none".
+    guarantor: str
+    guarantor_valid_until: datetime | None = None
+
+
 class TrustQueryResponse(ApiModel):
     worker_id: UUID
     decision: bool
@@ -86,6 +97,8 @@ class TrustQueryResponse(ApiModel):
     signals_used: list[str]
     explanation_summary: str
     platform_type_applied: PlatformType
+    #: Identity, liveness and guarantor status, alongside the score.
+    verification: WorkerVerification
 
 
 class TrustBaselines(ApiModel):

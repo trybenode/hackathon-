@@ -11,7 +11,8 @@ from app.db.session import get_db_session
 from app.core.platform_auth import require_platform_api_key
 from app.models.portability import PlatformKey
 from app.services.platform_history import authorize_assessment
-from app.schemas.api import TrustQueryRequest, TrustQueryResponse
+from app.schemas.api import TrustQueryRequest, TrustQueryResponse, WorkerVerification
+from app.services.worker_verification import verification_for_id
 from app.schemas.portability import ApiError
 from app.services.trust_scoring.assessment import UnknownWorkerError, assess_worker
 
@@ -45,6 +46,7 @@ async def query_trust(
     except UnknownWorkerError as error:
         raise HTTPException(status_code=404, detail="Worker not found") from error
 
+    checks = await verification_for_id(session, result.worker_id)
     await session.commit()
     return TrustQueryResponse(
         worker_id=result.worker_id,
@@ -55,4 +57,10 @@ async def query_trust(
         signals_used=result.signals_used,
         explanation_summary=result.explanation_summary,
         platform_type_applied=payload.platform_type,
+        verification=WorkerVerification(
+            identity=checks.identity,
+            liveness=checks.liveness,
+            guarantor=checks.guarantor,
+            guarantor_valid_until=checks.guarantor_valid_until,
+        ),
     )
