@@ -178,6 +178,8 @@ class Worker(UUIDTimestampMixin, Base):
     #: Where the worker operates, e.g. "Lekki, Lagos".
     location: Mapped[str | None] = mapped_column(String(160), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    #: A demo worker that only sandbox platform keys can see.
+    is_sandbox: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     user: Mapped[User] = relationship(back_populates="worker")
     outcomes: Mapped[list["NormalizedOutcome"]] = relationship(back_populates="worker")
