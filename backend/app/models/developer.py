@@ -11,7 +11,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import JSON, DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, UUIDTimestampMixin
@@ -88,3 +88,26 @@ class ApiRequestLog(UUIDTimestampMixin, Base):
     path: Mapped[str] = mapped_column(String(300))
     status_code: Mapped[int] = mapped_column(Integer)
     duration_ms: Mapped[int] = mapped_column(Integer)
+
+
+class ScoringConfig(UUIDTimestampMixin, Base):
+    """A platform's own scoring settings for one platform type (SRS FR-1.3).
+
+    Kept per environment, so a sandbox key can experiment without changing how
+    production keys score real workers. Without a row the preset applies.
+    """
+
+    __tablename__ = "scoring_configs"
+    __table_args__ = (UniqueConstraint("organization_id", "environment", "platform_type"),)
+
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    environment: Mapped[str] = mapped_column(String(20))
+    platform_type: Mapped[str] = mapped_column(String(40))
+    #: Signal -> weight; the weights add up to 1.
+    weights: Mapped[dict[str, float]] = mapped_column(JSON)
+    required_signals: Mapped[list[str]] = mapped_column(JSON)
+    #: Signal -> highest raw rate allowed before the worker fails outright.
+    hard_fail: Mapped[dict[str, float]] = mapped_column(JSON, default=dict)
+    min_jobs: Mapped[int] = mapped_column(Integer)
+    high_threshold: Mapped[float] = mapped_column(Float)
+    medium_threshold: Mapped[float] = mapped_column(Float)

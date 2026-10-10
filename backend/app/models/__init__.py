@@ -32,10 +32,11 @@ from app.models.domain import (
 	Worker,
 )
 
-from app.models.developer import ApiRequestLog, DeveloperAccount, NameChangeRequest
+from app.models.developer import ApiRequestLog, DeveloperAccount, NameChangeRequest, ScoringConfig
 from app.models.portability import (HistoryIdentity, ImportReceipt, PlatformGrant, PlatformKey, Review, ShareGrant, WorkerLink)
 
 __all__ = [
+    "ScoringConfig",
     "ApiRequestLog",
     "DeveloperAccount",
     "NameChangeRequest",
