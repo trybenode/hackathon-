@@ -112,7 +112,7 @@ export function ReportIssueDialog<T extends string>({
             size="lg"
             fullWidth
             disabled={!canSubmit || busy}
-            className={cn("rounded-xl px-0", !canSubmit && "opacity-50")}
+            className={cn("min-w-0 rounded-xl px-0", !canSubmit && "opacity-50")}
             onClick={submit}
           >
             {busy ? "Submitting…" : "Submit"}
