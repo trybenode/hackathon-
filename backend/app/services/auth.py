@@ -134,12 +134,15 @@ async def verify_login_code(
     email: str,
     code: str,
     *,
+    create_account: bool = False,
     now: datetime | None = None,
 ) -> tuple[User, str]:
     """Check a code and open a session, returning the user and session token.
 
-    The token is returned once, to be set as an HTTP-only cookie; only its hash
-    is stored.
+    With `create_account` (signing up, or claiming a guarantor invite) a new
+    address gets an account; otherwise only existing accounts can sign in.
+    The token is returned once, to be set as an HTTP-only cookie; only its
+    hash is stored.
     """
 
     moment = now or _now()
@@ -165,10 +168,15 @@ async def verify_login_code(
         raise InvalidCodeError("That code is not correct.")
 
     user = await session.scalar(select(User).where(User.email == address))
+    if user is None and create_account:
+        # The name comes with the identity details, or from the invite.
+        user = User(email=address, display_name="")
+        session.add(user)
+        await session.flush()
     if user is None:
-        # An instrument creates the guarantor's user record, so a missing one
-        # means nobody has ever asked this person to stand as guarantor.
-        raise UnknownAccountError("We have no guarantor request for that address.")
+        raise UnknownAccountError(
+            "We have no account for that address. New workers can sign up from Get started."
+        )
 
     record.consumed_at = moment
     token = secrets.token_urlsafe(32)
