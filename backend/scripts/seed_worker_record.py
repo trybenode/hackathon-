@@ -56,6 +56,13 @@ SEED_ORGANIZATION = "Portable Record Seed Clients"
 NATIVE_SOURCE = "portable-record-seed"
 IMPORT_SOURCE = "portable-record-seed-import"
 
+#: Clients by pool number, so repeat hires come back under the same name.
+CLIENT_NAMES = [
+    "Peter James", "Amaka Obi", "John Parker", "Tunde Bello", "Ngozi Eze", "Sarah Ade",
+    "Chidi Okafor", "Bisi Adeyemi", "Kemi Lawal", "Emeka Nwosu", "Funke Alabi", "Yemi Ojo",
+]
+AREAS = ["Lekki, Lagos", "Ikoyi, Lagos", "Victoria Island, Lagos", "Yaba, Lagos", "Ikeja, Lagos"]
+
 #: (title, amount) for the kinds of job the history is made of.
 JOB_KINDS = [
     ("Home cleaning", Decimal("15000.00")),
@@ -105,6 +112,7 @@ async def add_outcome(
     dispute_resolution: str | None = None,
     imported: bool = False,
     created_at: datetime | None = None,
+    rating: int | None = None,
 ) -> None:
     key = f"seed-{uuid4().hex[:12]}"
     raw = RawOutcome(
@@ -123,6 +131,7 @@ async def add_outcome(
         status=status,
         occurred_at=occurred_at,
         amount=amount,
+        rating=Decimal(rating) if rating else None,
         completion_confirmed=confirmed,
         normalization_version="1",
         cancelled_by=cancelled_by,
@@ -150,6 +159,8 @@ async def main() -> None:
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         user = await get_or_create_user(session, email, "Jane Adams")
+        # Payscrow needs the worker's (merchant's) phone to open escrow.
+        user.phone = user.phone or "08087654321"
         worker = await session.scalar(select(Worker).where(Worker.user_id == user.id))
         if worker is None:
             worker = Worker(user_id=user.id)
@@ -169,16 +180,18 @@ async def main() -> None:
             session.add(organization)
             await session.flush()
 
-        # Start clean so re-running does not pile up duplicates.
+        # Start clean so re-running does not pile up duplicates. Only what this
+        # script seeded goes: outcomes from real jobs (released through escrow,
+        # or imported) belong to the worker and are kept.
         old_raw = (
             await session.scalars(
-                select(NormalizedOutcome.raw_outcome_id).where(
-                    NormalizedOutcome.worker_id == worker.id
-                )
+                select(RawOutcome.id).where(RawOutcome.source_id.in_((native.id, imported_source.id)))
             )
         ).all()
-        await session.execute(delete(NormalizedOutcome).where(NormalizedOutcome.worker_id == worker.id))
         if old_raw:
+            await session.execute(
+                delete(NormalizedOutcome).where(NormalizedOutcome.raw_outcome_id.in_(old_raw))
+            )
             await session.execute(delete(RawOutcome).where(RawOutcome.id.in_(old_raw)))
         old_assessments = (
             await session.scalars(
@@ -239,7 +252,8 @@ async def main() -> None:
         for index in range(36):
             title, amount = JOB_KINDS[index % len(JOB_KINDS)]
             occurred = NOW - timedelta(days=4 + index * 10, hours=rng.randint(0, 8))
-            client = f"client-{rng.randint(1, 24)}"
+            pool = rng.randint(1, 24)
+            client = f"client-{pool}"
             job = Job(
                 worker_id=worker.id,
                 organization_id=organization.id,
@@ -247,6 +261,8 @@ async def main() -> None:
                 status=JobStatus.RELEASED,
                 title=title,
                 agreed_amount=amount,
+                client_name=CLIENT_NAMES[pool % len(CLIENT_NAMES)],
+                location=AREAS[index % len(AREAS)],
             )
             session.add(job)
             await session.flush()
@@ -267,6 +283,8 @@ async def main() -> None:
                 confirmed=index % 6 != 3,
                 # One dispute went against the worker.
                 dispute_resolution="upheld" if index == 20 else None,
+                # Confirming customers rate the job; most are happy.
+                rating=(rng.choice((5, 5, 5, 4, 4, 3)) if index % 6 != 3 else None),
             )
 
         # Work verified elsewhere and imported two days ago.

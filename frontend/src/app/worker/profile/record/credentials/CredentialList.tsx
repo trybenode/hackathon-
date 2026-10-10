@@ -6,7 +6,7 @@ import { ArrowLeftIcon } from "@/components/worker/icons";
 import { ChevronRightIcon } from "@/components/worker/recordIcons";
 import { Button, CheckIcon, ClockIcon, VerificationBadge } from "@/components/ui";
 import { formatRelative } from "@/lib/format";
-import { formatShortDate } from "@/lib/workerMock";
+import { formatShortDate } from "@/lib/workerFormat";
 import { RecordGate } from "@/components/worker/RecordGate";
 import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
 import type { Credentials } from "@/lib/workerRecord";
