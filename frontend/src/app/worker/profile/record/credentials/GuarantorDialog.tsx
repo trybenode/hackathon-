@@ -3,7 +3,7 @@
 import { WorkerDialog } from "@/components/worker/WorkerDialog";
 import { Button, DotIcon, VerificationBadge } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { formatShortDate, initialsOf } from "@/lib/workerMock";
+import { formatFullDate, initialsOf } from "@/lib/workerFormat";
 import type { GuarantorCredential } from "@/lib/workerRecord";
 
 /** The stored agreement lifecycle and supporting verification evidence. */
@@ -44,9 +44,22 @@ export function GuarantorDialog({
             </span>
           </p>
           {guarantor.sandbox && <p className="text-body-sm text-grey-600">Sandbox verification evidence</p>}
-          <p className="text-xs leading-4 text-grey-900">
-            Valid until - {formatShortDate(guarantor.valid_until)}
-          </p>
+        </section>
+
+        <section className="flex flex-col px-1">
+          <h3 className="pb-2 text-body-md text-grey-900">Guarantee Information</h3>
+          <dl className="flex flex-col">
+            {[
+              ["Relationship", guarantor.relationship ? guarantor.relationship[0].toUpperCase() + guarantor.relationship.slice(1) : "—"],
+              ["Guarantee started", formatFullDate(guarantor.activated_at)],
+              ["Valid until", formatFullDate(guarantor.valid_until)],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between gap-3 border-b border-stroke py-4">
+                <dt className="text-body-sm whitespace-nowrap text-grey-600">{label}</dt>
+                <dd className="text-body-sm font-medium whitespace-nowrap text-grey-900">{value}</dd>
+              </div>
+            ))}
+          </dl>
         </section>
 
         <Button variant="outline" size="lg" onClick={onClose}>Close</Button>

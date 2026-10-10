@@ -31,6 +31,14 @@ class RecordOutcome:
     occurred_at: datetime
     amount: Decimal | None
     status: str
+    location: str | None = None
+    client_name: str | None = None
+    #: The customer's 1-5 stars, given when they released the payment.
+    rating: float | None = None
+    #: "none", or how a dispute on this job ended: "dismissed" or "upheld".
+    dispute: str = "none"
+    #: Where the outcome was verified: "native" here, else the importing platform.
+    source: str = "native"
 
 
 @dataclass(frozen=True)
@@ -49,6 +57,8 @@ class GuarantorCredential:
     activated_at: datetime
     valid_until: datetime
     sandbox: bool
+    #: How the guarantor knows the worker, e.g. "employer".
+    relationship: str = ""
 
 
 @dataclass(frozen=True)
@@ -124,7 +134,7 @@ async def _guarantor(session: AsyncSession, worker_id: UUID) -> GuarantorCredent
     status = agreement.status.value
     if agreement.status == AgreementStatus.ACTIVE and _as_aware(agreement.valid_until) <= datetime.now(UTC):
         status = AgreementStatus.EXPIRED.value
-    return GuarantorCredential(person.display_name if person else "", all(value == "verified" for value in checks), status.replace("_", " ").title(), _as_aware(agreement.verified_at), _as_aware(agreement.valid_until), all(value in {"verified", "sandbox"} for value in checks) and any(value == "sandbox" for value in checks))
+    return GuarantorCredential(person.display_name if person else "", all(value == "verified" for value in checks), status.replace("_", " ").title(), _as_aware(agreement.verified_at), _as_aware(agreement.valid_until), all(value in {"verified", "sandbox"} for value in checks) and any(value == "sandbox" for value in checks), agreement.relationship_type)
 
 
 async def completion_labels(session: AsyncSession, rows: list[NormalizedOutcome]) -> dict[UUID, str]:
@@ -152,7 +162,12 @@ async def load_record(session: AsyncSession, user: User, *, include_history: boo
     preview = completed[:PREVIEW_SIZE] if include_history else []
     jobs = {job.id: job for job in (await session.scalars(select(Job).where(Job.id.in_({item.job_id for item in preview if item.job_id})))).all()} if preview else {}
     labels = await completion_labels(session, preview)
-    history = [RecordOutcome(row.id, jobs[row.job_id].title if row.job_id in jobs else "Recorded job", _as_aware(row.occurred_at), row.amount if row.amount is not None else jobs[row.job_id].agreed_amount if row.job_id in jobs else None, labels[row.id]) for row in preview]
+    history = [RecordOutcome(row.id, jobs[row.job_id].title if row.job_id in jobs else "Recorded job", _as_aware(row.occurred_at), row.amount if row.amount is not None else jobs[row.job_id].agreed_amount if row.job_id in jobs else None, labels[row.id],
+        location=jobs[row.job_id].location if row.job_id in jobs else None,
+        client_name=jobs[row.job_id].client_name if row.job_id in jobs else None,
+        rating=float(row.rating) if row.rating is not None else None,
+        dispute=row.dispute_resolution if row.dispute_resolution in ("dismissed", "upheld") else "none",
+        source=row.source_platform) for row in preview]
     imported_count, imported_at = (await session.execute(select(func.count(NormalizedOutcome.id), func.max(NormalizedOutcome.created_at)).where(NormalizedOutcome.worker_id == worker.id, NormalizedOutcome.verified.is_(True), NormalizedOutcome.import_method != "native"))).one()
     initial = None
     if include_starting_history and total > len(rows):

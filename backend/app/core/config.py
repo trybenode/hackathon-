@@ -56,6 +56,33 @@ class Settings(BaseSettings):
     resend_from: str = Field("Trust Infrastructure <onboarding@resend.dev>", alias="RESEND_FROM")
     credential_signing_secret: str = Field("", alias="CREDENTIAL_SIGNING_SECRET")
     platform_api_key: str = Field("", alias="PLATFORM_API_KEY")
+    #: Payscrow escrow. Without a key, a local stand-in holds the money.
+    payscrow_api_key: str = Field("", alias="PAYSCROW_API_KEY")
+    #: The sandbox lives on .dev; production is https://api.payscrow.net.
+    payscrow_base_url: str = Field("https://api.payscrow.dev", alias="PAYSCROW_BASE_URL")
+    #: Verifies that webhooks really came from Payscrow.
+    payscrow_webhook_secret: str = Field("", alias="PAYSCROW_WEBHOOK_SECRET")
+    #: Public HTTPS address Payscrow posts to, e.g. a tunnel to this API.
+    payscrow_webhook_url: str = Field("", alias="PAYSCROW_WEBHOOK_URL")
+    #: Share of Payscrow's charge the worker bears, 0 to 100. 0: the client pays it.
+    payscrow_merchant_charge_percentage: float = Field(0, alias="PAYSCROW_MERCHANT_CHARGE_PERCENTAGE")
+    #: Micro-insurance premium (SRS 3.6): a share of the job, kept between a
+    #: floor and a cap, paid by the client on top of the job. 0 turns it off.
+    insurance_premium_rate: float = Field(0.02, alias="INSURANCE_PREMIUM_RATE")
+    insurance_premium_min: float = Field(200, alias="INSURANCE_PREMIUM_MIN")
+    insurance_premium_max: float = Field(2000, alias="INSURANCE_PREMIUM_MAX")
+    #: Hours the customer has, after the worker marks a job complete, to
+    #: release with their code or report a problem. After that a dispute opens:
+    #: money never releases on a timer.
+    escrow_confirmation_window_hours: int = Field(48, alias="ESCROW_CONFIRMATION_WINDOW_HOURS")
+    #: Where the screens live, for links in emails (job pages, job details).
+    frontend_base_url: str = Field("http://localhost:3000", alias="FRONTEND_BASE_URL")
+    #: The platform's own address, told when a dispute opens. Optional.
+    ops_email: str = Field("", alias="OPS_EMAIL")
+
+    @property
+    def escrow_enabled(self) -> bool:
+        return bool(self.payscrow_api_key.strip())
     history_enabled: bool = True
     sms_provider: str = "stub"
     twilio_account_sid: str = ""
@@ -73,6 +100,22 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def payscrow_webhook_endpoint(self) -> str:
+        """PAYSCROW_WEBHOOK_URL with the webhook route on the end.
+
+        A bare host (e.g. a fresh tunnel address) is a common slip that sends
+        Payscrow's webhooks to "/"; the route is added when no path is given.
+        """
+
+        url = self.payscrow_webhook_url.strip()
+        if not url:
+            return ""
+        parts = urlsplit(url)
+        if parts.path in ("", "/"):
+            return urlunsplit(parts._replace(path=f"{self.api_v1_prefix}/webhooks/payscrow"))
+        return url
 
     @property
     def async_database_url(self) -> str:

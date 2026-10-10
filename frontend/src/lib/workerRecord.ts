@@ -30,6 +30,14 @@ export type RecordOutcome = {
   occurred_at: string;
   amount: string | null;
   status: string;
+  location: string | null;
+  client_name: string | null;
+  /** The customer's 1-5 stars; null for outcomes imported from elsewhere. */
+  rating: number | null;
+  /** "none", or how a dispute on the job ended. */
+  dispute: "none" | "dismissed" | "upheld";
+  /** "native" here, else the platform it was imported from. */
+  source: string;
 };
 
 export type IdentityCredential = {
@@ -47,6 +55,8 @@ export type GuarantorCredential = {
   activated_at: string;
   /** A guarantee runs for one year from activation. */
   valid_until: string;
+  /** How the guarantor knows the worker, e.g. "employer". */
+  relationship: string;
 };
 
 export type ImportedRecordCredential = {

@@ -1,26 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { useJobs } from "@/components/worker/JobsProvider";
+import { useCallback, useState } from "react";
+import { RecordGate } from "@/components/worker/RecordGate";
+import { useWorkerResource } from "@/components/worker/useWorkerResource";
 import { Button, DotIcon } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import {
-  formatNaira,
-  initialsOf,
+  getMyJobs,
   jobStatusLabel,
   jobTab,
   paymentStatusLabel,
   type WorkerJob,
-} from "@/lib/workerMock";
+} from "@/lib/workerJobs";
+import { formatNaira, initialsOf } from "@/lib/workerFormat";
 
 const TABS = ["All", "Active", "Completed"] as const;
 type Tab = (typeof TABS)[number];
 
-const AVATAR_TONE: Record<WorkerJob["clientTone"], string> = {
-  cyan: "bg-primary-400",
-  purple: "bg-badge-pending-text",
-};
+/** The designs give each client a different avatar colour. */
+const AVATAR_TONES = ["bg-primary-400", "bg-badge-pending-text"];
+
+function toneFor(name: string) {
+  const sum = [...name].reduce((total, char) => total + char.charCodeAt(0), 0);
+  return AVATAR_TONES[sum % AVATAR_TONES.length];
+}
 
 function JobCard({ job }: { job: WorkerJob }) {
   const tab = jobTab(job);
@@ -32,13 +36,13 @@ function JobCard({ job }: { job: WorkerJob }) {
           <span
             className={cn(
               "flex h-11 w-11 shrink-0 items-center justify-center rounded-pill text-body-md font-medium text-white",
-              AVATAR_TONE[job.clientTone],
+              toneFor(job.client_name ?? ""),
             )}
           >
-            {initialsOf(job.clientName)}
+            {job.client_name ? initialsOf(job.client_name) : "?"}
           </span>
           <span className="flex flex-col">
-            <span className="text-body-md text-grey-900">{job.clientName}</span>
+            <span className="text-body-md text-grey-900">{job.client_name ?? "Awaiting customer"}</span>
             <span className="text-body-sm text-grey-600">Client</span>
           </span>
         </div>
@@ -50,7 +54,7 @@ function JobCard({ job }: { job: WorkerJob }) {
 
       <div className="flex flex-col gap-1">
         <p className="text-body-lg font-semibold text-grey-900">{job.title}</p>
-        <p className="text-body-sm text-grey-600">{formatNaira(job.amount)}</p>
+        <p className="text-body-sm text-grey-600">{formatNaira(Number(job.amount))}</p>
       </div>
 
       <dl className="flex flex-col gap-1 text-body-sm">
@@ -74,7 +78,9 @@ function JobCard({ job }: { job: WorkerJob }) {
 }
 
 export function JobsList() {
-  const { jobs } = useJobs();
+  const load = useCallback(() => getMyJobs(), []);
+  const { data, error, loading } = useWorkerResource(load, "This account has no worker profile.");
+  const jobs = data ?? [];
   const [tab, setTab] = useState<Tab>("All");
   const shown = tab === "All" ? jobs : jobs.filter((job) => jobTab(job) === tab);
 
@@ -107,13 +113,15 @@ export function JobsList() {
         })}
       </div>
 
-      <div className="flex flex-col gap-4 px-6 pt-6">
-        {shown.length === 0 ? (
-          <p className="text-body-sm text-grey-600">Nothing here yet.</p>
-        ) : (
-          shown.map((job) => <JobCard key={job.id} job={job} />)
-        )}
-      </div>
+      <RecordGate loading={loading} error={error}>
+        <div className="flex flex-col gap-4 px-6 pt-6">
+          {shown.length === 0 ? (
+            <p className="text-body-sm text-grey-600">Nothing here yet.</p>
+          ) : (
+            shown.map((job) => <JobCard key={job.id} job={job} />)
+          )}
+        </div>
+      </RecordGate>
     </main>
   );
 }

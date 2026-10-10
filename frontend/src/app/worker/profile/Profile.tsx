@@ -9,7 +9,7 @@ import { ScoreRing } from "@/components/worker/ScoreRing";
 import { TrustBandBadge } from "@/components/worker/TrustBandBadge";
 import { RecordGate } from "@/components/worker/RecordGate";
 import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
-import { initialsOf } from "@/lib/workerMock";
+import { initialsOf } from "@/lib/workerFormat";
 
 export function Profile() {
   const router = useRouter();
