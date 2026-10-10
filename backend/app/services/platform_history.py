@@ -69,18 +69,23 @@ async def authorized_link(session: AsyncSession, principal: PlatformKey, externa
     return link
 
 
-async def authorize_assessment(session: AsyncSession, principal: PlatformKey, worker_id: UUID) -> None:
-    """Require current read consent for assessments addressed by canonical UUID."""
+async def authorize_worker(session: AsyncSession, principal: PlatformKey, worker_id: UUID, permission: str) -> None:
+    """Require the worker's current approval for `permission`, addressed by canonical UUID."""
     await same_environment(session, principal, worker_id)
     links = (await session.scalars(select(WorkerLink).where(WorkerLink.organization_id == principal.organization_id,
         WorkerLink.worker_id == worker_id))).all()
     for link in links:
         try:
-            await active_grant(session, link.grant_id, principal, "read_history")
+            await active_grant(session, link.grant_id, principal, permission)
             return
         except FeatureError:
             continue
-    raise FeatureError(403, "CONSENT_REQUIRED", "Current worker approval is required for this assessment.")
+    raise FeatureError(403, "CONSENT_REQUIRED", f"Current worker approval for {permission} is required.")
+
+
+async def authorize_assessment(session: AsyncSession, principal: PlatformKey, worker_id: UUID) -> None:
+    """Require current read consent for assessments addressed by canonical UUID."""
+    await authorize_worker(session, principal, worker_id, "read_history")
 
 
 async def read_history(session: AsyncSession, principal: PlatformKey, external_id: str, page: int, size: int) -> HistoryPage:
