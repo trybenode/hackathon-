@@ -5,7 +5,10 @@ Base URL: `/api/v1`
 Authentication:
 
 - Platform routes use an API key in `X-API-Key`.
-- User-facing routes use a JWT Bearer token.
+- User-facing routes use the existing HTTP-only `guarantor_session` cookie.
+- Dedicated platform keys identify organizations; history and assessment access require worker approval. The legacy shared key is limited to development trust queries.
+
+Implemented portability, consent, restricted reviews, examples and handoff: [portable work history guide](docs/portable_work_history.md). Generated contract: [OpenAPI JSON](docs/openapi.json). Monitoring/configuration/job-provider endpoints described below remain design contracts unless registered in the generated OpenAPI schema.
 
 ## API Purpose
 
@@ -45,7 +48,7 @@ Response:
   "confidence": 0.84,
   "band": "High",
   "status": "Scored",
-  "signals_used": ["completion_rate", "dispute_count", "repeat_hires"],
+  "signals_used": ["completion_rate", "dispute_rate", "repeat_hire_rate"],
   "explanation_summary": "Strong completion history with very low disputes",
   "platform_type_applied": "domestic"
 }
@@ -274,3 +277,19 @@ All errors use:
 - Write audit events for status, investigation, guarantor, credential, escrow, and dispute changes.
 - Invalidate trust caches after outcome writes and policy changes.
 - Apply pagination to all list endpoints.
+
+
+## Integrated worker and review interfaces
+
+The canonical session-authenticated worker snapshot is `GET /me/record`.
+Full history uses `GET /me/record/history?page=1&size=20`; the older
+`GET /me/worker/record` remains a compatibility projection. Both use shared
+identity, guarantor, assessment and evidence semantics. Private worker screens
+retain model score separately from evidence confidence. Self-declared history
+is separate from verified outcomes; absent ratings/metrics remain null.
+Customer review entry uses `GET /me/client/jobs` and `/client/jobs` in the web UI.
+
+Share/platform-grant creation accepts an optional UUID `Idempotency-Key`.
+Worker-owned `.../operations/{operation_id}` endpoints reconcile lost responses
+without recovering secret tokens. See the integration guide and generated
+OpenAPI for all request/response fields, examples, errors and security requirements.

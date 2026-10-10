@@ -3,14 +3,8 @@
 import { useState } from "react";
 import { WorkerDialog } from "@/components/worker/WorkerDialog";
 import { Button, FileDropzone, FileItem, Switch } from "@/components/ui";
-import { ApiError } from "@/lib/guarantor";
+import { errorMessage } from "@/lib/portability";
 import { importCredentials } from "@/lib/workerRecord";
-
-/** Where an imported record says it came from, if it does. */
-function sourceOf(record: Record<string, unknown>) {
-  const source = record.source_platform ?? record.platform;
-  return typeof source === "string" && source.trim() ? source.trim() : "Imported record";
-}
 
 /**
  * "Import Record": a portable record file exported earlier (Export record),
@@ -25,7 +19,7 @@ export function ImportRecordDialog({
   workerId: string;
   open: boolean;
   onClose: () => void;
-  onImported: () => void;
+  onImported: () => Promise<void> | void;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [agreed, setAgreed] = useState(false);
@@ -56,15 +50,18 @@ export function ImportRecordDialog({
       if (typeof token !== "string" || !token) {
         throw new Error("That file has no signed record in it. Use the file Export record saved.");
       }
-      const result = await importCredentials(workerId, token, sourceOf(record));
+      // The server skips outcomes already on the record, so a re-import adds none.
+      const result = await importCredentials(workerId, token);
       setDone(
-        result.imported_outcomes === 1
-          ? "1 verified outcome was added to your record."
-          : `${result.imported_outcomes} verified outcomes were added to your record.`,
+        result.imported_outcomes === 0
+          ? "Nothing new to add: every outcome in that record is already on your profile."
+          : result.imported_outcomes === 1
+            ? "1 verified outcome was added to your record."
+            : `${result.imported_outcomes} verified outcomes were added to your record.`,
       );
-      onImported();
+      await onImported();
     } catch (cause) {
-      setError(cause instanceof ApiError || cause instanceof Error ? cause.message : "Could not import that record.");
+      setError(errorMessage(cause));
     } finally {
       setBusy(false);
     }

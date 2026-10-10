@@ -1,0 +1,210 @@
+# REST-client examples. Replace placeholders with isolated demo records.
+# API authentication is a session cookie for people and X-API-Key for platforms.
+@base = http://localhost:8000/api/v1
+@worker = 00000000-0000-4000-8000-000000000001
+@job = 00000000-0000-4000-8000-000000000002
+@platform = 00000000-0000-4000-8000-000000000003
+@grant = 00000000-0000-4000-8000-000000000004
+@workerSession = EXISTING_WORKER_SESSION
+@customerSession = EXISTING_CUSTOMER_SESSION
+@key = DEDICATED_PLATFORM_KEY
+@token = SIGNED_CREDENTIAL_TOKEN
+@share = RANDOM_SHARE_TOKEN_RETURNED_ONCE
+@operation = 00000000-0000-4000-8000-000000000005
+@consent = RANDOM_PLATFORM_CONSENT_RETURNED_ONCE
+
+### Worker record: 200, real assessment, provenance and separate self-declared count
+GET {{base}}/me/record
+Cookie: guarantor_session={{workerSession}}
+
+### Credential export: 200, JSON with credential_token and fresh trust_summary
+GET {{base}}/workers/{{worker}}/credentials/export
+Cookie: guarantor_session={{workerSession}}
+
+### Credential import: 200; repeat the same token => imported_outcomes: 0
+POST {{base}}/workers/{{worker}}/credentials/import
+Cookie: guarantor_session={{workerSession}}
+Content-Type: application/json
+
+{"credential_token":"{{token}}","source_platform":"Source A"}
+
+### Tampered token: 422 REQUEST_FAILED, invalid signature/malformed token detail
+POST {{base}}/workers/{{worker}}/credentials/import
+Cookie: guarantor_session={{workerSession}}
+Content-Type: application/json
+
+{"credential_token":"{{token}}tampered","source_platform":"Source A"}
+
+### Expired token: use an otherwise valid bundle issued more than seven days ago
+# Expected: 422 REQUEST_FAILED, "Credential token has expired".
+# Wrong-worker token also returns 422; never change the subject to bypass ownership.
+POST {{base}}/workers/{{worker}}/credentials/import
+Cookie: guarantor_session={{workerSession}}
+Content-Type: application/json
+
+{"credential_token":"VALID_BUT_EXPIRED_TOKEN","source_platform":"Source A"}
+
+### Generate public link: 201, token disclosed once, expiry seven days
+POST {{base}}/me/worker/shares
+Idempotency-Key: {{operation}}
+Cookie: guarantor_session={{workerSession}}
+
+### Read public summary: 200, identity/work checks distinct; no detailed history
+GET {{base}}/verification/{{share}}
+
+### Revoke owned public link: 204; next GET /verification/{{share}} => 410 LINK_UNAVAILABLE
+DELETE {{base}}/me/worker/shares/{{grant}}
+Cookie: guarantor_session={{workerSession}}
+
+### Unknown token: 404 LINK_NOT_FOUND
+GET {{base}}/verification/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
+### Named platform approval: 201, organization name, permissions and one-time token
+POST {{base}}/me/worker/platform-grants
+Cookie: guarantor_session={{workerSession}}
+Content-Type: application/json
+
+{"organization_id":"{{platform}}","permissions":["read_history","import_history"]}
+
+### Link platform account: 201, canonical worker_id, no name/phone matching
+POST {{base}}/platform/worker-links
+X-API-Key: {{key}}
+Content-Type: application/json
+
+{"external_worker_id":"worker-123","consent_token":"{{consent}}"}
+
+### Unauthorized platform: 401 AUTH_REQUIRED
+POST {{base}}/platform/worker-links
+X-API-Key: invalid-key
+Content-Type: application/json
+
+{"external_worker_id":"worker-123","consent_token":"{{consent}}"}
+
+### Historical import: 200, imported_outcomes: 1, verified_outcomes: 0
+# Identical retry with this key returns the original receipt.
+# Same facts with a different key return duplicate_outcomes: 1.
+POST {{base}}/platform/workers/worker-123/history/import
+X-API-Key: {{key}}
+Idempotency-Key: external-history-example-1
+Content-Type: application/json
+
+{"outcomes":[{"source_record_id":"past-job-1","occurred_at":"2026-10-01T12:00:00+01:00","status":"completed","rating":4,"dispute_resolution":null,"attest":false}]}
+
+### Changed facts reusing idempotency key: 409 IDEMPOTENCY_CONFLICT
+POST {{base}}/platform/workers/worker-123/history/import
+X-API-Key: {{key}}
+Idempotency-Key: external-history-example-1
+Content-Type: application/json
+
+{"outcomes":[{"source_record_id":"past-job-1","occurred_at":"2026-10-01T12:00:00+01:00","status":"no_show","attest":false}]}
+
+### An unreviewed key cannot attest: 403 ATTESTATION_NOT_ALLOWED
+# With reviewed attestation authority, this instead imports verified own-source evidence.
+POST {{base}}/platform/workers/worker-123/history/import
+X-API-Key: {{key}}
+Idempotency-Key: unauthorized-attestation-example
+Content-Type: application/json
+
+{"outcomes":[{"source_record_id":"past-job-2","occurred_at":"2026-10-01T12:00:00+01:00","status":"completed","attest":true}]}
+
+### Approved history: 200 items/total/page/size/pages, provenance, no client identities
+GET {{base}}/platform/workers/worker-123/history?page=1&size=20
+X-API-Key: {{key}}
+
+### Approved trust query: 200 decision/confidence/band from eligible persisted evidence
+POST {{base}}/trust/query
+X-API-Key: {{key}}
+Content-Type: application/json
+
+{"worker_id":"{{worker}}","platform_type":"generic","job_context":{"job_type":"cleaning","value_band":"low"}}
+
+### Revoke platform grant: 204; subsequent history read => 403 CONSENT_EXPIRED
+# Subsequent trust/query => 403 CONSENT_REQUIRED. Downloaded data cannot be recalled.
+DELETE {{base}}/me/worker/platform-grants/{{grant}}
+Cookie: guarantor_session={{workerSession}}
+
+### Review eligibility: 200 eligible/reasons/existing_review for attributed hiring customer
+GET {{base}}/jobs/{{job}}/review-eligibility
+Cookie: guarantor_session={{customerSession}}
+
+### Eligible protected review: 201 id/job_id/rating/submitted_at; comment stays private
+# Use a completed protected independent job with explicit dual confirmation.
+# Matching retry returns same receipt. New key/payload for same job => 409 REVIEW_EXISTS.
+POST {{base}}/jobs/{{job}}/review
+Cookie: guarantor_session={{customerSession}}
+Idempotency-Key: customer-review-example-1
+Content-Type: application/json
+
+{"rating":4,"comment":"Completed the agreed work."}
+
+### Ineligible attributed job: 403 REVIEW_INELIGIBLE with eligibility reasons
+# Replace job with one lacking protection/identity/confirmation or having an open dispute.
+# An unrelated customer's job returns 404 JOB_NOT_FOUND instead.
+POST {{base}}/jobs/{{job}}/review
+Cookie: guarantor_session={{customerSession}}
+Idempotency-Key: ineligible-review-example
+Content-Type: application/json
+
+{"rating":5}
+
+### Invalid review rating: 422 INVALID_INPUT (integer rating required)
+POST {{base}}/jobs/{{job}}/review
+Cookie: guarantor_session={{customerSession}}
+Idempotency-Key: invalid-rating-example
+Content-Type: application/json
+
+{"rating":4.5}
+
+# Retryable failure examples:
+# Sixth review attempt within the same UTC minute => 429 REVIEW_RATE_LIMIT.
+# Eleventh successful review in rolling 24h => 429 REVIEW_VELOCITY_LIMIT.
+# Stop isolated demo Redis, then submit => 503 LIMITER_UNAVAILABLE, Retry-After: 60.
+# Preserve the same draft/idempotency key. Check review-eligibility for a receipt
+# after an interrupted response before resubmission. Do not retry invalid input
+# or re-enable a revoked grant without a new worker approval.
+
+
+### Canonical complete history: 200, all statuses and honest provenance, 20 per page
+GET {{base}}/me/record/history?page=1&size=20
+Cookie: guarantor_session={{workerSession}}
+
+### Compatibility record: 200; same assessment/evidence, original projection
+GET {{base}}/me/worker/record?page=1&size=20
+Cookie: guarantor_session={{workerSession}}
+
+### Customer entry: 200, jobs with client_id matching this session only
+GET {{base}}/me/client/jobs?page=1&size=20
+Cookie: guarantor_session={{customerSession}}
+
+### Lost share response: 200 receipt, token:null; 404 if not completed
+GET {{base}}/me/worker/shares/operations/{{operation}}
+Cookie: guarantor_session={{workerSession}}
+
+### Identical share retry: 201, same id, token:null after original committed
+POST {{base}}/me/worker/shares
+Idempotency-Key: {{operation}}
+Cookie: guarantor_session={{workerSession}}
+
+### Idempotent named-platform approval; use a fresh UUID for a new operation
+POST {{base}}/me/worker/platform-grants
+Idempotency-Key: {{operation}}
+Cookie: guarantor_session={{workerSession}}
+Content-Type: application/json
+
+{"organization_id":"{{platform}}","permissions":["read_history"]}
+
+### Reconcile approval: 200 receipt with token:null
+GET {{base}}/me/worker/platform-grants/operations/{{operation}}
+Cookie: guarantor_session={{workerSession}}
+
+### Changed approval details reuse operation: 409 IDEMPOTENCY_CONFLICT
+POST {{base}}/me/worker/platform-grants
+Idempotency-Key: {{operation}}
+Cookie: guarantor_session={{workerSession}}
+Content-Type: application/json
+
+{"organization_id":"{{platform}}","permissions":["import_history"]}
+
+### Revocation before replacement: 204, then create with a fresh operation UUID
+DELETE {{base}}/me/worker/platform-grants/{{grant}}
+Cookie: guarantor_session={{workerSession}}

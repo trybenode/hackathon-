@@ -100,6 +100,20 @@ def test_import_unmappable_status_is_skipped_not_guessed():
     assert result[0]["job_id"] == "t1"
 
 
+def test_handyman_import_maps_statuses_and_skips_rework():
+    rows = [
+        {"job_id": "h1", "date": "2026-09-01", "status": "JOB_COMPLETED"},
+        {"job_id": "h2", "date": "2026-09-02", "status": "PRO_CANCELLED"},
+        {"job_id": "h3", "date": "2026-09-03", "status": "CLIENT_CANCELLED"},
+        {"job_id": "h4", "date": "2026-09-04", "status": "NO_SHOW"},
+        {"job_id": "h5", "date": "2026-09-05", "status": "REWORK_REQUESTED"},
+    ]
+    result = normalise_import(rows, "handyman_generic")
+    assert len(result) == 4
+    assert all(r["job_id"] != "h5" for r in result)
+    assert [r["status"] for r in result] == ["completed", "cancelled", "cancelled", "no_show"]
+
+
 def test_import_never_includes_native_only_fields():
     rows = [{"job_id": "t1", "date": "2026-09-01", "status": "COMPLETED"}]
     result = normalise_import(rows, "ridehailing_generic")[0]

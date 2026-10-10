@@ -1,0 +1,97 @@
+{
+  "description": "Fictional fixtures for ML review; no real-worker reassessment or team approval is implied.",
+  "scoring_fingerprint_version": "3",
+  "weights_changed": false,
+  "cases": {
+    "legacy_missing_dispute": {
+      "previous_input": {
+        "signals": {
+          "completion_rate": 1.0,
+          "cancellation_rate": 0.0,
+          "no_show_rate": 0.0,
+          "dispute_rate": 0.0
+        },
+        "assessment": {
+          "decision": true,
+          "confidence": 0.42,
+          "score": 1.0,
+          "band": "High",
+          "status": "Scored",
+          "signals_used": [
+            "completion_rate",
+            "dispute_rate",
+            "no_show_rate",
+            "cancellation_rate"
+          ],
+          "explanation_summary": "Score 1.00 (High); weakest signal: completion_rate"
+        }
+      },
+      "conservative_input": {
+        "signals": {
+          "completion_rate": 1.0,
+          "cancellation_rate": 0.0,
+          "no_show_rate": 0.0
+        },
+        "assessment": {
+          "decision": false,
+          "confidence": 0.5,
+          "score": null,
+          "band": "Building History",
+          "status": "Building History",
+          "signals_used": [
+            "completion_rate",
+            "no_show_rate",
+            "cancellation_rate"
+          ],
+          "explanation_summary": "Not enough verified job history yet"
+        }
+      }
+    },
+    "legacy_known_dismissed_dispute": {
+      "previous_input": {
+        "signals": {
+          "completion_rate": 1.0,
+          "cancellation_rate": 0.0,
+          "no_show_rate": 0.0,
+          "dispute_rate": 0.0
+        },
+        "assessment": {
+          "decision": true,
+          "confidence": 0.42,
+          "score": 1.0,
+          "band": "High",
+          "status": "Scored",
+          "signals_used": [
+            "completion_rate",
+            "dispute_rate",
+            "no_show_rate",
+            "cancellation_rate"
+          ],
+          "explanation_summary": "Score 1.00 (High); weakest signal: completion_rate"
+        }
+      },
+      "conservative_input": {
+        "signals": {
+          "completion_rate": 1.0,
+          "cancellation_rate": 0.0,
+          "no_show_rate": 0.0,
+          "dispute_rate": 0.0
+        },
+        "assessment": {
+          "decision": true,
+          "confidence": 0.42,
+          "score": 1.0,
+          "band": "High",
+          "status": "Scored",
+          "signals_used": [
+            "completion_rate",
+            "dispute_rate",
+            "no_show_rate",
+            "cancellation_rate"
+          ],
+          "explanation_summary": "Score 1.00 (High); weakest signal: completion_rate"
+        }
+      }
+    }
+  }
+}

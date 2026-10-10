@@ -9,10 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
 from app.core.platform_auth import require_platform_api_key
+from app.models.portability import PlatformKey
+from app.services.platform_history import authorize_assessment
 from app.schemas.api import TrustQueryRequest, TrustQueryResponse
+from app.schemas.portability import ApiError
 from app.services.trust_scoring.assessment import UnknownWorkerError, assess_worker
 
-router = APIRouter(prefix="/trust", tags=["trust"])
+router = APIRouter(prefix="/trust", tags=["trust"], responses={code: {"model": ApiError} for code in (401, 403, 404, 422, 503)})
 
 
 @router.post(
@@ -22,11 +25,13 @@ router = APIRouter(prefix="/trust", tags=["trust"])
 )
 async def query_trust(
     payload: TrustQueryRequest,
-    _: None = Depends(require_platform_api_key),
+    principal: PlatformKey | None = Depends(require_platform_api_key),
     session: AsyncSession = Depends(get_db_session),
 ) -> TrustQueryResponse:
     """Score verified normalized history and persist/reuse its assessment."""
 
+    if principal is not None:
+        await authorize_assessment(session, principal, payload.worker_id)
     try:
         result = await assess_worker(
             session,

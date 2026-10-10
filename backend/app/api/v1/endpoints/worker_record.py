@@ -8,8 +8,10 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.schemas.portability import HistoryPage, ApiError, VerificationSummary
+from app.services.portability import own_history, summary_from_record
 
 from app.api.v1.endpoints.auth import current_user
 from app.db.session import get_db_session
@@ -17,10 +19,12 @@ from app.models.domain import User
 from app.schemas.api import ApiModel
 from app.services import worker_record as record_service
 
-router = APIRouter(prefix="/me", tags=["worker record"])
+router = APIRouter(prefix="/me", tags=["worker record"], responses={code: {"model": ApiError} for code in (401, 404, 422, 503)})
 
 
+# extract into defined schema file 
 class RecordAssessment(ApiModel):
+    assessed_at: datetime
     decision: bool
     confidence: float
     #: How good the record is, 0 to 1; null while building history.
@@ -34,8 +38,8 @@ class RecordAssessment(ApiModel):
 class RecordStats(ApiModel):
     completed_jobs: int
     completion_rate: float | None = None
-    repeat_hires: int
-    disputes: int
+    repeat_hires: int | None
+    disputes: int | None
 
 
 class RecordOutcomeItem(ApiModel):
@@ -53,12 +57,14 @@ class RecordOutcomeItem(ApiModel):
 
 
 class IdentityCredentialItem(ApiModel):
+    status: str
     nin_verified: bool
     bvn_verified: bool
     verified_at: datetime
 
 
 class GuarantorCredentialItem(ApiModel):
+    sandbox: bool
     name: str
     verified: bool
     status: str
@@ -84,6 +90,12 @@ class WorkerRecordResponse(ApiModel):
     role: str | None = None
     avatar_url: str | None = None
     identity_verified: bool
+    identity_status: str
+    self_declared_outcomes: int
+    total_outcomes: int
+    starting_rating: float | None
+    starting_rating_label: str | None
+    public_summary: VerificationSummary
     assessment: RecordAssessment
     verified_outcomes: int
     last_updated: datetime
@@ -112,7 +124,10 @@ async def worker_record(
         role=record.role,
         avatar_url=record.avatar_url,
         identity_verified=record.identity_verified,
+        identity_status=record.identity_status, self_declared_outcomes=record.self_declared_outcomes, total_outcomes=record.total_outcomes, starting_rating=record.starting_rating, starting_rating_label=record.starting_rating_label,
+        public_summary=summary_from_record(record),
         assessment=RecordAssessment(
+            assessed_at=record.assessed_at,
             decision=record.decision,
             confidence=float(record.confidence),
             score=record.score,
@@ -146,6 +161,7 @@ async def worker_record(
         ],
         credentials=RecordCredentials(
             identity=IdentityCredentialItem(
+                status=record.identity.status,
                 nin_verified=record.identity.nin_verified,
                 bvn_verified=record.identity.bvn_verified,
                 verified_at=record.identity.verified_at,
@@ -153,6 +169,7 @@ async def worker_record(
             if record.identity
             else None,
             guarantor=GuarantorCredentialItem(
+                sandbox=record.guarantor.sandbox,
                 name=record.guarantor.name,
                 verified=record.guarantor.verified,
                 status=record.guarantor.status,
@@ -170,3 +187,8 @@ async def worker_record(
             else None,
         ),
     )
+
+
+@router.get("/record/history", response_model=HistoryPage, summary="Read your verified and self-declared history")
+async def worker_history(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100), user: User = Depends(current_user), session: AsyncSession = Depends(get_db_session)) -> HistoryPage:
+    return await own_history(session, user, page, size)

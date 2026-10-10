@@ -32,7 +32,16 @@ from app.models.domain import (
 	Worker,
 )
 
+from app.models.portability import (HistoryIdentity, ImportReceipt, PlatformGrant, PlatformKey, Review, ShareGrant, WorkerLink)
+
 __all__ = [
+    "HistoryIdentity",
+    "ImportReceipt",
+    "PlatformGrant",
+    "PlatformKey",
+    "Review",
+    "ShareGrant",
+    "WorkerLink",
 	"AuditEvent",
 	"Credential",
 	"CredentialTransfer",

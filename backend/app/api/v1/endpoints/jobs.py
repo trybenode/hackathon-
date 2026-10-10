@@ -137,7 +137,7 @@ class PublicJobView(ApiModel):
     dispute: DisputeView | None = None
 
 
-class NotificationItem(ApiModel):
+class JobNotificationItem(ApiModel):
     id: UUID
     job_id: UUID
     title: str
@@ -147,9 +147,9 @@ class NotificationItem(ApiModel):
     icon: str
 
 
-def _notifications(items: list[job_feed.FeedItem]) -> list[NotificationItem]:
+def _notifications(items: list[job_feed.FeedItem]) -> list[JobNotificationItem]:
     return [
-        NotificationItem(id=i.id, job_id=i.job_id, title=i.title, body=i.body, at=i.at, icon=i.icon)
+        JobNotificationItem(id=i.id, job_id=i.job_id, title=i.title, body=i.body, at=i.at, icon=i.icon)
         for i in items
     ]
 
@@ -318,12 +318,12 @@ async def list_my_jobs(
 
 
 @worker_feed_router.get(
-    "/job-notifications", response_model=list[NotificationItem], summary="The worker's job notifications"
+    "/job-notifications", response_model=list[JobNotificationItem], summary="The worker's job notifications"
 )
 async def my_job_notifications(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_db_session),
-) -> list[NotificationItem]:
+) -> list[JobNotificationItem]:
     worker = await session.scalar(select(Worker).where(Worker.user_id == user.id))
     if worker is None:
         raise HTTPException(status_code=404, detail="This account has no worker profile.")
@@ -436,9 +436,9 @@ async def get_public_job(token: str, session: AsyncSession = Depends(get_db_sess
 
 
 @public_router.get(
-    "/{token}/notifications", response_model=list[NotificationItem], summary="The customer's notifications"
+    "/{token}/notifications", response_model=list[JobNotificationItem], summary="The customer's notifications"
 )
-async def customer_notifications(token: str, session: AsyncSession = Depends(get_db_session)) -> list[NotificationItem]:
+async def customer_notifications(token: str, session: AsyncSession = Depends(get_db_session)) -> list[JobNotificationItem]:
     """Customers have no account, so their notifications are this job's."""
 
     try:

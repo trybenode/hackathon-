@@ -30,6 +30,9 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://placeholder:placeholder@localhost:5432/placeholder",
         alias="DATABASE_URL",
     )
+    review_user_attempts_per_minute: int = Field(5, ge=1)
+    review_ip_attempts_per_minute: int = Field(30, ge=1)
+    review_daily_limit: int = Field(10, ge=1)
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: str = "http://localhost:3000"
 

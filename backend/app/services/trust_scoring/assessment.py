@@ -16,6 +16,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.models.domain import (
     AssessmentStatus,
@@ -24,11 +25,11 @@ from app.models.domain import (
     TrustPolicy,
     Worker,
 )
-from app.services.normalisation import normalise_db_row
+from app.services.trust_scoring.evidence import scoring_inputs
 from app.services.trust_scoring.scoring import PRESETS, PlatformConfig, score_worker
 from app.services.trust_scoring.signals import aggregate
 
-SCORING_VERSION = "1"
+SCORING_VERSION = "3"
 
 # blank template that defines exactly what information will be handed back at the end
 @dataclass(frozen=True)
@@ -54,6 +55,7 @@ class UnknownWorkerError(ValueError):
 def _canonical_outcome(outcome: NormalizedOutcome) -> dict[str, Any]:
     return {
         "id": str(outcome.id),
+        "available_signals": outcome.available_signals,
         "status": outcome.status.value,
         "cancelled_by": outcome.cancelled_by,
         "dispute_resolution": outcome.dispute_resolution,
@@ -118,7 +120,8 @@ async def assess_worker(
     as evidence. A matching input/config fingerprint reuses the prior record.
     """
 
-    if await session.get(Worker, worker_id) is None:
+    worker = await session.scalar(select(Worker).where(Worker.id == worker_id).with_for_update())
+    if worker is None:
         raise UnknownWorkerError(f"Worker {worker_id} was not found")
 
     config = PRESETS.get(platform_type, PRESETS["generic"])
@@ -135,7 +138,8 @@ async def assess_worker(
         ).all()
     )
 
-    fingerprint = _fingerprint(outcomes, platform_type, config)
+    canonical_jobs = await scoring_inputs(session, outcomes)
+    fingerprint = hashlib.sha256(f"{_fingerprint(outcomes, platform_type, config)}:{json.dumps(canonical_jobs, sort_keys=True, default=str)}".encode()).hexdigest()
     if job_context:
         fingerprint = hashlib.sha256(
             f"{fingerprint}:{json.dumps(job_context, sort_keys=True)}".encode()
@@ -146,9 +150,15 @@ async def assess_worker(
         select(TrustPolicy).where(TrustPolicy.name == policy_name, TrustPolicy.version == 1)
     )
     if policy is None:
-        policy = TrustPolicy(name=policy_name, version=1, is_active=True)
-        session.add(policy)
-        await session.flush()
+        try:
+            async with session.begin_nested():
+                policy = TrustPolicy(name=policy_name, version=1, is_active=True)
+                session.add(policy)
+                await session.flush()
+        except IntegrityError:
+            policy = await session.scalar(select(TrustPolicy).where(TrustPolicy.name == policy_name, TrustPolicy.version == 1))
+            if policy is None:
+                raise
 
     existing = await session.scalar(
         select(TrustAssessment).where(
@@ -168,7 +178,6 @@ async def assess_worker(
         )
 
     tracked = set(config.weights)
-    canonical_jobs = [normalise_db_row(row) for row in outcomes]
     signals, job_count = aggregate(canonical_jobs, tracked)
     result = score_worker(signals, job_count, config)
     score = Decimal(str(result["score"])) if result["score"] is not None else None

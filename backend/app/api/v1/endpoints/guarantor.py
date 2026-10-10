@@ -41,7 +41,6 @@ from app.services.guarantor import (
     InstrumentNotFoundError,
     InvalidTransitionError,
     SelfGuaranteeError,
-    ValidityWindowError,
     WorkerNotFoundError,
 )
 
@@ -106,7 +105,7 @@ def _http_error(error: GuarantorError) -> HTTPException:
         return HTTPException(status_code=404, detail=str(error))
     if isinstance(error, InvalidTransitionError):
         return HTTPException(status_code=409, detail=str(error))
-    if isinstance(error, (SelfGuaranteeError, ValidityWindowError, UnknownOutcomeError)):
+    if isinstance(error, (SelfGuaranteeError, UnknownOutcomeError)):
         return HTTPException(status_code=422, detail=str(error))
     if isinstance(error, IdentityCheckFailedError):
         return HTTPException(status_code=422, detail=str(error))

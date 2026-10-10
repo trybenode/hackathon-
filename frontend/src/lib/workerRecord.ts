@@ -4,12 +4,12 @@
  * Used by: the worker profile, portable record, outcomes and credentials screens.
  */
 
-import { apiBaseUrl } from "./api";
-import { ApiError } from "./guarantor";
+import { featureRequest, type HistoryItem, type Page, type VerificationSummary } from "./portability";
 
 export type TrustBand = "High" | "Medium" | "Low" | "Building History";
 
 export type RecordAssessment = {
+  assessed_at: string;
   decision: boolean;
   /** How much evidence backs the score, 0 to 1. Not the score itself. */
   confidence: number;
@@ -29,7 +29,7 @@ export type RecordOutcome = {
   title: string;
   occurred_at: string;
   amount: string | null;
-  status: "Client Confirmed" | "Auto-released";
+  status: string;
   location: string | null;
   client_name: string | null;
   /** The customer's 1-5 stars; null for outcomes imported from elsewhere. */
@@ -41,15 +41,17 @@ export type RecordOutcome = {
 };
 
 export type IdentityCredential = {
+  status: "verified" | "sandbox" | "not_verified";
   nin_verified: boolean;
   bvn_verified: boolean;
   verified_at: string;
 };
 
 export type GuarantorCredential = {
+  sandbox: boolean;
   name: string;
   verified: boolean;
-  status: "Active" | "Expired";
+  status: string;
   activated_at: string;
   /** A guarantee runs for one year from activation. */
   valid_until: string;
@@ -78,6 +80,12 @@ export type WorkerRecord = {
   role: string | null;
   avatar_url: string | null;
   identity_verified: boolean;
+  identity_status: "verified" | "sandbox" | "not_verified";
+  self_declared_outcomes: number;
+  total_outcomes: number;
+  starting_rating: number | null;
+  starting_rating_label: string | null;
+  public_summary: VerificationSummary;
   assessment: RecordAssessment;
   /** Verified outcomes the assessment rests on. */
   verified_outcomes: number;
@@ -86,26 +94,24 @@ export type WorkerRecord = {
     completed_jobs: number;
     /** Completed share of the jobs the worker was responsible for. */
     completion_rate: number | null;
-    repeat_hires: number;
-    disputes: number;
+    repeat_hires: number | null;
+    disputes: number | null;
   };
   /** Completed jobs, newest first. */
   outcomes: RecordOutcome[];
   credentials: Credentials;
 };
 
-async function get<T>(path: string): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, { cache: "no-store", credentials: "include" });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    const detail = body && typeof body.detail === "string" ? body.detail : response.statusText;
-    throw new ApiError(detail, response.status);
-  }
-  return response.json() as Promise<T>;
+export function getWorkerRecord(signal?: AbortSignal) {
+  return featureRequest<WorkerRecord>("/me/record", { signal });
 }
 
-export function getWorkerRecord() {
-  return get<WorkerRecord>("/me/record");
+export function getWorkerHistory(page = 1, signal?: AbortSignal) {
+  return featureRequest<Page<HistoryItem>>(`/me/record/history?page=${page}&size=20`, { signal });
+}
+
+export function importCredentials(workerId: string, token: string) {
+  return featureRequest<{ worker_id: string; imported_outcomes: number; new_band: TrustBand }>(`/workers/${encodeURIComponent(workerId)}/credentials/import`, { method: "POST", body: JSON.stringify({ credential_token: token, source_platform: "worker_upload" }) });
 }
 
 /**
@@ -113,27 +119,7 @@ export function getWorkerRecord() {
  * another platform.
  */
 export function exportCredentials(workerId: string) {
-  return get<Record<string, unknown>>(`/workers/${workerId}/credentials/export`);
-}
-
-/**
- * Bring a previously exported record back in (FR-5.2). The exported file
- * carries a signed token; the API checks the signature and that the record
- * is this worker's.
- */
-export async function importCredentials(workerId: string, credentialToken: string, sourcePlatform: string) {
-  const response = await fetch(`${apiBaseUrl}/workers/${workerId}/credentials/import`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ credential_token: credentialToken, source_platform: sourcePlatform }),
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    const detail = body && typeof body.detail === "string" ? body.detail : response.statusText;
-    throw new ApiError(detail, response.status);
-  }
-  return response.json() as Promise<{ imported_outcomes: number; new_band: string }>;
+  return featureRequest<Record<string, unknown>>(`/workers/${encodeURIComponent(workerId)}/credentials/export`);
 }
 
 /** "Jane A." from "Jane Adams", as the record shows it. */

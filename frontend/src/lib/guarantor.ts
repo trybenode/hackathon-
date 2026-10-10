@@ -35,7 +35,6 @@ export type CreateInstrumentRequest = {
   guarantor: GuarantorDetails;
   scope: string;
   conditions: string;
-  valid_until: string;
   job_id?: string | null;
   as_draft?: boolean;
 };
@@ -329,27 +328,45 @@ export function signOut() {
 
 export type GuaranteeCard = {
   instrument_id: string;
+  /** Short reference to quote, e.g. "G-3F9A1C". */
+  reference: string;
   worker_name: string;
   worker_role: string | null;
   avatar_url: string | null;
   job_title: string | null;
-  amount: string | null;
   status: string;
-  /** Which tab shows this card: "pending", "active" or "completed". */
-  bucket: "pending" | "active" | "completed";
+  /**
+   * Where "My guarantees" files it. Active and Expired have tabs; guarantees
+   * closed some other way (revoked, paid…) show only under All. "request"
+   * never went live, so it is only on the requests screen.
+   */
+  bucket: "request" | "active" | "expired" | "closed";
+  /** Where "Guarantee requests" files it; null for lapsed requests. */
+  request_bucket: "pending" | "accepted" | "declined" | null;
+  requested_at: string;
+  /** When the guarantor accepted or declined. */
+  responded_at: string | null;
+  /** When the guarantee's year began; null until it goes live. */
   started_on: string | null;
+  /** The deadline to answer a request, or the end of a guarantee's year. */
+  valid_until: string;
+  ended_on: string | null;
 };
 
 export type ActivityItem = {
   id: string;
   label: string;
   at: string;
+  /** Present on the home screen's list, which spans every guarantee. */
+  worker_name?: string;
 };
 
 export type DashboardData = {
   greeting_name: string;
   active_count: number;
-  completed_count: number;
+  /** Requests waiting for the guarantor's answer. */
+  pending_count: number;
+  expired_count: number;
   guarantees: GuaranteeCard[];
   recent_activity: ActivityItem[];
   action_required: GuaranteeCard | null;
@@ -362,6 +379,34 @@ export type NotificationItem = {
   at: string;
   icon: "bell" | "check" | "calendar";
 };
+
+export type GuaranteeDetail = {
+  guarantee: GuaranteeCard;
+  relationship: string;
+  scope: string;
+  conditions: string;
+  signed_at: string | null;
+  activity: ActivityItem[];
+  /** The agreement, one paragraph per entry. */
+  agreement: string[];
+};
+
+export function getGuarantee(instrumentId: string) {
+  return request<GuaranteeDetail>(`/me/guarantees/${instrumentId}`);
+}
+
+/** Fetches the agreement as a text file, for saving. */
+export async function downloadAgreement(instrumentId: string) {
+  const response = await fetch(`${apiBaseUrl}/me/guarantees/${instrumentId}/agreement`, {
+    cache: "no-store",
+    credentials: "include",
+  });
+  if (!response.ok) throw new ApiError(response.statusText, response.status);
+
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? "agreement.txt";
+  return { blob: await response.blob(), filename };
+}
 
 export function getDashboard() {
   return request<DashboardData>("/me/dashboard");

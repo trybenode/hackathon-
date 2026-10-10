@@ -21,8 +21,12 @@ export function BottomNav() {
       className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md justify-around border-t border-stroke bg-white px-2 pt-3 pb-5"
     >
       {TABS.map(({ href, label, Icon, dot }) => {
-        // Only the home tab needs an exact match; the others own their subtrees.
-        const active = href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+        // Home owns the requests screen it links to; the other tabs own their
+        // subtrees.
+        const active =
+          href === "/dashboard"
+            ? pathname === href || pathname.startsWith("/dashboard/requests")
+            : pathname.startsWith(href);
 
         return (
           <Link

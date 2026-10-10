@@ -34,11 +34,15 @@ def aggregate(jobs: list[dict], tracked: set[str]) -> tuple[dict, int]:
     if n == 0:
         return {}, 0
 
-    signals = {s: sum(map(pred, jobs)) / n
-               for s, pred in SIGNAL_DEFS.items() if s in tracked}
+    signals = {}
+    for signal, predicate in SIGNAL_DEFS.items():
+        eligible = [j for j in jobs if signal in j.get("available_signals", tracked)]
+        if signal in tracked and eligible:
+            signals[signal] = sum(map(predicate, eligible)) / len(eligible)
 
     if "repeat_hire_rate" in tracked:
-        known_clients = [j.get("client_id") for j in jobs if j.get("client_id")]
+        known_clients = [j.get("client_id") for j in jobs if j.get("client_id")
+                         and "repeat_hire_rate" in j.get("available_signals", tracked)]
         if known_clients:
             clients = Counter(known_clients)
             signals["repeat_hire_rate"] = sum(
@@ -46,10 +50,11 @@ def aggregate(jobs: list[dict], tracked: set[str]) -> tuple[dict, int]:
             ) / len(clients)
 
     if "average_rating" in tracked:
-        # average_rating is a mean of 1-5 values, not a predicate-based rate.
-        # Normalized to [0,1] here so NORMALIZERS can treat it as identity.
-        # signals["average_rating"] = sum(j["rating"] for j in jobs) / n / 5.0
-        signals["average_rating"] = sum(float(job.get("rating") or 0) for job in jobs) / n / 5.0
+        ratings = [float(j["rating"]) for j in jobs if j.get("rating") is not None
+                   and "average_rating" in j.get("available_signals", tracked)]
+        if ratings:
+            signals["average_rating"] = sum(ratings) / len(ratings) / 5.0
+
 
     return signals, n
 

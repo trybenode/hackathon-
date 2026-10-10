@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AssessmentConfidence } from "@/components/worker/AssessmentConfidence";
 import { useRouter } from "next/navigation";
 import { ArrowLeftIcon } from "@/components/worker/icons";
 import { ChevronRightIcon, RecordIcon, VerifiedIcon } from "@/components/worker/recordIcons";
@@ -12,7 +13,7 @@ import { initialsOf } from "@/lib/workerFormat";
 
 export function Profile() {
   const router = useRouter();
-  const { data: record, error, loading } = useWorkerRecord();
+  const { data: record, error, loading, refresh } = useWorkerRecord();
 
   return (
     <main className="flex flex-col">
@@ -23,7 +24,7 @@ export function Profile() {
         <h1 className="text-body-lg font-semibold text-grey-900">Profile</h1>
       </header>
 
-      <RecordGate loading={loading} error={error}>
+      <RecordGate loading={loading} error={error} onRetry={refresh} hasData={!!record}>
       {record && (
       <div className="flex flex-col gap-8 px-6 pt-8">
         <section className="flex flex-col items-center gap-1 border-b border-stroke pb-5">
@@ -37,6 +38,7 @@ export function Profile() {
             )}
           </p>
           <p className="text-body-sm text-grey-900">{record.role}</p>
+          <p className="text-body-sm text-grey-600">Identity: {record.identity_status === "sandbox" ? "Sandbox check · demo" : record.identity_status.replace("_", " ")}</p>
         </section>
 
         <section className="flex flex-col gap-5 rounded-xl border border-stroke bg-white px-4 pt-5 pb-7">
@@ -53,6 +55,7 @@ export function Profile() {
               </p>
             </div>
           </div>
+          <AssessmentConfidence assessment={record.assessment} />
         </section>
 
         <Link

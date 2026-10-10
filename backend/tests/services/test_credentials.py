@@ -36,3 +36,8 @@ def test_signed_credential_bundle_rejects_expired_tokens() -> None:
 
     with pytest.raises(CredentialTokenError, match="expired"):
         verify_bundle(token, "a" * 32, now=issued + timedelta(hours=2))
+
+
+def test_non_ascii_token_is_rejected_cleanly() -> None:
+    with pytest.raises(CredentialTokenError, match="malformed"):
+        verify_bundle("é.payload", "a" * 32)

@@ -30,6 +30,8 @@ from app.models.domain import (
     TrustAssessment,
     Worker,
 )
+from app.services.trust_scoring.evidence import scoring_inputs
+
 from app.schemas.api import (
     CredentialsExportResponse,
     TrustSummary,
@@ -174,18 +176,24 @@ async def export_credentials(
     credential_id = uuid4()
     outcome_claims: list[dict[str, Any]] = []
     response_outcomes: list[VerifiedOutcome] = []
-    for outcome in outcomes:
+    inputs = await scoring_inputs(session, outcomes)
+    for outcome, evidence in zip(outcomes, inputs, strict=True):
         outcome_claim = {
             "outcome_id": str(outcome.id),
             "outcome_key": outcome.outcome_key,
             "job_id": str(outcome.job_id) if outcome.job_id else None,
             "source_platform": outcome.source_platform,
-            "status": outcome.status.value,
+            "status": evidence["status"],
             "occurred_at": outcome.occurred_at.isoformat(),
             "rating": float(outcome.rating) if outcome.rating is not None else None,
             "cancelled_by": outcome.cancelled_by,
             "dispute_resolution": outcome.dispute_resolution,
             "flags": outcome.quality_flags or [],
+            "client_id": outcome.client_id,
+            "available_signals": evidence["available_signals"],
+            "verification_method": outcome.verification_method,
+            "verified_by_org_id": str(outcome.verified_by_org_id) if outcome.verified_by_org_id else None,
+            "verified_at": outcome.verified_at.isoformat() if outcome.verified_at else None,
         }
         outcome_claims.append(outcome_claim)
         response_outcomes.append(
@@ -193,14 +201,14 @@ async def export_credentials(
                 outcome_id=outcome.id,
                 job_id=outcome.job_id,
                 source_platform=outcome.source_platform,
-                status=outcome.status.value,
+                status=evidence["status"],
                 occurred_at=outcome.occurred_at,
                 rating=float(outcome.rating) if outcome.rating is not None else None,
             )
         )
 
-    completed_count = sum(item.status is OutcomeStatus.COMPLETED for item in outcomes)
-    completion_rate = completed_count / len(outcomes) if outcomes else 0.0
+    responsible = [item for item in inputs if "completion_rate" in item["available_signals"] and not (item["status"] == "cancelled" and item["cancelled_by"] in {"client", "platform"})]
+    completion_rate = sum(item["status"] == "completed" for item in responsible) / len(responsible) if responsible else None
     token = sign_bundle(
         {
             "iss": "dynamic-trust-infrastructure",
@@ -252,7 +260,7 @@ async def export_credentials(
         credential_token=token,
     )
 
-"""when the sealed ennvelope is handed back to the platform, it checks the seal, make sure it is still valid, and then copies the contents into the platform's own database"""
+"""when the sealed envelope is handed back to the platform, it checks the seal, make sure it is still valid, and then copies the contents into the platform's own database"""
 async def import_credentials(
     session: AsyncSession,
     worker_id: UUID,
@@ -326,6 +334,19 @@ async def import_credentials(
                 rating = Decimal(str(rating))
                 if rating < 0 or rating > 5:
                     raise ValueError("invalid rating")
+            availability = item.get("available_signals")
+            if availability is not None and (not isinstance(availability, list) or any(not isinstance(v, str) for v in availability)):
+                raise ValueError("invalid signal availability")
+            client_id = item.get("client_id")
+            if client_id is not None and (not isinstance(client_id, str) or len(client_id) > 255):
+                raise ValueError("invalid opaque client identifier")
+            verified_by_org_id = UUID(item["verified_by_org_id"]) if item.get("verified_by_org_id") else None
+            verified_at = datetime.fromisoformat(item["verified_at"]) if item.get("verified_at") else None
+            method = item.get("verification_method")
+            if method is not None and (not isinstance(method, str) or len(method) > 40):
+                raise ValueError("invalid verification method")
+            if not 1 <= len(outcome_key) <= 80 or not 1 <= len(source_platform_value) <= 120:
+                raise ValueError("invalid source identifiers")
             cancelled_by = item.get("cancelled_by")
             if cancelled_by not in (None, "worker", "client", "platform"):
                 raise ValueError("invalid cancellation source")
@@ -366,7 +387,11 @@ async def import_credentials(
                 normalization_version="credential-v1",
                 cancelled_by=cancelled_by,
                 dispute_resolution=dispute_resolution,
-                client_id=None,
+                client_id=client_id,
+                available_signals=availability,
+                verification_method=method,
+                verified_by_org_id=verified_by_org_id,
+                verified_at=verified_at,
                 source_platform=source_platform_value,
                 import_method="api",
                 verified=True,

@@ -3,7 +3,7 @@
 from app.services.trust_scoring.signals import aggregate
 
 
-def test_average_rating_counts_missing_rating_as_zero() -> None:
+def test_average_rating_excludes_missing_ratings() -> None:
     jobs = [
         {"status": "completed", "rating": 4.0},
         {"status": "completed"},
@@ -12,10 +12,10 @@ def test_average_rating_counts_missing_rating_as_zero() -> None:
     signals, count = aggregate(jobs, {"average_rating"})
 
     assert count == 2
-    assert signals["average_rating"] == 0.4
+    assert signals["average_rating"] == 0.8
 
 
-def test_average_rating_counts_null_rating_as_zero() -> None:
+def test_average_rating_excludes_null_ratings() -> None:
     jobs = [
         {"status": "completed", "rating": 5.0},
         {"status": "completed", "rating": None},
@@ -23,4 +23,11 @@ def test_average_rating_counts_null_rating_as_zero() -> None:
 
     signals, _ = aggregate(jobs, {"average_rating"})
 
-    assert signals["average_rating"] == 0.5
+    assert signals["average_rating"] == 1.0
+
+
+def test_absent_evidence_is_not_a_perfect_signal():
+    jobs = [{"status": "completed", "available_signals": ["completion_rate"]} for _ in range(10)]
+    signals, count = aggregate(jobs, {"completion_rate", "dispute_rate", "safety_incident_rate", "average_rating"})
+    assert count == 10
+    assert signals == {"completion_rate": 1.0}
