@@ -174,7 +174,7 @@ export function WorkerHome() {
             <Button
               fullWidth
               variant={locked ? "ghost" : "fill"}
-              className={cn("rounded-lg font-semibold", locked && "bg-grey-400 text-white disabled:opacity-100")}
+              className={cn("rounded-lg font-semibold", locked && "bg-grey-600/70 text-white/85 disabled:opacity-100")}
               disabled={locked}
               onClick={() => setCreating(true)}
             >
@@ -251,7 +251,7 @@ export function WorkerHome() {
               ) : (
                 <>
                   <div className="flex items-center gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-pill bg-grey-100 text-grey-800">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-pill bg-grey-200 text-grey-800">
                       <GuarantorMissingIcon />
                     </span>
                     <span className="flex flex-col">
