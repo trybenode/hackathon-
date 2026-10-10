@@ -57,7 +57,8 @@ async def test_a_new_developer_starts_unverified(session: AsyncSession) -> None:
 
     assert dashboard["kyb_status"] == "not_started"
     assert dashboard["identity_submitted"] is False
-    assert dashboard["usage"] == {"total_calls": 0, "successful_calls": 0}
+    assert (dashboard["usage"]["total_calls"], dashboard["usage"]["successful_calls"]) == (0, 0)
+    assert len(dashboard["usage"]["daily"]) == 14
     assert len(dashboard["sandbox_workers"]) == 4
     app.dependency_overrides.clear()
 
@@ -109,7 +110,8 @@ async def test_approved_developer_calls_the_api_with_a_sandbox_key(session: Asyn
 
     assert dashboard["kyb_status"] == "approved"
     assert dashboard["credentials"][0]["key_id"] == generated.json()["key_id"]
-    assert dashboard["usage"] == {"total_calls": 1, "successful_calls": 1}
+    assert (dashboard["usage"]["total_calls"], dashboard["usage"]["successful_calls"]) == (1, 1)
+    assert dashboard["usage"]["daily"][-1] == {"day": dashboard["usage"]["daily"][-1]["day"], "total": 1, "successful": 1}
     assert dashboard["recent_activity"][0]["path"] == "/api/v1/platform/worker-links"
     app.dependency_overrides.clear()
 

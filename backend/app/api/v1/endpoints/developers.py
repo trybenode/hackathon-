@@ -4,7 +4,7 @@ Dependencies: FastAPI, SQLAlchemy async sessions, app.services.developers.
 Used by: the developer screens (dashboard, KYB steps, credentials, profile).
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,9 +24,17 @@ from app.services.document_store import (
 router = APIRouter(prefix="/me/developer", tags=["developers"])
 
 
+class DailyUsageView(ApiModel):
+    day: date
+    total: int
+    successful: int
+
+
 class UsageView(ApiModel):
     total_calls: int
     successful_calls: int
+    #: The last 14 days, oldest first, for the usage chart.
+    daily: list[DailyUsageView]
 
 
 class ApiCallView(ApiModel):
@@ -116,7 +124,11 @@ async def _dashboard(session: AsyncSession, user: User) -> DeveloperDashboard:
         kyb_status=account.kyb_status.value,
         review_note=account.review_note,
         identity_submitted=service.identity_submitted(account),
-        usage=UsageView(total_calls=usage.total_calls, successful_calls=usage.successful_calls),
+        usage=UsageView(
+            total_calls=usage.total_calls,
+            successful_calls=usage.successful_calls,
+            daily=[DailyUsageView(day=d.day, total=d.total, successful=d.successful) for d in usage.daily],
+        ),
         recent_activity=[
             ApiCallView(method=row.method, path=row.path, status_code=row.status_code,
                         duration_ms=row.duration_ms, at=row.created_at)

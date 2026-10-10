@@ -143,6 +143,10 @@ async def test_usage_counts_the_platform_calls(session: AsyncSession) -> None:
 
     assert (usage.total_calls, usage.successful_calls) == (3, 2)
     assert len(usage.recent) == 3
+    # Fourteen days for the chart, today last, holding today's calls.
+    assert len(usage.daily) == service.CHART_DAYS
+    assert (usage.daily[-1].total, usage.daily[-1].successful) == (3, 2)
+    assert all(day.total == 0 for day in usage.daily[:-1])
 
 
 async def test_name_change_needs_a_verified_name_and_one_at_a_time(session: AsyncSession) -> None:

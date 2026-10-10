@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.developer import ApiRequestLog, DeveloperAccount, NameChangeRequest, ReviewStatus
@@ -47,6 +47,8 @@ NAME_CHANGE_REASONS = {
 ENVIRONMENTS = {"sandbox": "sandbox", "production": "live"}
 #: How many recent calls the dashboard lists.
 RECENT_CALLS = 10
+#: Days of history the usage chart covers, today included.
+CHART_DAYS = 14
 
 
 class DeveloperError(Exception):
@@ -66,10 +68,19 @@ class InvalidChoiceError(DeveloperError):
 
 
 @dataclass(frozen=True)
+class DailyUsage:
+    day: date
+    total: int
+    successful: int
+
+
+@dataclass(frozen=True)
 class Usage:
     total_calls: int
     successful_calls: int
     recent: list[ApiRequestLog]
+    #: One entry per day for the chart, oldest first, quiet days as zero.
+    daily: list[DailyUsage]
 
 
 def _now() -> datetime:
@@ -257,11 +268,13 @@ async def credentials(session: AsyncSession, account: DeveloperAccount) -> list[
     )
 
 
-async def usage(session: AsyncSession, account: DeveloperAccount) -> Usage:
-    """Calls made with the platform's keys: totals and the latest few."""
+async def usage(session: AsyncSession, account: DeveloperAccount, *, now: datetime | None = None) -> Usage:
+    """Calls made with the platform's keys: totals, the latest few, and per day."""
 
+    today = (now or _now()).date()
+    days = [today - timedelta(days=offset) for offset in range(CHART_DAYS - 1, -1, -1)]
     if account.organization_id is None:
-        return Usage(0, 0, [])
+        return Usage(0, 0, [], [DailyUsage(day, 0, 0) for day in days])
     mine = ApiRequestLog.organization_id == account.organization_id
     total = await session.scalar(select(func.count()).select_from(ApiRequestLog).where(mine))
     ok = await session.scalar(
@@ -274,7 +287,19 @@ async def usage(session: AsyncSession, account: DeveloperAccount) -> Usage:
             select(ApiRequestLog).where(mine).order_by(ApiRequestLog.created_at.desc()).limit(RECENT_CALLS)
         )
     ).all()
-    return Usage(total or 0, ok or 0, list(recent))
+    # Counted per UTC day in the database; date() works on SQLite and Postgres.
+    day = func.date(ApiRequestLog.created_at)
+    success = func.sum(case((ApiRequestLog.status_code.between(200, 299), 1), else_=0))
+    counts = {
+        str(row.day): (row.total, row.successful or 0)
+        for row in await session.execute(
+            select(day.label("day"), func.count().label("total"), success.label("successful"))
+            .where(mine, ApiRequestLog.created_at >= datetime.combine(days[0], datetime.min.time(), UTC))
+            .group_by(day)
+        )
+    }
+    daily = [DailyUsage(d, *counts.get(d.isoformat(), (0, 0))) for d in days]
+    return Usage(total or 0, ok or 0, list(recent), daily)
 
 
 async def open_name_change(session: AsyncSession, account: DeveloperAccount) -> NameChangeRequest | None:

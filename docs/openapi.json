@@ -4809,6 +4809,31 @@
         ],
         "title": "CustomerJobPage"
       },
+      "DailyUsageView": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "successful": {
+            "type": "integer",
+            "title": "Successful"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "day",
+          "total",
+          "successful"
+        ],
+        "title": "DailyUsageView"
+      },
       "DashboardResponse": {
         "properties": {
           "greeting_name": {
@@ -7157,13 +7182,21 @@
           "successful_calls": {
             "type": "integer",
             "title": "Successful Calls"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/DailyUsageView"
+            },
+            "type": "array",
+            "title": "Daily"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "total_calls",
-          "successful_calls"
+          "successful_calls",
+          "daily"
         ],
         "title": "UsageView"
       },
