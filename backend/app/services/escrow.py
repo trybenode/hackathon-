@@ -61,6 +61,7 @@ from app.models.domain import (
 )
 from app.services import escrow_provider as provider_module
 from app.services import insurance, job_notifications
+from app.services import worker_onboarding as onboarding
 from app.services.escrow_provider import EscrowParty, EscrowProvider, EscrowStart
 
 #: Payscrow's escrow code is 10 alphanumerics; this rejects obvious typos
@@ -161,6 +162,8 @@ async def create_job_link(
     worker = await session.scalar(select(Worker).where(Worker.user_id == user.id))
     if worker is None:
         raise JobNotFoundError("This account has no worker profile.")
+    if not await onboarding.has_active_guarantor(session, worker):
+        raise EscrowStateError("Job creation opens once your guarantor is active.")
     # Payscrow requires the merchant's phone, whatever its docs say; better to
     # say so now than when the customer tries to pay.
     if not (user.phone or "").strip():
