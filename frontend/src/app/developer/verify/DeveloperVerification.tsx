@@ -192,7 +192,7 @@ export function DeveloperVerification() {
         </form>
       )}
 
-      <Modal open={busy && step === 2} title="Verifying your identity…">
+      <Modal open={busy && step === 2} title="Verifying your identity…" hideTitle>
         <span className="h-12 w-12 animate-spin rounded-pill border-4 border-primary-100 border-t-primary-400" />
         <h2 className="text-h3 text-grey-900">Verifying your identity...</h2>
         <p className="text-body-md text-grey-600">
