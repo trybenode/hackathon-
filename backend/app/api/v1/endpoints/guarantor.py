@@ -2,6 +2,14 @@
 
 Dependencies: FastAPI, SQLAlchemy async sessions, app.services.guarantor, and app.schemas.api.
 Used by: the guarantor flow UI and platform integrations.
+
+Who may call what:
+- Platforms (platform key): create, list, send, trigger, resolve and revoke.
+  Creating needs the worker's approval to write (import_history); listing a
+  worker needs approval to read. Only the platform that asked for a
+  guarantee may change it. Sandbox changes are answered but never kept.
+- The guarantor's link: fetch and sign by the instrument's id.
+- The signed-in guarantor: identity details and the liveness check.
 """
 
 from uuid import UUID
@@ -9,8 +17,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.endpoints.auth import current_user
+from app.core.platform_auth import require_platform_api_key, require_tenant
 from app.db.session import get_db_session
 from app.models.domain import AgreementStatus, GuarantorAgreement, Job, User, Worker
+from app.models.portability import PlatformKey
 from app.schemas.api import (
     GuarantorInstrumentCreateRequest,
     GuarantorInstrumentCreateResponse,
@@ -26,6 +37,8 @@ from app.schemas.api import (
     WorkerProfileSummary,
 )
 from app.services import guarantor as guarantor_service
+from app.services import sandbox
+from app.services.platform_history import authorize_worker
 from app.services.document_store import (
     DocumentStorageError,
     DocumentTooLargeError,
@@ -116,6 +129,41 @@ def _http_error(error: GuarantorError) -> HTTPException:
     return HTTPException(status_code=400, detail=str(error))
 
 
+async def _platform_write(session: AsyncSession, principal: PlatformKey, build):
+    """Run a platform's change. Sandbox changes are answered, never kept."""
+
+    if principal.environment == sandbox.SANDBOX:
+        savepoint = await session.begin_nested()
+        try:
+            return await build()
+        finally:
+            await savepoint.rollback()
+    response = await build()
+    await session.commit()
+    return response
+
+
+async def _owned(session: AsyncSession, principal: PlatformKey, instrument_id: UUID) -> GuarantorAgreement:
+    """The instrument, if this platform is the one that asked for it."""
+
+    agreement = await session.get(GuarantorAgreement, instrument_id)
+    if agreement is None:
+        raise HTTPException(status_code=404, detail=f"No guarantor instrument with id {instrument_id}.")
+    if agreement.organization_id != principal.organization_id:
+        raise HTTPException(status_code=403, detail="Only the platform that asked for this guarantee can change it.")
+    return agreement
+
+
+async def _as_guarantor(session: AsyncSession, user: User, instrument_id: UUID) -> None:
+    """Identity and liveness belong to the guarantor named on the request."""
+
+    agreement = await session.get(GuarantorAgreement, instrument_id)
+    if agreement is None:
+        raise HTTPException(status_code=404, detail=f"No guarantor instrument with id {instrument_id}.")
+    if agreement.guarantor_user_id != user.id:
+        raise HTTPException(status_code=403, detail="Sign in as the guarantor named on this request.")
+
+
 @router.post(
     "",
     response_model=GuarantorInstrumentCreateResponse,
@@ -124,24 +172,32 @@ def _http_error(error: GuarantorError) -> HTTPException:
 )
 async def create_instrument(
     payload: GuarantorInstrumentCreateRequest,
+    principal: PlatformKey = Depends(require_tenant),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentCreateResponse:
-    try:
-        agreement = await guarantor_service.create_instrument(
-            session, payload, as_draft=payload.as_draft
-        )
-    except GuarantorError as error:
-        raise _http_error(error) from error
+    """Ask a person to stand behind a worker who approved this platform to write."""
 
-    await session.commit()
-    return GuarantorInstrumentCreateResponse(
-        instrument_id=agreement.id,
-        status=guarantor_service.status_label(agreement.status),
-        worker_id=agreement.worker_id,
-        guarantor_name=payload.guarantor.full_name,
-        created_at=agreement.created_at,
-        sign_url=f"/guarantor/{agreement.id}/sign",
-    )
+    await authorize_worker(session, principal, payload.worker_id, "import_history")
+
+    async def build() -> GuarantorInstrumentCreateResponse:
+        try:
+            agreement = await guarantor_service.create_instrument(
+                session, payload, as_draft=payload.as_draft
+            )
+        except GuarantorError as error:
+            raise _http_error(error) from error
+        agreement.organization_id = principal.organization_id
+        await session.flush()
+        return GuarantorInstrumentCreateResponse(
+            instrument_id=agreement.id,
+            status=guarantor_service.status_label(agreement.status),
+            worker_id=agreement.worker_id,
+            guarantor_name=payload.guarantor.full_name,
+            created_at=agreement.created_at,
+            sign_url=f"/guarantor/{agreement.id}/sign",
+        )
+
+    return await _platform_write(session, principal, build)
 
 
 @router.post(
@@ -149,6 +205,7 @@ async def create_instrument(
     summary="Expire instruments whose validity period has ended",
 )
 async def expire_due(
+    _principal: PlatformKey | None = Depends(require_platform_api_key),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, int]:
     """Run the expiry sweep on demand.
@@ -166,13 +223,21 @@ async def expire_due(
 async def list_instruments(
     worker_id: UUID | None = Query(default=None),
     instrument_status: AgreementStatus | None = Query(default=None, alias="status"),
+    principal: PlatformKey = Depends(require_tenant),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentListResponse:
+    """A worker's guarantees, with their approval to read; without a worker,
+    the guarantees this platform asked for."""
+
+    if worker_id is not None:
+        await authorize_worker(session, principal, worker_id, "read_history")
     agreements = await guarantor_service.list_instruments(
         session,
         worker_id=worker_id,
         statuses=[instrument_status] if instrument_status else None,
     )
+    if worker_id is None:
+        agreements = [item for item in agreements if item.organization_id == principal.organization_id]
     return GuarantorInstrumentListResponse(
         items=[await _to_response(session, agreement) for agreement in agreements]
     )
@@ -202,15 +267,19 @@ async def get_instrument(
 )
 async def send_for_signature(
     instrument_id: UUID,
+    principal: PlatformKey = Depends(require_tenant),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentResponse:
-    try:
-        agreement = await guarantor_service.send_for_signature(session, instrument_id)
-    except GuarantorError as error:
-        raise _http_error(error) from error
+    await _owned(session, principal, instrument_id)
 
-    await session.commit()
-    return await _to_response(session, agreement)
+    async def build() -> GuarantorInstrumentResponse:
+        try:
+            agreement = await guarantor_service.send_for_signature(session, instrument_id)
+        except GuarantorError as error:
+            raise _http_error(error) from error
+        return await _to_response(session, agreement)
+
+    return await _platform_write(session, principal, build)
 
 
 @router.post(
@@ -252,6 +321,7 @@ async def submit_identity(
     nin: str = Form(..., max_length=20),
     bvn: str = Form(..., max_length=20),
     utility_bill: UploadFile | None = File(default=None),
+    user: User = Depends(current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorIdentityResponse:
     """Forward identity details to the provider and keep only references.
@@ -260,6 +330,7 @@ async def submit_identity(
     identity numbers are passed to the provider and dropped.
     """
 
+    await _as_guarantor(session, user, instrument_id)
     document: tuple[str, bytes] | None = None
     if utility_bill is not None and utility_bill.filename:
         document = (utility_bill.filename, await utility_bill.read())
@@ -307,6 +378,7 @@ async def submit_identity(
 async def complete_liveness(
     instrument_id: UUID,
     frame: UploadFile = File(...),
+    user: User = Depends(current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentResponse:
     """Pass the captured frame to the liveness provider and drop it.
@@ -315,6 +387,7 @@ async def complete_liveness(
     written against the guarantor.
     """
 
+    await _as_guarantor(session, user, instrument_id)
     image = await frame.read()
     await frame.close()
 
@@ -341,17 +414,21 @@ async def complete_liveness(
 async def trigger_instrument(
     instrument_id: UUID,
     payload: GuarantorTriggerRequest,
+    principal: PlatformKey = Depends(require_tenant),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentResponse:
-    try:
-        agreement = await guarantor_service.trigger_instrument(
-            session, instrument_id, reason=payload.reason
-        )
-    except GuarantorError as error:
-        raise _http_error(error) from error
+    await _owned(session, principal, instrument_id)
 
-    await session.commit()
-    return await _to_response(session, agreement)
+    async def build() -> GuarantorInstrumentResponse:
+        try:
+            agreement = await guarantor_service.trigger_instrument(
+                session, instrument_id, reason=payload.reason
+            )
+        except GuarantorError as error:
+            raise _http_error(error) from error
+        return await _to_response(session, agreement)
+
+    return await _platform_write(session, principal, build)
 
 
 @router.post(
@@ -362,17 +439,21 @@ async def trigger_instrument(
 async def resolve_claim(
     instrument_id: UUID,
     payload: GuarantorResolveRequest,
+    principal: PlatformKey = Depends(require_tenant),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentResponse:
-    try:
-        agreement = await guarantor_service.resolve_claim(
-            session, instrument_id, outcome=payload.outcome, reason=payload.reason
-        )
-    except GuarantorError as error:
-        raise _http_error(error) from error
+    await _owned(session, principal, instrument_id)
 
-    await session.commit()
-    return await _to_response(session, agreement)
+    async def build() -> GuarantorInstrumentResponse:
+        try:
+            agreement = await guarantor_service.resolve_claim(
+                session, instrument_id, outcome=payload.outcome, reason=payload.reason
+            )
+        except GuarantorError as error:
+            raise _http_error(error) from error
+        return await _to_response(session, agreement)
+
+    return await _platform_write(session, principal, build)
 
 
 @router.post(
@@ -383,14 +464,18 @@ async def resolve_claim(
 async def revoke_instrument(
     instrument_id: UUID,
     payload: GuarantorRevokeRequest,
+    principal: PlatformKey = Depends(require_tenant),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentResponse:
-    try:
-        agreement = await guarantor_service.revoke_instrument(
-            session, instrument_id, reason=payload.reason
-        )
-    except GuarantorError as error:
-        raise _http_error(error) from error
+    await _owned(session, principal, instrument_id)
 
-    await session.commit()
-    return await _to_response(session, agreement)
+    async def build() -> GuarantorInstrumentResponse:
+        try:
+            agreement = await guarantor_service.revoke_instrument(
+                session, instrument_id, reason=payload.reason
+            )
+        except GuarantorError as error:
+            raise _http_error(error) from error
+        return await _to_response(session, agreement)
+
+    return await _platform_write(session, principal, build)

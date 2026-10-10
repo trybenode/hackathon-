@@ -5,13 +5,20 @@ Used by: the backend test suite and CI.
 """
 
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
 from app.main import app
-from app.models.domain import Worker
+from app.models.domain import Organization, OrganizationType, Worker
+from app.models.portability import PlatformGrant, PlatformKey, WorkerLink
+from app.services.portability import digest
+
+#: The calling platform's key; the worker has approved it to read and write.
+HEADERS: dict[str, str] = {}
 
 NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 
@@ -49,6 +56,7 @@ LIVENESS_FRAME = {"frame": ("selfie.jpg", b"\xff\xd8" + b"x" * 512, "image/jpeg"
 
 
 async def pass_liveness(client: AsyncClient, instrument_id: str):
+    await as_guarantor(client)
     return await client.post(
         f"/api/v1/guarantor-instruments/{instrument_id}/liveness", files=LIVENESS_FRAME
     )
@@ -66,6 +74,7 @@ IDENTITY_FORM = {
 async def pass_identity(client: AsyncClient, instrument_id: str):
     """Submit the identity form the way the screen does, with a utility bill."""
 
+    await as_guarantor(client)
     return await client.post(
         f"/api/v1/guarantor-instruments/{instrument_id}/identity",
         data=IDENTITY_FORM,
@@ -73,12 +82,56 @@ async def pass_identity(client: AsyncClient, instrument_id: str):
     )
 
 
-def client_for(session: AsyncSession) -> AsyncClient:
+async def platform(
+    session: AsyncSession,
+    worker: Worker | None,
+    *,
+    environment: str = "production",
+    permissions: tuple[str, ...] = ("read_history", "import_history"),
+) -> dict[str, str]:
+    """A platform with a key, linked to the worker with the given approval."""
+
+    org = Organization(name=f"Platform {uuid4().hex[:6]}", organization_type=OrganizationType.PLATFORM)
+    session.add(org)
+    await session.flush()
+    secret = f"sk_test_{uuid4().hex}"
+    session.add(PlatformKey(organization_id=org.id, key_hash=digest(secret), environment=environment))
+    if worker is not None:
+        grant = PlatformGrant(
+            worker_id=worker.id, organization_id=org.id, token_hash=digest(uuid4().hex),
+            permissions=list(permissions), expires_at=datetime.now(tz=UTC) + timedelta(days=7),
+        )
+        session.add(grant)
+        await session.flush()
+        session.add(WorkerLink(organization_id=org.id, worker_id=worker.id, external_worker_id="worker-1", grant_id=grant.id))
+    await session.flush()
+    return {"X-API-Key": secret}
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def approved_platform(session: AsyncSession, worker: Worker) -> None:
+    HEADERS.clear()
+    HEADERS.update(await platform(session, worker))
+
+
+def client_for(session: AsyncSession, headers: dict[str, str] | None = None) -> AsyncClient:
     async def _session_override():
         yield session
 
     app.dependency_overrides[get_db_session] = _session_override
-    return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    return AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test", headers=HEADERS if headers is None else headers
+    )
+
+
+async def as_guarantor(client: AsyncClient, email: str = "grace@example.com") -> None:
+    """Sign in as the guarantor, once per client, as the screens do before identity."""
+
+    if (await client.get("/api/v1/auth/me")).status_code == 200:
+        return
+    code = (await client.post("/api/v1/auth/code", json={"email": email})).json()["debug_code"]
+    verified = await client.post("/api/v1/auth/verify", json={"email": email, "code": code})
+    assert verified.status_code == 200, verified.text
 
 
 async def test_create_sign_and_fetch(session: AsyncSession, worker: Worker) -> None:
@@ -195,6 +248,7 @@ async def test_identity_rejects_malformed_numbers(
         created = await client.post("/api/v1/guarantor-instruments", json=create_payload(worker))
         instrument_id = created.json()["instrument_id"]
         await client.post(f"/api/v1/guarantor-instruments/{instrument_id}/sign", json=SIGN_PAYLOAD)
+        await as_guarantor(client)
 
         response = await client.post(
             f"/api/v1/guarantor-instruments/{instrument_id}/identity",
@@ -316,4 +370,88 @@ async def test_unreachable_storage_returns_503(
         detail = (await client.get(f"/api/v1/guarantor-instruments/{instrument_id}")).json()
         assert detail["status"] == "Pending Verification"
 
+    app.dependency_overrides.clear()
+
+
+async def test_platform_endpoints_need_a_key(session: AsyncSession, worker: Worker) -> None:
+    async with client_for(session, headers={}) as client:
+        created = await client.post("/api/v1/guarantor-instruments", json=create_payload(worker))
+        listed = await client.get("/api/v1/guarantor-instruments")
+
+    assert created.status_code == 401
+    assert listed.status_code == 401
+    app.dependency_overrides.clear()
+
+
+async def test_creating_needs_the_workers_approval_to_write(session: AsyncSession, worker: Worker) -> None:
+    read_only = await platform(session, worker, permissions=("read_history",))
+    stranger = await platform(session, None)
+    async with client_for(session, headers=read_only) as client:
+        refused = await client.post("/api/v1/guarantor-instruments", json=create_payload(worker))
+    async with client_for(session, headers=stranger) as client:
+        unlinked = await client.post("/api/v1/guarantor-instruments", json=create_payload(worker))
+        listing = await client.get(f"/api/v1/guarantor-instruments?worker_id={worker.id}")
+
+    assert refused.status_code == 403
+    assert unlinked.status_code == 403
+    assert listing.status_code == 403
+    app.dependency_overrides.clear()
+
+
+async def test_only_the_asking_platform_changes_a_guarantee(session: AsyncSession, worker: Worker) -> None:
+    other = await platform(session, worker)
+    async with client_for(session) as client:
+        created = await client.post("/api/v1/guarantor-instruments", json=create_payload(worker))
+        instrument_id = created.json()["instrument_id"]
+    async with client_for(session, headers=other) as client:
+        revoked = await client.post(
+            f"/api/v1/guarantor-instruments/{instrument_id}/revoke", json={"reason": "Not ours"}
+        )
+        # Another approved platform can still see it on the worker.
+        seen = await client.get(f"/api/v1/guarantor-instruments?worker_id={worker.id}")
+        # But its own list holds only what it asked for.
+        own = await client.get("/api/v1/guarantor-instruments")
+
+    assert revoked.status_code == 403
+    assert [item["instrument_id"] for item in seen.json()["items"]] == [instrument_id]
+    assert own.json()["items"] == []
+    app.dependency_overrides.clear()
+
+
+async def test_identity_is_for_the_named_guarantor(session: AsyncSession, worker: Worker) -> None:
+    from app.models.domain import User
+
+    session.add(User(email="someone@example.com", display_name="Someone"))
+    await session.flush()
+    async with client_for(session) as client:
+        created = await client.post("/api/v1/guarantor-instruments", json=create_payload(worker))
+        instrument_id = created.json()["instrument_id"]
+        await client.post(f"/api/v1/guarantor-instruments/{instrument_id}/sign", json=SIGN_PAYLOAD)
+        signed_out = await client.post(f"/api/v1/guarantor-instruments/{instrument_id}/identity", data=IDENTITY_FORM)
+        await as_guarantor(client, "someone@example.com")
+        wrong_person = await client.post(f"/api/v1/guarantor-instruments/{instrument_id}/identity", data=IDENTITY_FORM)
+
+    assert signed_out.status_code == 401
+    assert wrong_person.status_code == 403
+    app.dependency_overrides.clear()
+
+
+async def test_sandbox_guarantees_are_answered_but_not_kept(session: AsyncSession, worker: Worker) -> None:
+    from sqlalchemy import func, select
+
+    from app.models.domain import GuarantorAgreement
+    from app.services import sandbox
+
+    workers = await sandbox.ensure_demo_workers(session)
+    ada = workers["ada"]
+    before = await session.scalar(select(func.count()).select_from(GuarantorAgreement))
+    headers = await platform(session, ada, environment="sandbox")
+    async with client_for(session, headers=headers) as client:
+        created = await client.post("/api/v1/guarantor-instruments", json=create_payload(ada))
+        listed = await client.get(f"/api/v1/guarantor-instruments?worker_id={ada.id}")
+
+    assert created.status_code == 201, created.text
+    assert await session.scalar(select(func.count()).select_from(GuarantorAgreement)) == before
+    # Ada's demo guarantee is there to read.
+    assert [item["status"] for item in listed.json()["items"]] == ["Active"]
     app.dependency_overrides.clear()
