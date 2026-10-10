@@ -694,7 +694,14 @@ async def _record_outcome(
     ):
         return
 
-    payload = {"job_id": str(job.id), "status": status.value, "rating": rating}
+    # Stating the dispute result, even "none", is what lets scoring count
+    # this job towards the dispute rate; a missing key reads as unknown.
+    payload = {
+        "job_id": str(job.id),
+        "status": status.value,
+        "rating": rating,
+        "dispute_resolution": dispute_resolution,
+    }
     raw = RawOutcome(
         source_id=source.id,
         external_outcome_id=key,

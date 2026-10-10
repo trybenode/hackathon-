@@ -200,6 +200,8 @@ async def test_released_job_shows_its_rating_on_the_record(session: AsyncSession
     assert outcome.client_name == "Peter James"
     assert outcome.rating == 5.0
     assert outcome.dispute == "none"
+    # Escrow knows there was no dispute, so the record can say 0, not unknown.
+    assert record.disputes == 0
 
 
 async def test_latest_failed_identity_supersedes_pass(session, worker):
