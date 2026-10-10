@@ -53,6 +53,8 @@ export type GuarantorCredential = {
   activated_at: string;
   /** A guarantee runs for one year from activation. */
   valid_until: string;
+  /** How the guarantor knows the worker, e.g. "employer". */
+  relationship: string;
 };
 
 export type ImportedRecordCredential = {
@@ -112,6 +114,26 @@ export function getWorkerRecord() {
  */
 export function exportCredentials(workerId: string) {
   return get<Record<string, unknown>>(`/workers/${workerId}/credentials/export`);
+}
+
+/**
+ * Bring a previously exported record back in (FR-5.2). The exported file
+ * carries a signed token; the API checks the signature and that the record
+ * is this worker's.
+ */
+export async function importCredentials(workerId: string, credentialToken: string, sourcePlatform: string) {
+  const response = await fetch(`${apiBaseUrl}/workers/${workerId}/credentials/import`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ credential_token: credentialToken, source_platform: sourcePlatform }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const detail = body && typeof body.detail === "string" ? body.detail : response.statusText;
+    throw new ApiError(detail, response.status);
+  }
+  return response.json() as Promise<{ imported_outcomes: number; new_band: string }>;
 }
 
 /** "Jane A." from "Jane Adams", as the record shows it. */

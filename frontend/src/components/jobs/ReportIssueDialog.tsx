@@ -105,7 +105,7 @@ export function ReportIssueDialog<T extends string>({
         )}
 
         <div className="flex gap-4">
-          <Button variant="outline" size="lg" fullWidth className="rounded-xl px-0" onClick={close}>
+          <Button variant="outline" size="lg" fullWidth className="min-w-0 rounded-xl px-0" onClick={close}>
             Cancel
           </Button>
           <Button

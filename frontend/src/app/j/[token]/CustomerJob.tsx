@@ -255,10 +255,10 @@ function ReleaseDialog({
         )}
 
         <div className="flex gap-4">
-          <Button variant="outline" size="lg" fullWidth className="rounded-xl px-0" onClick={onClose}>
+          <Button variant="outline" size="lg" fullWidth className="min-w-0 rounded-xl px-0" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="lg" fullWidth disabled={!ready || busy} className="rounded-xl px-0" onClick={release}>
+          <Button size="lg" fullWidth disabled={!ready || busy} className="min-w-0 rounded-xl px-0" onClick={release}>
             {busy ? "Releasing…" : "Release payment"}
           </Button>
         </div>

@@ -65,3 +65,14 @@ export function formatDayMonthYear(value: string) {
   const date = new Date(value);
   return `${date.getDate()} ${LONG_MONTHS[date.getMonth()].slice(0, 3)}, ${date.getFullYear()}`;
 }
+
+const FULL_MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** 23 September, 2026 */
+export function formatFullDate(value: string) {
+  const date = new Date(value);
+  return `${date.getDate()} ${FULL_MONTHS[date.getMonth()]}, ${date.getFullYear()}`;
+}

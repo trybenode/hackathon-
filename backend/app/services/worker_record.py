@@ -83,6 +83,8 @@ class GuarantorCredential:
     status: str
     activated_at: datetime
     valid_until: datetime
+    #: How the guarantor knows the worker, e.g. "employer".
+    relationship: str = ""
 
 
 @dataclass(frozen=True)
@@ -185,6 +187,7 @@ async def _guarantor(session: AsyncSession, worker_id: UUID) -> GuarantorCredent
         status="Active" if agreement.status in LIVE_GUARANTEE else "Expired",
         activated_at=_as_aware(agreement.verified_at),
         valid_until=_as_aware(agreement.valid_until),
+        relationship=agreement.relationship_type,
     )
 
 

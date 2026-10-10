@@ -11,6 +11,7 @@ import { RecordGate } from "@/components/worker/RecordGate";
 import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
 import type { Credentials } from "@/lib/workerRecord";
 import { GuarantorDialog } from "./GuarantorDialog";
+import { ImportRecordDialog } from "./ImportRecordDialog";
 
 function Check({ children }: { children: ReactNode }) {
   return (
@@ -66,7 +67,7 @@ function CredentialCard({
  */
 export function CredentialList() {
   const router = useRouter();
-  const { data, error, loading } = useWorkerRecord();
+  const { data, error, loading, reload } = useWorkerRecord();
 
   return (
     <main className="flex flex-col">
@@ -78,13 +79,22 @@ export function CredentialList() {
       </header>
 
       <RecordGate loading={loading} error={error}>
-        {data && <CredentialCards credentials={data.credentials} />}
+        {data && <CredentialCards credentials={data.credentials} workerId={data.worker_id} onImported={reload} />}
       </RecordGate>
     </main>
   );
 }
 
-function CredentialCards({ credentials }: { credentials: Credentials }) {
+function CredentialCards({
+  credentials,
+  workerId,
+  onImported,
+}: {
+  credentials: Credentials;
+  workerId: string;
+  onImported: () => void;
+}) {
+  const [importing, setImporting] = useState(false);
   const [guarantorOpen, setGuarantorOpen] = useState(false);
   const { identity, guarantor, imported_record: importedRecord } = credentials;
   const none = !identity && !guarantor && !importedRecord;
@@ -141,15 +151,20 @@ function CredentialCards({ credentials }: { credentials: Credentials }) {
           />
         )}
 
-        {/* Importing is the portable credentials import (Abdul's side) and has
-            no screen yet, so the button is in place but does nothing. */}
         <Button
           variant="outline"
           size="lg"
           className="mt-4 mb-4 w-46 self-center rounded-xl px-0 text-body-md font-semibold"
+          onClick={() => setImporting(true)}
         >
           Import record
         </Button>
+        <ImportRecordDialog
+          workerId={workerId}
+          open={importing}
+          onClose={() => setImporting(false)}
+          onImported={onImported}
+        />
       </div>
 
       {guarantor && (

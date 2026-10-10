@@ -165,10 +165,10 @@ export function JobDetails({ jobId }: { jobId: string }) {
             </p>
           )}
           <div className="mt-2 flex w-full gap-4">
-            <Button variant="outline" size="lg" fullWidth className="rounded-xl px-0" onClick={() => setConfirming(false)}>
+            <Button variant="outline" size="lg" fullWidth className="min-w-0 rounded-xl px-0" onClick={() => setConfirming(false)}>
               Cancel
             </Button>
-            <Button size="lg" fullWidth className="rounded-xl px-0" disabled={busy} onClick={confirmCompletion}>
+            <Button size="lg" fullWidth className="min-w-0 rounded-xl px-0" disabled={busy} onClick={confirmCompletion}>
               {busy ? "Confirming…" : "Confirm"}
             </Button>
           </div>

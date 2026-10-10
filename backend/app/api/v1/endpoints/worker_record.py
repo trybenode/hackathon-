@@ -64,6 +64,7 @@ class GuarantorCredentialItem(ApiModel):
     status: str
     activated_at: datetime
     valid_until: datetime
+    relationship: str = ""
 
 
 class ImportedRecordItem(ApiModel):
@@ -157,6 +158,7 @@ async def worker_record(
                 status=record.guarantor.status,
                 activated_at=record.guarantor.activated_at,
                 valid_until=record.guarantor.valid_until,
+                relationship=record.guarantor.relationship,
             )
             if record.guarantor
             else None,

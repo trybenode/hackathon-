@@ -155,6 +155,7 @@ async def test_credentials_come_from_checks_and_guarantees(
     assert record.guarantor is not None
     assert record.guarantor.name == "John Parker"
     assert record.guarantor.status == "Expired"
+    assert record.guarantor.relationship == "employer"
     assert record.imported_record is None
 
 
