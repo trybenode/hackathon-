@@ -248,6 +248,66 @@
         }
       }
     },
+    "/api/v1/guarantor-instruments/{instrument_id}/claim": {
+      "post": {
+        "tags": [
+          "guarantor"
+        ],
+        "summary": "Become the guarantor on an invite link",
+        "description": "The signed-in person takes the invite a worker sent them.",
+        "operationId": "claim_invite_api_v1_guarantor_instruments__instrument_id__claim_post",
+        "parameters": [
+          {
+            "name": "instrument_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Instrument Id"
+            }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuarantorInstrumentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/guarantor-instruments/{instrument_id}/sign": {
       "post": {
         "tags": [
@@ -4005,6 +4065,255 @@
         ]
       }
     },
+    "/api/v1/me/worker/onboarding": {
+      "get": {
+        "tags": [
+          "worker onboarding"
+        ],
+        "summary": "Where the worker is in onboarding",
+        "operationId": "onboarding_status_api_v1_me_worker_onboarding_get",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/worker/identity": {
+      "post": {
+        "tags": [
+          "worker onboarding"
+        ],
+        "summary": "Submit the worker's identity details",
+        "description": "Forward the details to the provider; NIN and BVN are never stored.\n\nThe utility bill goes to object storage and only its key is kept.",
+        "operationId": "submit_identity_api_v1_me_worker_identity_post",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_submit_identity_api_v1_me_worker_identity_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/worker/liveness": {
+      "post": {
+        "tags": [
+          "worker onboarding"
+        ],
+        "summary": "Check the worker's liveness capture",
+        "description": "The frame goes to the provider and is dropped; only the reference is kept.",
+        "operationId": "complete_liveness_api_v1_me_worker_liveness_post",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_complete_liveness_api_v1_me_worker_liveness_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/worker/guarantor": {
+      "post": {
+        "tags": [
+          "worker onboarding"
+        ],
+        "summary": "Create an invite link for the worker's guarantor",
+        "description": "The link expires in seven days; a new invite replaces an unclaimed one.",
+        "operationId": "invite_guarantor_api_v1_me_worker_guarantor_post",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuarantorInviteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuarantorInviteView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
     "/api/v1/public/jobs/{token}": {
       "get": {
         "tags": [
@@ -4808,6 +5117,20 @@
         ],
         "title": "Body_complete_liveness_api_v1_guarantor_instruments__instrument_id__liveness_post"
       },
+      "Body_complete_liveness_api_v1_me_worker_liveness_post": {
+        "properties": {
+          "frame": {
+            "type": "string",
+            "format": "binary",
+            "title": "Frame"
+          }
+        },
+        "type": "object",
+        "required": [
+          "frame"
+        ],
+        "title": "Body_complete_liveness_api_v1_me_worker_liveness_post"
+      },
       "Body_report_customer_issue_api_v1_public_jobs__token__issue_post": {
         "properties": {
           "reason": {
@@ -4921,6 +5244,72 @@
           "bvn"
         ],
         "title": "Body_submit_identity_api_v1_guarantor_instruments__instrument_id__identity_post"
+      },
+      "Body_submit_identity_api_v1_me_worker_identity_post": {
+        "properties": {
+          "first_name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "First Name"
+          },
+          "last_name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Last Name"
+          },
+          "date_of_birth": {
+            "type": "string",
+            "format": "date",
+            "title": "Date Of Birth"
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 5,
+            "title": "Phone"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Address"
+          },
+          "nin": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Nin"
+          },
+          "bvn": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Bvn"
+          },
+          "utility_bill": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "binary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utility Bill"
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_name",
+          "last_name",
+          "date_of_birth",
+          "phone",
+          "address",
+          "nin",
+          "bvn"
+        ],
+        "title": "Body_submit_identity_api_v1_me_worker_identity_post"
       },
       "CredentialsExportResponse": {
         "properties": {
@@ -5943,6 +6332,11 @@
               }
             ],
             "title": "Created At"
+          },
+          "claimed": {
+            "type": "boolean",
+            "title": "Claimed",
+            "default": true
           }
         },
         "additionalProperties": false,
@@ -5958,6 +6352,74 @@
         ],
         "title": "GuarantorInstrumentResponse"
       },
+      "GuarantorInviteRequest": {
+        "properties": {
+          "first_name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "First Name"
+          },
+          "last_name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Last Name"
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/GuarantorRelationship"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "first_name",
+          "last_name",
+          "relationship"
+        ],
+        "title": "GuarantorInviteRequest"
+      },
+      "GuarantorInviteView": {
+        "properties": {
+          "instrument_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Instrument Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "relationship": {
+            "type": "string",
+            "title": "Relationship"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "link": {
+            "type": "string",
+            "title": "Link"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "instrument_id",
+          "name",
+          "relationship",
+          "status",
+          "expires_at",
+          "link"
+        ],
+        "title": "GuarantorInviteView"
+      },
       "GuarantorRelationship": {
         "type": "string",
         "enum": [
@@ -5965,6 +6427,7 @@
           "parent",
           "spouse",
           "colleague",
+          "employer",
           "other"
         ],
         "title": "GuarantorRelationship"
@@ -6023,8 +6486,8 @@
           "signer_phone": {
             "type": "string",
             "maxLength": 40,
-            "minLength": 5,
-            "title": "Signer Phone"
+            "title": "Signer Phone",
+            "default": ""
           },
           "accepted": {
             "type": "boolean",
@@ -6038,7 +6501,6 @@
         "type": "object",
         "required": [
           "signer_name",
-          "signer_phone",
           "accepted",
           "signature_metadata"
         ],
@@ -6865,6 +7327,52 @@
           "icon"
         ],
         "title": "NotificationItem"
+      },
+      "OnboardingResponse": {
+        "properties": {
+          "identity_verified": {
+            "type": "boolean",
+            "title": "Identity Verified"
+          },
+          "liveness_verified": {
+            "type": "boolean",
+            "title": "Liveness Verified"
+          },
+          "guarantor": {
+            "type": "string",
+            "title": "Guarantor"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Step"
+          },
+          "invite": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GuarantorInviteView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "identity_verified",
+          "liveness_verified",
+          "guarantor",
+          "next_step"
+        ],
+        "title": "OnboardingResponse"
       },
       "OutcomeStatus": {
         "type": "string",
@@ -7735,6 +8243,17 @@
             "type": "boolean",
             "title": "Is Guarantor",
             "default": false
+          },
+          "onboarding_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Onboarding Step"
           }
         },
         "additionalProperties": false,
@@ -8068,6 +8587,21 @@
             "maxLength": 8,
             "minLength": 4,
             "title": "Code"
+          },
+          "sign_up": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "worker",
+                  "guarantor"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sign Up"
           }
         },
         "additionalProperties": false,
