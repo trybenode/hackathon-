@@ -56,6 +56,15 @@ class Settings(BaseSettings):
     resend_from: str = Field("Trust Infrastructure <onboarding@resend.dev>", alias="RESEND_FROM")
     credential_signing_secret: str = Field("", alias="CREDENTIAL_SIGNING_SECRET")
     platform_api_key: str = Field("", alias="PLATFORM_API_KEY")
+    history_enabled: bool = True
+    sms_provider: str = "stub"
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_verify_service_sid: str = ""
+    history_ai_base_url: str = ""
+    history_ai_api_key: str = ""
+    history_ai_enabled: bool = False
+    history_audio_dir: str = ""
 
     @property
     def email_enabled(self) -> bool:

@@ -14,6 +14,7 @@ from app.services.trust_scoring.assessment import assess_worker
 from app.services.trust_scoring.evidence import scoring_inputs
 from app.services.trust_scoring.scoring import starting_rating
 from app.services.trust_scoring.signals import aggregate
+from app.services.history import history_counts
 
 RECORD_PLATFORM_TYPE = "generic"
 PREVIEW_SIZE = 20
@@ -87,6 +88,7 @@ class WorkerRecord:
     imported_record: ImportedRecordCredential | None
     starting_rating: float | None
     starting_rating_label: str | None
+    informal_history: dict | None = None
 
 
 def _as_aware(moment: datetime) -> datetime:
@@ -159,6 +161,7 @@ async def load_record(session: AsyncSession, user: User, *, include_history: boo
         if signals:
             initial = starting_rating(signals, count)
     identity = await _identity(session, user.id)
+    informal_history = await history_counts(session, worker.id)
     return WorkerRecord(worker_id=worker.id, name=user.display_name, role=worker.role, avatar_url=worker.avatar_url, location=worker.location,
         identity_verified=bool(identity and identity.status == "verified"), identity_status=identity.status if identity else "not_verified",
         decision=assessment.decision, confidence=assessment.confidence, band=assessment.band, status=assessment.status, signals_used=assessment.signals_used, explanation_summary=assessment.explanation_summary, score=float(assessment.score) if assessment.score is not None else None,
@@ -166,4 +169,4 @@ async def load_record(session: AsyncSession, user: User, *, include_history: boo
         completed_jobs=len(completed), completion_rate=sum(item["status"] == "completed" for item in responsible)/len(responsible) if responsible else None,
         repeat_hires=len(known_clients)-len(set(known_clients)) if known_clients else None, disputes=sum(item["dispute_resolution"] in {"open", "upheld"} for item in known_disputes) if known_disputes else None,
         outcomes=history, identity=identity, guarantor=await _guarantor(session, worker.id), imported_record=ImportedRecordCredential(imported_count, _as_aware(imported_at)) if imported_count else None,
-        starting_rating=initial["starting_rating"] if initial else None, starting_rating_label=initial["label"] if initial else None)
+        starting_rating=initial["starting_rating"] if initial else None, starting_rating_label=initial["label"] if initial else None, informal_history=informal_history.model_dump())

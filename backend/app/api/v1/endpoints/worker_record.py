@@ -11,6 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.portability import HistoryPage, ApiError, VerificationSummary
+from app.schemas.history import InformalHistoryCounts
 from app.services.portability import own_history, summary_from_record
 
 from app.api.v1.endpoints.auth import current_user
@@ -89,6 +90,7 @@ class WorkerRecordResponse(ApiModel):
     starting_rating: float | None
     starting_rating_label: str | None
     public_summary: VerificationSummary
+    informal_history: InformalHistoryCounts
     assessment: RecordAssessment
     verified_outcomes: int
     last_updated: datetime
@@ -119,6 +121,7 @@ async def worker_record(
         identity_verified=record.identity_verified,
         identity_status=record.identity_status, self_declared_outcomes=record.self_declared_outcomes, total_outcomes=record.total_outcomes, starting_rating=record.starting_rating, starting_rating_label=record.starting_rating_label,
         public_summary=summary_from_record(record),
+        informal_history=record.informal_history or {},
         assessment=RecordAssessment(
             assessed_at=record.assessed_at,
             decision=record.decision,
