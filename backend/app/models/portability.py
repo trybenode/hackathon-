@@ -15,6 +15,13 @@ class PlatformKey(UUIDTimestampMixin, Base):
     key_hash: Mapped[str] = mapped_column(String(64), unique=True)
     can_attest: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: "sandbox" keys see only the demo workers; "production" keys only real ones.
+    environment: Mapped[str] = mapped_column(String(20), default="production", server_default="production", nullable=False)
+    #: Public identifier shown on the dashboard (pk_sandbox_…/pk_live_…); keys
+    #: issued by the operator script have none.
+    key_id: Mapped[str | None] = mapped_column(String(40), unique=True, nullable=True)
+    #: The developer who generated it from the dashboard.
+    created_by_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
 
 class ShareGrant(UUIDTimestampMixin, Base):
