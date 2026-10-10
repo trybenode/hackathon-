@@ -104,3 +104,7 @@ async def test_a_claimed_invite_runs_the_usual_checks(
 
     assert active.status is AgreementStatus.ACTIVE
     assert active.guarantor_user_id == hannah.id
+    # Contact details arrive with the identity check.
+    assert active.guarantor_phone == "+2348012345678"
+    assert hannah.phone == "+2348012345678"
+    assert hannah.address == "12 Trust Street, Lagos"

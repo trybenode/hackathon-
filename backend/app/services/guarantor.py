@@ -638,6 +638,14 @@ async def submit_identity_check(
             "We could not verify those identity details. Check them and try again."
         )
 
+    # A guarantor invited by link gave no contact details until now; fill only
+    # what is blank so details the guarantor maintains are never overwritten.
+    agreement.guarantor_phone = agreement.guarantor_phone or submission.phone
+    agreement.guarantor_address = agreement.guarantor_address or submission.address
+    person = await session.get(User, agreement.guarantor_user_id)
+    if person is not None:
+        person.phone = person.phone or submission.phone
+        person.address = person.address or submission.address
     return record
 
 
