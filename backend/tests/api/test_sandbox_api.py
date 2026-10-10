@@ -105,3 +105,20 @@ async def test_a_production_key_cannot_use_demo_workers(api, session):
     )
     assert by_id.status_code == 403
     assert by_id.json()["code"] == "ENVIRONMENT_MISMATCH"
+
+
+async def test_calls_with_a_platform_key_are_logged_without_identifiers(api, session):
+    from app.models.developer import ApiRequestLog
+
+    client, _ = api
+    _, headers = await keyed(session, "sandbox")
+    await client.post(
+        "/api/v1/platform/worker-links", headers=headers,
+        json={"external_worker_id": "my-user-1", "consent_token": ADA.consent_token},
+    )
+    await client.get("/api/v1/platform/workers/nobody/history", headers=headers)
+
+    rows = (await session.scalars(select(ApiRequestLog).order_by(ApiRequestLog.created_at))).all()
+    assert [(row.method, row.status_code) for row in rows] == [("POST", 201), ("GET", 404)]
+    # The route template, never the worker's id.
+    assert rows[1].path == "/api/v1/platform/workers/{external_id}/history"
