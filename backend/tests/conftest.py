@@ -104,3 +104,38 @@ async def worker(session: AsyncSession) -> Worker:
     session.add(record)
     await session.flush()
     return record
+
+
+async def give_guarantor(session: AsyncSession, worker: Worker) -> None:
+    """Stand an active guarantee behind the worker, as creating job links needs."""
+
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from app.models.domain import AgreementStatus, GuarantorAgreement
+
+    existing = await session.scalar(
+        select(GuarantorAgreement).where(
+            GuarantorAgreement.worker_id == worker.id,
+            GuarantorAgreement.status == AgreementStatus.ACTIVE,
+        )
+    )
+    if existing is not None:
+        return
+    person = User(email=f"guarantor-{worker.id.hex[:8]}@example.com", display_name="Grace Guarantor")
+    session.add(person)
+    await session.flush()
+    session.add(
+        GuarantorAgreement(
+            worker_id=worker.id,
+            guarantor_user_id=person.id,
+            scope="Cleaning jobs",
+            conditions="Covers no-show.",
+            relationship_type="employer",
+            status=AgreementStatus.ACTIVE,
+            verified_at=datetime.now(UTC),
+            valid_until=datetime.now(UTC) + timedelta(days=365),
+        )
+    )
+    await session.flush()

@@ -15,6 +15,7 @@ from app.db.session import get_db_session
 from app.main import app
 from app.models.domain import Worker
 from app.services.escrow_provider import sign_webhook
+from tests.conftest import give_guarantor
 
 
 @pytest.fixture(autouse=True)
@@ -44,7 +45,8 @@ async def deliver(client: AsyncClient, payload: dict, *, secret: str = "test-web
     return await client.post("/api/v1/webhooks/payscrow", content=body, headers=headers)
 
 
-async def create_link(client: AsyncClient) -> dict:
+async def create_link(client: AsyncClient, session: AsyncSession, worker: Worker) -> dict:
+    await give_guarantor(session, worker)
     created = await client.post(
         "/api/v1/me/jobs",
         json={
@@ -72,7 +74,7 @@ async def test_full_job_flow_over_http(session: AsyncSession, worker: Worker) ->
         assert (await client.post("/api/v1/me/jobs", json={})).status_code == 401
         await sign_in(client, "worker@example.com")
 
-        job = await create_link(client)
+        job = await create_link(client, session, worker)
         assert job["stage"] == "awaiting_customer"
         token = job["link"].rsplit("/j/", 1)[1]
 
@@ -126,7 +128,7 @@ async def test_full_job_flow_over_http(session: AsyncSession, worker: Worker) ->
 async def test_customer_reports_a_problem_with_evidence(session: AsyncSession, worker: Worker) -> None:
     async with client_for(session) as client:
         await sign_in(client, "worker@example.com")
-        job = await create_link(client)
+        job = await create_link(client, session, worker)
         token = job["link"].rsplit("/j/", 1)[1]
         await pay(client, token)
         number = (await client.get(f"/api/v1/me/jobs/{job['id']}")).json()["transaction_number"]
@@ -153,7 +155,7 @@ async def test_customer_reports_a_problem_with_evidence(session: AsyncSession, w
 async def test_worker_reports_an_issue(session: AsyncSession, worker: Worker) -> None:
     async with client_for(session) as client:
         await sign_in(client, "worker@example.com")
-        job = await create_link(client)
+        job = await create_link(client, session, worker)
         token = job["link"].rsplit("/j/", 1)[1]
         await pay(client, token)
         number = (await client.get(f"/api/v1/me/jobs/{job['id']}")).json()["transaction_number"]
@@ -179,7 +181,7 @@ async def test_bad_link_is_not_found(session: AsyncSession) -> None:
 async def test_notifications_for_both_sides(session: AsyncSession, worker: Worker) -> None:
     async with client_for(session) as client:
         await sign_in(client, "worker@example.com")
-        job = await create_link(client)
+        job = await create_link(client, session, worker)
         token = job["link"].rsplit("/j/", 1)[1]
         await pay(client, token)
         number = (await client.get(f"/api/v1/me/jobs/{job['id']}")).json()["transaction_number"]
@@ -204,7 +206,7 @@ async def test_webhooks_sent_to_the_root_address_still_land(
 
     async with client_for(session) as client:
         await sign_in(client, "worker@example.com")
-        job = await create_link(client)
+        job = await create_link(client, session, worker)
         token = job["link"].rsplit("/j/", 1)[1]
         await pay(client, token)
         number = (await client.get(f"/api/v1/me/jobs/{job['id']}")).json()["transaction_number"]

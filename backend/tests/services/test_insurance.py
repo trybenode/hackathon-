@@ -14,12 +14,14 @@ from app.core.config import get_settings
 from app.models.domain import InsuranceStatus, User, Worker
 from app.services import escrow as escrow_service
 from app.services import insurance
+from tests.conftest import give_guarantor
 
 
 async def open_job(session: AsyncSession, worker: Worker, amount: str = "25000.00"):
     """The worker's link, and the customer starting payment on it."""
 
     user = await session.get(User, worker.user_id)
+    await give_guarantor(session, worker)
     job = await escrow_service.create_job_link(
         session, user, title="Home cleaning", address="Lekki, Lagos",
         scheduled_at=datetime.now(tz=UTC) + timedelta(days=1), price=Decimal(amount),
