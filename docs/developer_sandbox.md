@@ -84,4 +84,4 @@ History imports and guarantee changes run in full and answer exactly as producti
 
 ## Usage
 
-Every call made with your keys is counted on the dashboard (total and successful calls) and the latest ones are listed. Only the method, route, status and duration are recorded: no request bodies, headers or worker ids.
+Every call made with your keys is counted on the dashboard (total and successful calls) and charted per day over the last 14 days. Only the method, route, status and duration are recorded: no request bodies, headers or worker ids.
