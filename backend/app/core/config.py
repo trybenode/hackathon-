@@ -68,9 +68,14 @@ class Settings(BaseSettings):
     insurance_premium_rate: float = Field(0.02, alias="INSURANCE_PREMIUM_RATE")
     insurance_premium_min: float = Field(200, alias="INSURANCE_PREMIUM_MIN")
     insurance_premium_max: float = Field(2000, alias="INSURANCE_PREMIUM_MAX")
-    #: Days after the worker completes a job before an unconfirmed client is
-    #: reminded. Funds never release on a timer: only the client's code does.
-    escrow_confirmation_reminder_days: int = Field(7, alias="ESCROW_CONFIRMATION_REMINDER_DAYS")
+    #: Hours the customer has, after the worker marks a job complete, to
+    #: release with their code or report a problem. After that a dispute opens:
+    #: money never releases on a timer.
+    escrow_confirmation_window_hours: int = Field(48, alias="ESCROW_CONFIRMATION_WINDOW_HOURS")
+    #: Where the screens live, for links in emails (job pages, job details).
+    frontend_base_url: str = Field("http://localhost:3000", alias="FRONTEND_BASE_URL")
+    #: The platform's own address, told when a dispute opens. Optional.
+    ops_email: str = Field("", alias="OPS_EMAIL")
 
     @property
     def escrow_enabled(self) -> bool:

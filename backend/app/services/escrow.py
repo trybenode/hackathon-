@@ -1,28 +1,34 @@
-"""Purpose: Move a job's money through escrow, from payment to release or dispute.
+"""Purpose: Run a freelance job's money through Payscrow escrow, from link to release.
 
-Dependencies: SQLAlchemy async sessions, app.models.domain, and the escrow
-provider seam (Payscrow, or the local stand-in).
-Used by: the jobs, worker jobs and Payscrow webhook endpoints, and the sweep.
+Dependencies: SQLAlchemy async sessions, app.models.domain, the escrow provider
+seam (Payscrow, or the local stand-in), insurance and job notifications.
+Used by: the worker jobs, customer job page and Payscrow webhook endpoints,
+and the background sweep.
 
-The lifecycle (SRS 3.6):
-  open      -> job Accepted, escrow Pending: the client gets a payment link.
-  paid      -> job In Progress, escrow Held (Payscrow's webhook says so).
-  complete  -> job Submitted: the worker says the work is done.
-  release   -> job Released, escrow Released: the client confirms by giving us
-               the escrow code Payscrow sent them when they paid, which we
-               apply (Payscrow's integration guide, step 9).
-  dispute   -> job Disputed: raised through Payscrow, whose ruling arrives by
-               webhook (Refund, Split or Close).
+The flow (Freelance Worker <-> Customer Job Flow, Oct 2026):
+  1. link      worker creates the job (title, address, date, price) and shares
+               its link. Job Draft; no money yet.
+  2-3. pay     the customer opens the link (no account), enters name, email and
+               phone, and is sent to Payscrow. Job Accepted, escrow Pending.
+  4. held      Payscrow's signed webhook confirms payment. Job In Progress,
+               escrow Held, cover active; Payscrow emails the code to the customer.
+  5. complete  the worker marks it done; the customer is emailed and has
+               ESCROW_CONFIRMATION_WINDOW_HOURS to act.
+  6-7. release the customer enters the code and a 1-5 star rating. We apply the
+               code; the job closes and is recorded as a verified outcome, so
+               the rating feeds the worker's trust score.
+  dispute      either party reports a problem before release, or the window
+               passes without a code. Payscrow rules (Refund, Split, Close).
 
-Only the client releases money. Their code is used once and never stored, and
-nothing releases on a timer: a client who has not confirmed
-ESCROW_CONFIRMATION_REMINDER_DAYS after completion is reminded instead.
+Money only ever moves on the customer's code or Payscrow's ruling. Codes are
+passed to Payscrow and never stored.
 """
 
 from __future__ import annotations
 
+import hashlib
 import re
-from dataclasses import dataclass, field
+import secrets
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -42,17 +48,19 @@ from app.models.domain import (
     Job,
     JobStatus,
     JobType,
+    NormalizedOutcome,
     Organization,
     OrganizationType,
+    OutcomeSource,
+    OutcomeStatus,
     ProviderOperation,
     ProviderOperationStatus,
+    RawOutcome,
     User,
     Worker,
 )
-from app.services import email_sender as email_sender_module
 from app.services import escrow_provider as provider_module
-from app.services import insurance
-from app.services.email_sender import EmailMessage, EmailSender
+from app.services import insurance, job_notifications
 from app.services.escrow_provider import EscrowParty, EscrowProvider, EscrowStart
 
 #: Payscrow's escrow code is 10 alphanumerics; this rejects obvious typos
@@ -61,6 +69,9 @@ ESCROW_CODE = re.compile(r"^[A-Za-z0-9]{6,20}$")
 
 #: Payscrow's complaint length limits.
 COMPLAINT_MIN, COMPLAINT_MAX = 10, 1000
+
+#: Where completed jobs are recorded as outcomes for the trust score.
+OUTCOME_SOURCE = "credly-jobs"
 
 
 class EscrowError(Exception):
@@ -76,22 +87,7 @@ class EscrowStateError(EscrowError):
 
 
 class EscrowCodeMissingError(EscrowError):
-    """Releasing needs the client's escrow code."""
-
-
-@dataclass(frozen=True)
-class JobRequest:
-    """A job a platform asks us to protect with escrow."""
-
-    worker_id: UUID
-    title: str
-    amount: Decimal
-    client_name: str
-    client_email: str
-    client_phone: str | None = None
-    location: str | None = None
-    details: list[dict[str, str]] = field(default_factory=list)
-    return_url: str | None = None
+    """Releasing needs the customer's escrow code."""
 
 
 def _now() -> datetime:
@@ -114,8 +110,8 @@ def _audit(session: AsyncSession, job: Job, action: str, **metadata: Any) -> Non
 
 
 async def _client_organization(session: AsyncSession) -> Organization:
-    """Independent jobs hang off one placeholder organization until clients
-    have accounts of their own."""
+    """Freelance jobs hang off one placeholder organization: customers have no
+    account of their own."""
 
     organization = await session.scalar(
         select(Organization).where(Organization.name == "Independent clients")
@@ -137,52 +133,110 @@ async def latest_escrow(session: AsyncSession, job_id: UUID) -> EscrowTransactio
     )
 
 
-async def open_job(
-    session: AsyncSession,
-    request: JobRequest,
-    *,
-    provider: EscrowProvider | None = None,
-) -> tuple[Job, EscrowTransaction]:
-    """Create the job and open its escrow; the client pays via the link."""
+async def latest_dispute(session: AsyncSession, job_id: UUID) -> Dispute | None:
+    return await session.scalar(
+        select(Dispute).where(Dispute.job_id == job_id).order_by(Dispute.created_at.desc())
+    )
 
-    worker = await session.get(Worker, request.worker_id)
+
+async def _worker_person(session: AsyncSession, job: Job) -> User | None:
+    worker = await session.get(Worker, job.worker_id)
+    return await session.get(User, worker.user_id) if worker else None
+
+
+# --- 1. The worker creates the job link ---------------------------------------
+
+
+async def create_job_link(
+    session: AsyncSession,
+    user: User,
+    *,
+    title: str,
+    address: str,
+    scheduled_at: datetime,
+    price: Decimal,
+) -> Job:
+    """A job waiting for its customer; the link carries its secret token."""
+
+    worker = await session.scalar(select(Worker).where(Worker.user_id == user.id))
     if worker is None:
-        raise JobNotFoundError(f"No worker with id {request.worker_id}.")
-    person = await session.get(User, worker.user_id)
-    # Payscrow requires the merchant's phone, whatever its docs say.
-    if person is None or not (person.phone or "").strip():
+        raise JobNotFoundError("This account has no worker profile.")
+    # Payscrow requires the merchant's phone, whatever its docs say; better to
+    # say so now than when the customer tries to pay.
+    if not (user.phone or "").strip():
         raise EscrowStateError(
-            "The worker needs a phone number on their profile before escrow can start."
+            "Add a phone number to your profile before creating a job: Payscrow needs it."
         )
 
     job = Job(
         worker_id=worker.id,
         organization_id=(await _client_organization(session)).id,
         job_type=JobType.INDEPENDENT,
-        status=JobStatus.ACCEPTED,
-        title=request.title,
-        agreed_amount=request.amount,
-        client_name=request.client_name,
-        client_email=request.client_email,
-        client_phone=request.client_phone,
-        location=request.location,
-        details=request.details,
+        status=JobStatus.DRAFT,
+        title=title,
+        agreed_amount=price,
+        location=address,
+        scheduled_at=scheduled_at,
+        link_token=secrets.token_urlsafe(16),
     )
     session.add(job)
     await session.flush()
+    _audit(session, job, "job.link_created", actor=str(user.id))
+    return job
 
-    settings = get_settings()
-    premium = insurance.premium_for(request.amount)
-    active = _provider(provider)
-    started = await active.start(
+
+async def job_by_token(session: AsyncSession, token: str) -> tuple[Job, EscrowTransaction | None]:
+    job = await session.scalar(select(Job).where(Job.link_token == token))
+    if job is None:
+        raise JobNotFoundError("This job link is not valid.")
+    return job, await latest_escrow(session, job.id)
+
+
+# --- 2-3. The customer pays into escrow -----------------------------------------
+
+
+async def start_payment(
+    session: AsyncSession,
+    token: str,
+    *,
+    name: str,
+    email: str,
+    phone: str,
+    return_url: str | None = None,
+    provider: EscrowProvider | None = None,
+) -> EscrowTransaction:
+    """Open the escrow with the customer's details; they pay on Payscrow.
+
+    Asking again before paying returns the same payment link rather than a
+    second payable order (Payscrow's guide, step 5).
+    """
+
+    job, escrow = await job_by_token(session, token)
+    if escrow is not None:
+        if escrow.status is EscrowStatus.PENDING:
+            return escrow
+        raise EscrowStateError("This job has already been paid for.")
+
+    person = await _worker_person(session, job)
+    if person is None:
+        raise JobNotFoundError("This job's worker no longer exists.")
+    if email.strip().casefold() == person.email.casefold():
+        raise EscrowStateError("Use your own email: it must differ from the worker's.")
+
+    job.client_name = name.strip()
+    job.client_email = email.strip()
+    job.client_phone = phone.strip()
+
+    premium = insurance.premium_for(job.agreed_amount)
+    started = await _provider(provider).start(
         EscrowStart(
             reference=f"JOB-{job.id}",
-            description=request.title,
-            amount=request.amount,
-            client=EscrowParty(request.client_name, request.client_email, request.client_phone),
+            description=job.title,
+            amount=job.agreed_amount,
+            client=EscrowParty(job.client_name, job.client_email, job.client_phone),
             worker=EscrowParty(person.display_name, person.email, person.phone),
-            webhook_url=settings.payscrow_webhook_url or None,
-            return_url=request.return_url,
+            webhook_url=get_settings().payscrow_webhook_url or None,
+            return_url=return_url,
             premium=premium,
         )
     )
@@ -192,19 +246,20 @@ async def open_job(
         provider_reference=started.transaction_number,
         payment_link=started.payment_link,
         total_payable=started.total_payable,
-        amount=request.amount,
+        amount=job.agreed_amount,
         micro_premium=premium,
         status=EscrowStatus.PENDING,
     )
     session.add(escrow)
+    job.status = JobStatus.ACCEPTED
     # Cover is quoted now and starts only once the premium is paid.
-    insurance.quote(session, job.id, request.amount, premium)
+    insurance.quote(session, job.id, job.agreed_amount, premium)
     await session.flush()
     _audit(session, job, "escrow.opened", transaction_number=started.transaction_number)
-    return job, escrow
+    return escrow
 
 
-# --- Webhooks ---------------------------------------------------------------
+# --- 4. Payscrow's webhooks -------------------------------------------------------
 
 
 async def _find_by_webhook(session: AsyncSession, payload: dict) -> EscrowTransaction | None:
@@ -284,8 +339,8 @@ async def _apply_payment(
         _audit(session, job, "escrow.payment_mismatch", amount_paid=str(paid), currency=currency)
         return "amount mismatch"
 
-    # Any escrowCode in the payload is ignored: releasing is the client's call,
-    # made by giving us their code.
+    # Any escrowCode in the payload is ignored: releasing is the customer's
+    # call, made by giving us their code.
     escrow.provider_transaction_id = payload.get("transactionId") or escrow.provider_transaction_id
 
     if escrow.status is EscrowStatus.PENDING:
@@ -297,6 +352,9 @@ async def _apply_payment(
         # The payment included the premium: no premium, no cover, so only now.
         if await insurance.activate(session, escrow):
             _audit(session, job, "insurance.activated")
+        person = await _worker_person(session, job)
+        if person:
+            await job_notifications.payment_received(job, person.email)
     return "funded"
 
 
@@ -305,9 +363,7 @@ async def _apply_dispute_update(
 ) -> str:
     escrow.in_dispute = bool(payload.get("inDispute", True))
     escrow.dispute_stage = payload.get("disputeStage") or escrow.dispute_stage
-    dispute = await session.scalar(
-        select(Dispute).where(Dispute.job_id == job.id).order_by(Dispute.created_at.desc())
-    )
+    dispute = await latest_dispute(session, job.id)
 
     if payload.get("disputeStage") != "Resolved":
         if dispute and dispute.status is DisputeStatus.OPEN:
@@ -322,7 +378,7 @@ async def _apply_dispute_update(
         dispute.status = DisputeStatus.RESOLVED
         dispute.resolved_at = _now()
 
-    # Refund: the client gets the money back. Close: it goes to the worker as
+    # Refund: the customer gets the money back. Close: it goes to the worker as
     # agreed. Split: each gets a share, which Payscrow pays out itself.
     if resolution == "Refund":
         escrow.status = EscrowStatus.REFUNDED
@@ -333,11 +389,19 @@ async def _apply_dispute_update(
         job.status = JobStatus.RELEASED
     # A refund means the protected flow was abandoned: the cover is voided.
     await insurance.end(session, escrow, voided=resolution == "Refund")
+    # The outcome affects the worker's score: a refund or split upholds the
+    # complaint; a close dismisses it.
+    await _record_outcome(
+        session,
+        job,
+        status=OutcomeStatus.DISPUTED if resolution == "Refund" else OutcomeStatus.COMPLETED,
+        dispute_resolution="dismissed" if resolution == "Close" else "upheld",
+    )
     _audit(session, job, "escrow.dispute_resolved", resolution=resolution)
     return f"dispute resolved: {resolution}"
 
 
-# --- Worker actions ---------------------------------------------------------
+# --- 5. The worker marks the job complete ---------------------------------------
 
 
 async def worker_job(session: AsyncSession, user: User, job_id: UUID) -> tuple[Job, EscrowTransaction | None]:
@@ -353,7 +417,7 @@ async def worker_job(session: AsyncSession, user: User, job_id: UUID) -> tuple[J
 async def mark_complete(
     session: AsyncSession, user: User, job_id: UUID, *, now: datetime | None = None
 ) -> Job:
-    """The worker says the work is done; the client confirms or objects."""
+    """The worker says the work is done; the customer is told and the window opens."""
 
     job, escrow = await worker_job(session, user, job_id)
     if escrow is None or escrow.status is not EscrowStatus.HELD or escrow.in_dispute:
@@ -361,25 +425,31 @@ async def mark_complete(
     if job.status is not JobStatus.IN_PROGRESS:
         raise EscrowStateError("This job is not in progress.")
 
-    moment = now or _now()
     job.status = JobStatus.SUBMITTED
-    job.completed_at = moment
+    job.completed_at = now or _now()
     _audit(session, job, "job.completed", actor=str(user.id))
+    await job_notifications.job_completed(
+        job, user.display_name, get_settings().escrow_confirmation_window_hours
+    )
     return job
 
 
-async def report_issue(
+# --- Disputes -----------------------------------------------------------------------
+
+
+async def _open_dispute(
     session: AsyncSession,
-    user: User,
-    job_id: UUID,
+    job: Job,
+    escrow: EscrowTransaction | None,
     *,
+    raised_by: str,
+    requested_by: str,
     reason: str,
     complaint: str,
+    opened_by: User | None,
+    evidence: list[str] | None = None,
     provider: EscrowProvider | None = None,
 ) -> Dispute:
-    """The worker raises a problem; Payscrow holds the money until it rules."""
-
-    job, escrow = await worker_job(session, user, job_id)
     if escrow is None or escrow.status is not EscrowStatus.HELD:
         raise EscrowStateError("Only money held in escrow can be disputed.")
     if escrow.in_dispute:
@@ -388,47 +458,128 @@ async def report_issue(
     text = f"{reason}. {complaint}".strip(" .") if complaint else reason
     text = text.ljust(COMPLAINT_MIN, ".")[:COMPLAINT_MAX]
     await _provider(provider).raise_dispute(
-        escrow.provider_reference or "", requested_by="merchant", complaint=text
+        escrow.provider_reference or "", requested_by=requested_by, complaint=text
     )
 
-    dispute = Dispute(job_id=job.id, opened_by_id=user.id, reason=text, status=DisputeStatus.OPEN)
+    dispute = Dispute(
+        job_id=job.id,
+        opened_by_id=opened_by.id if opened_by else None,
+        raised_by=raised_by,
+        reason=reason,
+        status=DisputeStatus.OPEN,
+        evidence_urls=evidence or [],
+    )
     session.add(dispute)
     escrow.in_dispute = True
     escrow.dispute_stage = "NegotiationOpen"
     job.status = JobStatus.DISPUTED
     await session.flush()
-    _audit(session, job, "escrow.dispute_raised", actor=str(user.id))
+    _audit(session, job, "escrow.dispute_raised", raised_by=raised_by)
+
+    person = await _worker_person(session, job)
+    await job_notifications.dispute_opened(job, person.email if person else "", raised_by, reason)
     return dispute
 
 
-# --- Release ----------------------------------------------------------------
-
-
-async def release(
+async def report_issue_by_worker(
     session: AsyncSession,
+    user: User,
     job_id: UUID,
     *,
-    by: str,
-    code: str | None,
+    reason: str,
+    complaint: str,
+    evidence: list[str] | None = None,
+    provider: EscrowProvider | None = None,
+) -> Dispute:
+    job, escrow = await worker_job(session, user, job_id)
+    return await _open_dispute(
+        session, job, escrow, raised_by="worker", requested_by="merchant",
+        reason=reason, complaint=complaint, opened_by=user, evidence=evidence, provider=provider,
+    )
+
+
+async def report_issue_by_customer(
+    session: AsyncSession,
+    token: str,
+    *,
+    reason: str,
+    complaint: str,
+    evidence: list[str] | None = None,
+    provider: EscrowProvider | None = None,
+) -> Dispute:
+    job, escrow = await job_by_token(session, token)
+    return await _open_dispute(
+        session, job, escrow, raised_by="customer", requested_by="customer",
+        reason=reason, complaint=complaint, opened_by=None, evidence=evidence, provider=provider,
+    )
+
+
+async def dispute_overdue_confirmations(
+    session: AsyncSession,
+    *,
+    provider: EscrowProvider | None = None,
+    now: datetime | None = None,
+) -> list[UUID]:
+    """Open a dispute for every completed job the customer left unconfirmed.
+
+    Called by the sweep. The worker is owed, so it is raised as the merchant's
+    complaint. A job whose dispute cannot be raised yet is tried next run.
+    """
+
+    window = timedelta(hours=get_settings().escrow_confirmation_window_hours)
+    cutoff = (now or _now()) - window
+    due = (
+        await session.scalars(
+            select(Job).where(Job.status == JobStatus.SUBMITTED, Job.completed_at <= cutoff)
+        )
+    ).all()
+
+    opened: list[UUID] = []
+    for job in due:
+        escrow = await latest_escrow(session, job.id)
+        hours = window.total_seconds() // 3600
+        try:
+            async with session.begin_nested():
+                await _open_dispute(
+                    session, job, escrow, raised_by="timeout", requested_by="merchant",
+                    reason="Customer did not confirm",
+                    complaint=f"The job was marked completed and the customer did not release "
+                    f"payment or report a problem within {hours:.0f} hours.",
+                    opened_by=None, provider=provider,
+                )
+            opened.append(job.id)
+        except (EscrowError, provider_module.EscrowProviderError):
+            continue
+    return opened
+
+
+# --- 6-7. The customer releases with their code and a rating -------------------------
+
+
+async def release_by_customer(
+    session: AsyncSession,
+    token: str,
+    *,
+    code: str,
+    rating: int,
     provider: EscrowProvider | None = None,
     now: datetime | None = None,
 ) -> EscrowTransaction:
-    """Release the held money to the worker with the client's escrow code.
+    """Release the held money to the worker, and keep the customer's rating.
 
-    The code is passed straight to Payscrow and not kept.
+    One step, because both feed the trust score. The code is passed straight
+    to Payscrow and not kept.
     """
 
-    job = await session.get(Job, job_id)
-    escrow = await latest_escrow(session, job_id) if job else None
-    if job is None or escrow is None:
-        raise JobNotFoundError(f"No job with id {job_id}.")
-    if escrow.status is not EscrowStatus.HELD or escrow.in_dispute:
+    job, escrow = await job_by_token(session, token)
+    if escrow is None or escrow.status is not EscrowStatus.HELD or escrow.in_dispute:
         raise EscrowStateError("There is no undisputed payment held for this job.")
+    if not 1 <= rating <= 5:
+        raise EscrowStateError("Rate the job from 1 to 5 stars to release the payment.")
     release_code = (code or "").strip()
     if not release_code:
         raise EscrowCodeMissingError(
-            "The client's escrow code is needed to release the funds. Payscrow sent "
-            "it to the client when they paid."
+            "Enter the escrow code Payscrow emailed you when you paid."
         )
     if not ESCROW_CODE.match(release_code):
         raise EscrowStateError("That does not look like an escrow code.")
@@ -440,81 +591,90 @@ async def release(
     escrow.status = EscrowStatus.RELEASED
     escrow.released_at = moment
     job.status = JobStatus.RELEASED
+    job.rating = rating
     if job.completed_at is None:
         job.completed_at = moment
     await insurance.end(session, escrow, voided=False)
-    _audit(session, job, "escrow.released", by=by)
+    await _record_outcome(session, job, status=OutcomeStatus.COMPLETED, rating=rating, now=moment)
+    _audit(session, job, "escrow.released", rating=rating)
+
+    person = await _worker_person(session, job)
+    if person:
+        await job_notifications.payment_released(job, person.email)
     return escrow
 
 
-def _reminder(job: Job, escrow: EscrowTransaction, worker_name: str) -> EmailMessage:
-    amount = f"NGN {job.agreed_amount:,.2f}"
-    return EmailMessage(
-        to=job.client_email or "",
-        subject=f"Please confirm your {job.title.lower()} job",
-        body=(
-            f"Hello {job.client_name or ''},\n\n"
-            f"{worker_name} marked your {job.title.lower()} job complete on "
-            f"{job.completed_at:%d %B %Y}. Your payment of {amount} is still held "
-            f"safely in escrow (Payscrow {escrow.provider_reference}).\n\n"
-            "If the work was done, confirm it with the escrow code Payscrow sent you "
-            "when you paid; that releases the payment to the worker. If something is "
-            "wrong, raise an issue instead and the payment stays held while it is "
-            "reviewed.\n\n"
-            "Nothing is paid out until you confirm.\n"
-        ),
+# --- 8. Settled jobs feed the trust score -------------------------------------------
+
+
+async def _record_outcome(
+    session: AsyncSession,
+    job: Job,
+    *,
+    status: OutcomeStatus,
+    rating: int | None = None,
+    dispute_resolution: str | None = None,
+    now: datetime | None = None,
+) -> None:
+    """Record a settled job as a verified outcome on the worker's history.
+
+    The escrow is the evidence: Payscrow held the money and released it on the
+    customer's code, or ruled on a dispute. assess_worker() and the portable
+    record read these.
+    """
+
+    source = await session.scalar(select(OutcomeSource).where(OutcomeSource.name == OUTCOME_SOURCE))
+    if source is None:
+        source = OutcomeSource(name=OUTCOME_SOURCE, normalization_version="1")
+        session.add(source)
+        await session.flush()
+
+    key = f"job-{job.id}"
+    if await session.scalar(
+        select(RawOutcome).where(RawOutcome.source_id == source.id, RawOutcome.external_outcome_id == key)
+    ):
+        return
+
+    payload = {"job_id": str(job.id), "status": status.value, "rating": rating}
+    raw = RawOutcome(
+        source_id=source.id,
+        external_outcome_id=key,
+        payload=payload,
+        payload_checksum=hashlib.sha256(repr(sorted(payload.items())).encode()).hexdigest(),
+    )
+    session.add(raw)
+    await session.flush()
+    session.add(
+        NormalizedOutcome(
+            worker_id=job.worker_id,
+            job_id=job.id,
+            raw_outcome_id=raw.id,
+            outcome_key=key,
+            status=status,
+            occurred_at=now or _now(),
+            rating=Decimal(rating) if rating else None,
+            amount=job.agreed_amount,
+            completion_confirmed=rating is not None,
+            normalization_version="1",
+            dispute_resolution=dispute_resolution,
+            # Pseudonymous: lets repeat-hire counting work without the email.
+            client_id=hashlib.sha256((job.client_email or "").casefold().encode()).hexdigest()[:16]
+            if job.client_email
+            else None,
+            source_platform="native",
+            import_method="native",
+            verified=True,
+            quality_flags=[],
+        )
     )
 
 
-async def remind_unconfirmed(
-    session: AsyncSession,
-    *,
-    sender: EmailSender | None = None,
-    now: datetime | None = None,
-) -> list[UUID]:
-    """Remind clients who have not confirmed a completed job.
-
-    Called by the sweep. Moves no money: it emails the client once and records
-    that it did. A failed send is tried again on the next run.
-    """
-
-    moment = now or _now()
-    cutoff = moment - timedelta(days=get_settings().escrow_confirmation_reminder_days)
-    due = (
-        await session.scalars(
-            select(Job).where(
-                Job.status == JobStatus.SUBMITTED,
-                Job.completed_at <= cutoff,
-                Job.confirmation_reminded_at.is_(None),
-                Job.client_email.is_not(None),
-            )
-        )
-    ).all()
-
-    reminded: list[UUID] = []
-    for job in due:
-        escrow = await latest_escrow(session, job.id)
-        if escrow is None or escrow.status is not EscrowStatus.HELD or escrow.in_dispute:
-            continue
-        worker = await session.get(Worker, job.worker_id)
-        person = await session.get(User, worker.user_id) if worker else None
-        try:
-            # Resolved at call time so tests can swap the sender.
-            await (sender or email_sender_module.default_email_sender).send(
-                _reminder(job, escrow, person.display_name if person else "Your worker")
-            )
-        except Exception:  # noqa: BLE001 - one bad send must not stop the rest
-            continue
-        job.confirmation_reminded_at = moment
-        _audit(session, job, "job.confirmation_reminder_sent")
-        reminded.append(job.id)
-    return reminded
-
-
 def job_stage(job: Job, escrow: EscrowTransaction | None) -> str:
-    """Where the job's money stands, in the terms the worker screens use."""
+    """Where the job stands, in the terms both screens use."""
 
-    if escrow is None or escrow.status is EscrowStatus.PENDING:
+    if escrow is None:
+        return "awaiting_customer"
+    if escrow.status is EscrowStatus.PENDING:
         return "awaiting_payment"
     if escrow.in_dispute or job.status is JobStatus.DISPUTED:
         return "disputed"

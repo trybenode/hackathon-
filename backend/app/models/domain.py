@@ -389,16 +389,22 @@ class Job(UUIDTimestampMixin, Base):
     )
     #: When the worker said the work was done.
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    #: When the client was reminded to confirm. Money never moves on a timer.
-    confirmation_reminded_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    #: The secret in the job link the worker shares; it is the customer's
+    #: only key to the job, since customers have no account.
+    link_token: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    #: When the work is booked for.
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: The customer's 1-5 star rating, given when they release the payment.
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     worker: Mapped[Worker] = relationship(back_populates="jobs")
     confirmations: Mapped[list["JobConfirmation"]] = relationship(back_populates="job")
     disputes: Mapped[list["Dispute"]] = relationship(back_populates="job")
     escrow_transactions: Mapped[list["EscrowTransaction"]] = relationship(back_populates="job")
-    __table_args__ = (CheckConstraint("agreed_amount >= 0", name="agreed_amount_nonnegative"),)
+    __table_args__ = (
+        CheckConstraint("agreed_amount >= 0", name="agreed_amount_nonnegative"),
+        CheckConstraint("rating IS NULL OR (rating >= 1 AND rating <= 5)", name="rating_range"),
+    )
 
 
 class JobConfirmation(UUIDTimestampMixin, Base):
@@ -419,7 +425,12 @@ class Dispute(UUIDTimestampMixin, Base):
     __tablename__ = "disputes"
 
     job_id: Mapped[UUID] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
-    opened_by_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    #: Empty when the customer raised it: customers have no account.
+    opened_by_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
+    #: "customer", "worker", or "timeout" (no code within the confirmation window).
+    raised_by: Mapped[str] = mapped_column(String(20), default="worker", server_default="worker")
     reason: Mapped[str] = mapped_column(Text)
     status: Mapped[DisputeStatus] = mapped_column(Enum(DisputeStatus, name="dispute_status"), default=DisputeStatus.OPEN)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

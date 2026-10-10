@@ -1,4 +1,4 @@
-"""Purpose: Verify the escrow routes for platforms, workers and Payscrow's webhook.
+"""Purpose: Verify the job routes for workers, customers (by link) and Payscrow.
 
 Dependencies: pytest, httpx ASGI transport, and the in-memory session fixture.
 Used by: the backend test suite and CI. Uses the stub provider throughout.
@@ -16,12 +16,9 @@ from app.main import app
 from app.models.domain import Worker
 from app.services.escrow_provider import sign_webhook
 
-PLATFORM = {"X-API-Key": "test-platform-key"}
-
 
 @pytest.fixture(autouse=True)
-def keys(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(get_settings(), "platform_api_key", "test-platform-key")
+def secret(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(get_settings(), "payscrow_webhook_secret", "test-webhook-secret")
 
 
@@ -41,117 +38,139 @@ async def sign_in(client: AsyncClient, email: str) -> None:
     assert verified.status_code == 200, verified.text
 
 
-def job_payload(worker: Worker) -> dict:
-    return {
-        "worker_id": str(worker.id),
-        "title": "Home cleaning",
-        "amount": "25000.00",
-        "client_name": "Peter James",
-        "client_email": "peter@example.com",
-        "client_phone": "08012345678",
-        "location": "Lekki, Lagos",
-        "details": [{"label": "Bedrooms", "value": "2"}],
-    }
-
-
 async def deliver(client: AsyncClient, payload: dict, *, secret: str = "test-webhook-secret"):
     body = json.dumps(payload).encode()
     headers = {"Content-Type": "application/json", **sign_webhook(secret, body)}
     return await client.post("/api/v1/webhooks/payscrow", content=body, headers=headers)
 
 
-async def test_full_escrow_flow_over_http(session: AsyncSession, worker: Worker) -> None:
+async def create_link(client: AsyncClient) -> dict:
+    created = await client.post(
+        "/api/v1/me/jobs",
+        json={
+            "title": "Home cleaning",
+            "address": "Lagos Island, Lagos",
+            "scheduled_at": "2026-11-20T12:00:00+01:00",
+            "price": "25000.00",
+        },
+    )
+    assert created.status_code == 201, created.text
+    return created.json()
+
+
+async def pay(client: AsyncClient, token: str) -> dict:
+    paying = await client.post(
+        f"/api/v1/public/jobs/{token}/payment",
+        json={"name": "Sarah Ade", "email": "sarah@example.com", "phone": "08012345678"},
+    )
+    assert paying.status_code == 200, paying.text
+    return paying.json()
+
+
+async def test_full_job_flow_over_http(session: AsyncSession, worker: Worker) -> None:
     async with client_for(session) as client:
-        assert (await client.post("/api/v1/jobs", json=job_payload(worker))).status_code == 401
+        assert (await client.post("/api/v1/me/jobs", json={})).status_code == 401
+        await sign_in(client, "worker@example.com")
 
-        created = await client.post("/api/v1/jobs", json=job_payload(worker), headers=PLATFORM)
-        assert created.status_code == 201, created.text
-        job_id = created.json()["job_id"]
-        number = created.json()["transaction_number"]
-        assert created.json()["payment_link"]
+        job = await create_link(client)
+        assert job["stage"] == "awaiting_customer"
+        token = job["link"].rsplit("/j/", 1)[1]
 
-        # An unsigned webhook is refused; a signed one funds the escrow.
+        # The customer opens the link: no account needed.
+        public = (await client.get(f"/api/v1/public/jobs/{token}")).json()
+        assert public["worker"]["name"] == "Jane A."
+        assert public["worker"]["band"] == "Building History"
+        assert public["premium"] == "500.00"
+        assert public["stage"] == "awaiting_customer"
+
+        payment = await pay(client, token)
+        assert payment["payment_link"]
+        assert payment["total_payable"] == "25500.00"
+
+        # The worker sees customer details only once they have paid.
+        mine = (await client.get(f"/api/v1/me/jobs/{job['id']}")).json()
+        assert mine["client_name"] is None
+
+        number = mine["transaction_number"]
         forged = await client.post(
             "/api/v1/webhooks/payscrow", json={"transactionNumber": number, "paymentStatus": "Paid"}
         )
         assert forged.status_code == 401
         funded = await deliver(
-            client,
-            {
-                "transactionId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-                "transactionNumber": number,
-                "paymentStatus": "Paid",
-            },
+            client, {"transactionId": "guid-1", "transactionNumber": number, "paymentStatus": "Paid"}
         )
         assert funded.json() == {"status": "funded"}
 
-        await sign_in(client, "worker@example.com")
-        jobs = (await client.get("/api/v1/me/jobs")).json()
-        assert [job["stage"] for job in jobs] == ["held"]
+        mine = (await client.get(f"/api/v1/me/jobs/{job['id']}")).json()
+        assert mine["stage"] == "held" and mine["client_name"] == "Sarah Ade"
 
-        completed = await client.post(f"/api/v1/me/jobs/{job_id}/complete")
+        completed = await client.post(f"/api/v1/me/jobs/{job['id']}/complete")
         assert completed.json()["stage"] == "awaiting_confirmation"
+        public = (await client.get(f"/api/v1/public/jobs/{token}")).json()
+        assert public["confirm_by"] is not None
 
-        # The client confirms by handing over the code Payscrow sent them.
-        confirmed = await client.post(
-            f"/api/v1/jobs/{job_id}/client-confirmation",
-            json={"code": "XYZ789ABC1"},
-            headers=PLATFORM,
+        missing_rating = await client.post(
+            f"/api/v1/public/jobs/{token}/release", json={"code": "XYZ789ABC1"}
         )
-        assert confirmed.status_code == 200, confirmed.text
-        assert confirmed.json()["stage"] == "released"
+        assert missing_rating.status_code == 422
+        released = await client.post(
+            f"/api/v1/public/jobs/{token}/release", json={"code": "XYZ789ABC1", "rating": 5}
+        )
+        assert released.status_code == 200, released.text
+        assert released.json()["stage"] == "released"
+        assert released.json()["rating"] == 5
+
+    app.dependency_overrides.clear()
+
+
+async def test_customer_reports_a_problem_with_evidence(session: AsyncSession, worker: Worker) -> None:
+    async with client_for(session) as client:
+        await sign_in(client, "worker@example.com")
+        job = await create_link(client)
+        token = job["link"].rsplit("/j/", 1)[1]
+        await pay(client, token)
+        number = (await client.get(f"/api/v1/me/jobs/{job['id']}")).json()["transaction_number"]
+        await deliver(client, {"transactionId": "g", "transactionNumber": number, "paymentStatus": "Paid"})
+
+        reported = await client.post(
+            f"/api/v1/public/jobs/{token}/issue",
+            data={"reason": "Damaged or missing items", "complaint": "The vase broke"},
+            files=[("evidence", ("photo.jpg", b"\xff\xd8\xff fake", "image/jpeg"))],
+        )
+        assert reported.status_code == 200, reported.text
+        body = reported.json()
+        assert body["stage"] == "disputed"
+        assert body["dispute"]["raised_by"] == "customer"
+        assert body["dispute"]["history"][0]["stage"] == "NegotiationOpen"
+
+        # The worker sees the same dispute.
+        mine = (await client.get(f"/api/v1/me/jobs/{job['id']}")).json()
+        assert mine["dispute"]["reason"] == "Damaged or missing items"
 
     app.dependency_overrides.clear()
 
 
 async def test_worker_reports_an_issue(session: AsyncSession, worker: Worker) -> None:
     async with client_for(session) as client:
-        created = (await client.post("/api/v1/jobs", json=job_payload(worker), headers=PLATFORM)).json()
-        await deliver(
-            client,
-            {"transactionId": "id-1", "transactionNumber": created["transaction_number"], "paymentStatus": "Paid"},
-        )
         await sign_in(client, "worker@example.com")
+        job = await create_link(client)
+        token = job["link"].rsplit("/j/", 1)[1]
+        await pay(client, token)
+        number = (await client.get(f"/api/v1/me/jobs/{job['id']}")).json()["transaction_number"]
+        await deliver(client, {"transactionId": "g", "transactionNumber": number, "paymentStatus": "Paid"})
 
         reported = await client.post(
-            f"/api/v1/me/jobs/{created['job_id']}/issue",
-            json={"reason": "Work conditions changed", "complaint": "Two extra rooms"},
+            f"/api/v1/me/jobs/{job['id']}/issue",
+            data={"reason": "Work conditions changed", "complaint": "Two extra rooms"},
         )
         assert reported.status_code == 200, reported.text
-        assert reported.json()["stage"] == "disputed"
-        assert reported.json()["dispute"]["reference"].startswith("D-")
-
-        # Disputed: even the client's code cannot release.
-        refused = await client.post(
-            f"/api/v1/jobs/{created['job_id']}/client-confirmation",
-            json={"code": "XYZ789ABC1"},
-            headers=PLATFORM,
-        )
-        assert refused.status_code == 409
+        assert reported.json()["dispute"]["raised_by"] == "worker"
 
     app.dependency_overrides.clear()
 
 
-async def test_confirming_requires_the_clients_code(session: AsyncSession, worker: Worker) -> None:
+async def test_bad_link_is_not_found(session: AsyncSession) -> None:
     async with client_for(session) as client:
-        created = (await client.post("/api/v1/jobs", json=job_payload(worker), headers=PLATFORM)).json()
-        await deliver(
-            client,
-            {"transactionId": "id-2", "transactionNumber": created["transaction_number"], "paymentStatus": "Paid"},
-        )
-
-        refused = await client.post(
-            f"/api/v1/jobs/{created['job_id']}/client-confirmation", json={}, headers=PLATFORM
-        )
-        assert refused.status_code == 422
-
-        # The client confirms by handing over the code Payscrow sent them.
-        released = await client.post(
-            f"/api/v1/jobs/{created['job_id']}/client-confirmation",
-            json={"code": "XYZ789ABC1"},
-            headers=PLATFORM,
-        )
-        assert released.status_code == 200, released.text
-        assert released.json()["stage"] == "released"
+        assert (await client.get("/api/v1/public/jobs/not-a-token")).status_code == 404
 
     app.dependency_overrides.clear()

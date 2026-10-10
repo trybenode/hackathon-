@@ -33,11 +33,28 @@ def upgrade() -> None:
     op.add_column('jobs', sa.Column('location', sa.String(length=160), nullable=True))
     op.add_column('jobs', sa.Column('details', sa.JSON(), server_default='[]', nullable=False))
     op.add_column('jobs', sa.Column('completed_at', sa.DateTime(timezone=True), nullable=True))
-    op.add_column('jobs', sa.Column('confirmation_reminded_at', sa.DateTime(timezone=True), nullable=True))
+    op.add_column('jobs', sa.Column('link_token', sa.String(length=64), nullable=True))
+    op.create_unique_constraint(op.f('uq_jobs_link_token'), 'jobs', ['link_token'])
+    op.add_column('jobs', sa.Column('scheduled_at', sa.DateTime(timezone=True), nullable=True))
+    op.add_column('jobs', sa.Column('rating', sa.Integer(), nullable=True))
+    op.create_check_constraint(
+        op.f('ck_jobs_rating_range'), 'jobs', 'rating IS NULL OR (rating >= 1 AND rating <= 5)'
+    )
+    # Customers raise disputes too, and they have no account.
+    op.alter_column('disputes', 'opened_by_id', existing_type=sa.Uuid(), nullable=True)
+    op.add_column(
+        'disputes', sa.Column('raised_by', sa.String(length=20), server_default='worker', nullable=False)
+    )
 
 
 def downgrade() -> None:
-    op.drop_column('jobs', 'confirmation_reminded_at')
+    op.drop_column('disputes', 'raised_by')
+    op.alter_column('disputes', 'opened_by_id', existing_type=sa.Uuid(), nullable=False)
+    op.drop_constraint(op.f('ck_jobs_rating_range'), 'jobs', type_='check')
+    op.drop_column('jobs', 'rating')
+    op.drop_column('jobs', 'scheduled_at')
+    op.drop_constraint(op.f('uq_jobs_link_token'), 'jobs', type_='unique')
+    op.drop_column('jobs', 'link_token')
     op.drop_column('jobs', 'completed_at')
     op.drop_column('jobs', 'details')
     op.drop_column('jobs', 'location')

@@ -9,11 +9,14 @@ Usage:
     .venv/bin/python scripts/seed_worker_jobs.py you@example.com
 
 The email must already be a worker (run seed_worker_record.py first). Creates
-five jobs: awaiting payment, held, awaiting confirmation, disputed, released.
+six jobs, one per stage: waiting for the customer (link only), awaiting
+payment, held, awaiting confirmation, disputed (by the customer), released.
+Each has a job link: /j/<token> opens it as its customer.
 Re-running replaces the jobs this script made for that worker.
 """
 
 import asyncio
+import secrets
 import sys
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -57,6 +60,7 @@ JOBS = [
      [("bedrooms", "2"), ("Duration", "5 hours")], "disputed"),
     ("Post-party cleaning", "20000.00", "Ngozi Eze", "Surulere, Lagos",
      [("Rooms", "3"), ("Duration", "3 hours")], "awaiting_payment"),
+    ("Window cleaning", "15000.00", None, "Lagos Island, Lagos", [], "awaiting_customer"),
 ]
 
 
@@ -94,11 +98,13 @@ async def main() -> None:
             await session.execute(delete(EscrowTransaction).where(EscrowTransaction.job_id.in_(old)))
             await session.execute(delete(Job).where(Job.id.in_(old)))
 
+        links: list[tuple[str, str]] = []
         for index, (title, amount, client, location, details, stage) in enumerate(JOBS):
             assigned = NOW - timedelta(days=9 - index, hours=3)
             funded = assigned + timedelta(minutes=20)
             completed = funded + timedelta(hours=5) if stage in {"awaiting_confirmation", "released"} else None
             job_status = {
+                "awaiting_customer": JobStatus.DRAFT,
                 "awaiting_payment": JobStatus.ACCEPTED,
                 "held": JobStatus.IN_PROGRESS,
                 "awaiting_confirmation": JobStatus.SUBMITTED,
@@ -114,15 +120,20 @@ async def main() -> None:
                 title=title,
                 agreed_amount=Decimal(amount),
                 client_name=client,
-                client_email=f"{client.split()[0].lower()}@example.com",
-                client_phone="08012345678",
+                client_email=f"{client.split()[0].lower()}@example.com" if client else None,
+                client_phone="08012345678" if client else None,
                 location=location,
                 details=[{"label": label, "value": value} for label, value in details],
+                scheduled_at=assigned + timedelta(days=1, hours=2),
+                link_token=secrets.token_urlsafe(16),
                 completed_at=completed,
                 created_at=assigned,
             )
             session.add(job)
             await session.flush()
+            links.append((stage, job.link_token))
+            if stage == "awaiting_customer":
+                continue
 
             number = f"MKT-SEED{index:04d}"
             session.add(
@@ -149,15 +160,18 @@ async def main() -> None:
                 session.add(
                     Dispute(
                         job_id=job.id,
-                        opened_by_id=user.id,
-                        reason="Client didn't provide required access. The gate was locked on arrival.",
+                        opened_by_id=None,
+                        raised_by="customer",
+                        reason="Agreement unfulfilled",
                         status=DisputeStatus.UNDER_REVIEW,
                     )
                 )
 
         await session.commit()
-        print(f"Seeded {len(JOBS)} jobs for {email}: {', '.join(stage for *_, stage in JOBS)}")
-        print("Sign in with that email, then open /worker/jobs")
+        print(f"Seeded {len(JOBS)} jobs for {email}. Sign in, then open /worker")
+        print("Customer job pages (no sign-in):")
+        for stage, token in links:
+            print(f"  {stage:22} /j/{token}")
 
     await engine.dispose()
 

@@ -1,5 +1,6 @@
 """Purpose: Expire guarantor instruments whose validity period has ended, and
-remind clients who have not confirmed a completed job. No money moves here.
+open a dispute for completed jobs the customer left unconfirmed. No money
+moves here: only the customer's code or Payscrow's ruling moves it.
 
 Dependencies: SQLAlchemy async sessions, app.services.guarantor and app.services.escrow.
 Used by: the background sweep started with the app, and the ops endpoint.
@@ -16,7 +17,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.services.escrow import remind_unconfirmed
+from app.services.escrow import dispute_overdue_confirmations
 from app.services.guarantor import expire_due_instruments
 
 logger = logging.getLogger(__name__)
@@ -32,13 +33,13 @@ async def run_sweep(session_factory: async_sessionmaker) -> int:
     if expired:
         logger.info("Expired %d guarantor instrument(s)", len(expired))
 
-    # Separate session: an email hiccup must not undo expiry.
+    # Separate session: a Payscrow hiccup must not undo expiry.
     async with session_factory() as session:
-        reminded = await remind_unconfirmed(session)
+        disputed = await dispute_overdue_confirmations(session)
         await session.commit()
 
-    if reminded:
-        logger.info("Reminded %d client(s) to confirm a completed job", len(reminded))
+    if disputed:
+        logger.info("Opened disputes for %d unconfirmed job(s)", len(disputed))
 
     return len(expired)
 
