@@ -214,10 +214,10 @@ export function WorkerHome() {
               <article className="flex flex-col gap-4 rounded-xl border border-stroke bg-white p-4 text-center">
                 <div className="flex flex-col gap-2 py-2">
                   <p className="text-body-md font-semibold text-grey-900">No current job</p>
-                  <p className="text-body-sm text-grey-900">Your current Job will appear here once you have one</p>
+                  <p className="text-xs leading-4 text-grey-900">Your current Job will appear here once you have one</p>
                 </div>
                 {locked && (
-                  <p className="flex items-center justify-center gap-2 border-t border-stroke pt-4 text-body-sm text-grey-900">
+                  <p className="flex items-center justify-center gap-2 border-t border-stroke pt-4 text-xs leading-4 text-grey-900">
                     <LockIcon className="shrink-0" />
                     Job creation opens once your guarantor is active.
                   </p>
