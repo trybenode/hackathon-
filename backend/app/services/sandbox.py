@@ -21,6 +21,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.domain import (
+    AgreementStatus,
+    GuarantorAgreement,
     IdentityVerification,
     NormalizedOutcome,
     OutcomeSource,
@@ -55,6 +57,8 @@ class DemoWorker:
     rating_range: tuple[float, float]
     #: Share of jobs from returning clients.
     repeat_share: float
+    #: The demo guarantee's state: "active", "pending", "expired", or None.
+    guarantee: str | None = None
 
     @property
     def consent_token(self) -> str:
@@ -68,9 +72,9 @@ class DemoWorker:
 
 
 DEMO_WORKERS: tuple[DemoWorker, ...] = (
-    DemoWorker("ada", "Ada Okafor", "Cleaner", "Lekki, Lagos", "High", 48, 0.0, 0.0, 0, (4.6, 5.0), 0.4),
-    DemoWorker("tunde", "Tunde Bello", "Electrician", "Yaba, Lagos", "Medium", 30, 0.07, 0.03, 1, (3.8, 4.7), 0.2),
-    DemoWorker("bisi", "Bisi Adeyemi", "Plumber", "Ikeja, Lagos", "Low", 22, 0.18, 0.14, 3, (2.5, 4.0), 0.05),
+    DemoWorker("ada", "Ada Okafor", "Cleaner", "Lekki, Lagos", "High", 48, 0.0, 0.0, 0, (4.6, 5.0), 0.4, "active"),
+    DemoWorker("tunde", "Tunde Bello", "Electrician", "Yaba, Lagos", "Medium", 30, 0.07, 0.03, 1, (3.8, 4.7), 0.2, "pending"),
+    DemoWorker("bisi", "Bisi Adeyemi", "Plumber", "Ikeja, Lagos", "Low", 22, 0.18, 0.14, 3, (2.5, 4.0), 0.05, "expired"),
     DemoWorker("chidi", "Chidi Eze", "Painter", "Surulere, Lagos", "Building History", 2, 0.0, 0.0, 0, (4.0, 5.0), 0.0),
 )
 BY_TOKEN = {worker.consent_token: worker for worker in DEMO_WORKERS}
@@ -134,12 +138,6 @@ async def _seed(session: AsyncSession, demo: DemoWorker, source: OutcomeSource, 
     await session.flush()
     worker = Worker(user_id=user.id, role=demo.role, location=demo.location, is_sandbox=True)
     session.add(worker)
-    session.add(
-        IdentityVerification(
-            user_id=user.id, provider=SANDBOX, provider_reference=f"SANDBOX-{demo.slug.upper()}",
-            status="verified", check_type="identity",
-        )
-    )
     await session.flush()
 
     for row in _history(demo, today):
@@ -173,6 +171,47 @@ async def _seed(session: AsyncSession, demo: DemoWorker, source: OutcomeSource, 
     return worker
 
 
+async def _checks_and_guarantee(session: AsyncSession, demo: DemoWorker, worker: Worker, today: datetime) -> None:
+    """Identity, liveness and the demo guarantee; added to older seeds too."""
+
+    have = set(
+        (await session.scalars(select(IdentityVerification.check_type).where(IdentityVerification.user_id == worker.user_id))).all()
+    )
+    for check in ("identity", "liveness"):
+        if check not in have:
+            session.add(
+                IdentityVerification(
+                    user_id=worker.user_id, provider=SANDBOX, status="verified", check_type=check,
+                    provider_reference=f"SANDBOX-{check.upper()}-{demo.slug.upper()}",
+                )
+            )
+    if demo.guarantee is None or await session.scalar(
+        select(GuarantorAgreement.id).where(GuarantorAgreement.worker_id == worker.id)
+    ):
+        await session.flush()
+        return
+
+    guarantor = await session.scalar(select(User).where(User.email == f"guarantor-{demo.slug}@sandbox.credly.dev"))
+    if guarantor is None:
+        guarantor = User(email=f"guarantor-{demo.slug}@sandbox.credly.dev", display_name=f"{demo.name.split()[0]}'s Guarantor")
+        session.add(guarantor)
+        await session.flush()
+    status, started, ends = {
+        "active": (AgreementStatus.ACTIVE, today - timedelta(days=60), today + timedelta(days=305)),
+        "pending": (AgreementStatus.PENDING_VERIFICATION, None, today + timedelta(days=5)),
+        "expired": (AgreementStatus.EXPIRED, today - timedelta(days=400), today - timedelta(days=35)),
+    }[demo.guarantee]
+    session.add(
+        GuarantorAgreement(
+            worker_id=worker.id, guarantor_user_id=guarantor.id, scope=f"{demo.role} jobs",
+            conditions="Covers no-show and property damage claims.", relationship_type="colleague",
+            status=status, verified_at=started, signed_at=started or today - timedelta(days=2),
+            valid_until=ends, closed_at=ends if status is AgreementStatus.EXPIRED else None,
+        )
+    )
+    await session.flush()
+
+
 async def ensure_demo_workers(session: AsyncSession, *, now: datetime | None = None) -> dict[str, Worker]:
     """The demo workers by slug, seeding any that do not exist yet."""
 
@@ -186,6 +225,7 @@ async def ensure_demo_workers(session: AsyncSession, *, now: datetime | None = N
         if worker is None:
             source = source or await _source(session)
             worker = await _seed(session, demo, source, today)
+        await _checks_and_guarantee(session, demo, worker, today)
         workers[demo.slug] = worker
     return workers
 

@@ -122,3 +122,26 @@ async def test_calls_with_a_platform_key_are_logged_without_identifiers(api, ses
     assert [(row.method, row.status_code) for row in rows] == [("POST", 201), ("GET", 404)]
     # The route template, never the worker's id.
     assert rows[1].path == "/api/v1/platform/workers/{external_id}/history"
+
+
+async def test_the_trust_query_reports_what_was_verified(api, session):
+    client, _ = api
+    _, headers = await keyed(session, "sandbox")
+    expected = {
+        "ada": ("verified", "verified", "active"),
+        "tunde": ("verified", "verified", "pending"),
+        "bisi": ("verified", "verified", "none"),
+        "chidi": ("verified", "verified", "none"),
+    }
+
+    for demo in sandbox.DEMO_WORKERS:
+        linked = await client.post(
+            "/api/v1/platform/worker-links", headers=headers,
+            json={"external_worker_id": f"user-{demo.slug}", "consent_token": demo.consent_token},
+        )
+        scored = await client.post(
+            "/api/v1/trust/query", headers=headers, json={"worker_id": linked.json()["worker_id"], **QUERY}
+        )
+        checks = scored.json()["verification"]
+        assert (checks["identity"], checks["liveness"], checks["guarantor"]) == expected[demo.slug], demo.slug
+        assert (checks["guarantor_valid_until"] is not None) == (demo.slug == "ada")
