@@ -235,7 +235,7 @@ async def start_payment(
             amount=job.agreed_amount,
             client=EscrowParty(job.client_name, job.client_email, job.client_phone),
             worker=EscrowParty(person.display_name, person.email, person.phone),
-            webhook_url=get_settings().payscrow_webhook_url or None,
+            webhook_url=get_settings().payscrow_webhook_endpoint or None,
             return_url=return_url,
             premium=premium,
         )

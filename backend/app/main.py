@@ -19,8 +19,10 @@ from app.api.v1.endpoints.trust import router as trust_router
 from app.api.v1.endpoints.credentials import router as credentials_router
 from app.api.v1.endpoints.worker_record import router as worker_record_router
 from app.api.v1.endpoints.jobs import (
+    payscrow_webhook,
     public_router as public_jobs_router,
     webhook_router,
+    worker_feed_router,
     worker_router as my_jobs_router,
 )
 from app.core.config import get_settings
@@ -80,4 +82,9 @@ app.include_router(credentials_router, prefix=settings.api_v1_prefix)
 app.include_router(worker_record_router, prefix=settings.api_v1_prefix)
 app.include_router(public_jobs_router, prefix=settings.api_v1_prefix)
 app.include_router(my_jobs_router, prefix=settings.api_v1_prefix)
+app.include_router(worker_feed_router, prefix=settings.api_v1_prefix)
 app.include_router(webhook_router, prefix=settings.api_v1_prefix)
+# Payscrow retries a webhook at the address the transaction was opened with.
+# Transactions opened while PAYSCROW_WEBHOOK_URL was a bare host point at "/",
+# so the same signed handler answers there too.
+app.add_api_route("/", payscrow_webhook, methods=["POST"], include_in_schema=False)

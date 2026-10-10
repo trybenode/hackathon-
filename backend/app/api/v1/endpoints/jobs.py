@@ -23,7 +23,7 @@ from app.models.domain import AuditEvent, EscrowTransaction, Job, User, Worker
 from app.schemas.api import ApiModel
 from app.services import document_store as document_store_module
 from app.services import escrow as escrow_service
-from app.services import insurance, job_notifications
+from app.services import insurance, job_feed, job_notifications
 from app.services.document_store import (
     DocumentStorageError,
     DocumentTooLargeError,
@@ -33,6 +33,7 @@ from app.services.escrow_provider import EscrowProviderError, verify_webhook
 from app.services.trust_scoring.assessment import assess_worker
 
 worker_router = APIRouter(prefix="/me/jobs", tags=["jobs"])
+worker_feed_router = APIRouter(prefix="/me", tags=["jobs"])
 public_router = APIRouter(prefix="/public/jobs", tags=["jobs"])
 webhook_router = APIRouter(prefix="/webhooks", tags=["jobs"])
 
@@ -134,6 +135,23 @@ class PublicJobView(ApiModel):
     confirm_by: datetime | None = None
     rating: int | None = None
     dispute: DisputeView | None = None
+
+
+class NotificationItem(ApiModel):
+    id: UUID
+    job_id: UUID
+    title: str
+    body: str
+    at: datetime
+    #: "check" or "warning".
+    icon: str
+
+
+def _notifications(items: list[job_feed.FeedItem]) -> list[NotificationItem]:
+    return [
+        NotificationItem(id=i.id, job_id=i.job_id, title=i.title, body=i.body, at=i.at, icon=i.icon)
+        for i in items
+    ]
 
 
 class PaymentRequest(ApiModel):
@@ -299,6 +317,21 @@ async def list_my_jobs(
     return views
 
 
+@worker_feed_router.get(
+    "/job-notifications", response_model=list[NotificationItem], summary="The worker's job notifications"
+)
+async def my_job_notifications(
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[NotificationItem]:
+    worker = await session.scalar(select(Worker).where(Worker.user_id == user.id))
+    if worker is None:
+        raise HTTPException(status_code=404, detail="This account has no worker profile.")
+    jobs = list((await session.scalars(select(Job).where(Job.worker_id == worker.id))).all())
+    items = await job_feed.feed_for(session, jobs, audience="worker", worker_name=user.display_name)
+    return _notifications(items)
+
+
 @worker_router.get("/{job_id}", response_model=JobView, summary="One of the worker's jobs")
 async def get_my_job(
     job_id: UUID,
@@ -400,6 +433,22 @@ async def get_public_job(token: str, session: AsyncSession = Depends(get_db_sess
     # Assessing stores (or reuses) the worker's assessment.
     await session.commit()
     return view
+
+
+@public_router.get(
+    "/{token}/notifications", response_model=list[NotificationItem], summary="The customer's notifications"
+)
+async def customer_notifications(token: str, session: AsyncSession = Depends(get_db_session)) -> list[NotificationItem]:
+    """Customers have no account, so their notifications are this job's."""
+
+    try:
+        job, _ = await escrow_service.job_by_token(session, token)
+    except escrow_service.EscrowError as error:
+        raise _http_error(error) from error
+    worker = await session.get(Worker, job.worker_id)
+    person = await session.get(User, worker.user_id)
+    items = await job_feed.feed_for(session, [job], audience="customer", worker_name=person.display_name)
+    return _notifications(items)
 
 
 @public_router.post("/{token}/payment", response_model=PaymentResponse, summary="Pay into escrow")

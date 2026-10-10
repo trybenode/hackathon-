@@ -174,3 +174,54 @@ async def test_bad_link_is_not_found(session: AsyncSession) -> None:
         assert (await client.get("/api/v1/public/jobs/not-a-token")).status_code == 404
 
     app.dependency_overrides.clear()
+
+
+async def test_notifications_for_both_sides(session: AsyncSession, worker: Worker) -> None:
+    async with client_for(session) as client:
+        await sign_in(client, "worker@example.com")
+        job = await create_link(client)
+        token = job["link"].rsplit("/j/", 1)[1]
+        await pay(client, token)
+        number = (await client.get(f"/api/v1/me/jobs/{job['id']}")).json()["transaction_number"]
+        await deliver(client, {"transactionId": "g", "transactionNumber": number, "paymentStatus": "Paid"})
+        await client.post(f"/api/v1/me/jobs/{job['id']}/complete")
+
+        worker_feed = (await client.get("/api/v1/me/job-notifications")).json()
+        assert [item["title"] for item in worker_feed] == ["Job completed", "Payment received"]
+        assert "Sarah A. paid" in worker_feed[1]["body"]
+
+        customer_feed = (await client.get(f"/api/v1/public/jobs/{token}/notifications")).json()
+        assert [item["title"] for item in customer_feed] == ["Job completed"]
+        assert "Enter the job code" in customer_feed[0]["body"]
+
+    app.dependency_overrides.clear()
+
+
+async def test_webhooks_sent_to_the_root_address_still_land(
+    session: AsyncSession, worker: Worker
+) -> None:
+    """Transactions opened while PAYSCROW_WEBHOOK_URL was a bare host post to "/"."""
+
+    async with client_for(session) as client:
+        await sign_in(client, "worker@example.com")
+        job = await create_link(client)
+        token = job["link"].rsplit("/j/", 1)[1]
+        await pay(client, token)
+        number = (await client.get(f"/api/v1/me/jobs/{job['id']}")).json()["transaction_number"]
+
+        body = json.dumps({"transactionId": "g", "transactionNumber": number, "paymentStatus": "Paid"}).encode()
+        landed = await client.post(
+            "/", content=body, headers={"Content-Type": "application/json", **sign_webhook("test-webhook-secret", body)}
+        )
+        assert landed.json() == {"status": "funded"}
+        assert (await client.post("/", json={"paymentStatus": "Paid"})).status_code == 401
+
+    app.dependency_overrides.clear()
+
+
+def test_bare_webhook_host_gets_the_route(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "payscrow_webhook_url", "https://abc.trycloudflare.com")
+    assert settings.payscrow_webhook_endpoint == "https://abc.trycloudflare.com/api/v1/webhooks/payscrow"
+    monkeypatch.setattr(settings, "payscrow_webhook_url", "https://abc.example.com/hooks/payscrow")
+    assert settings.payscrow_webhook_endpoint == "https://abc.example.com/hooks/payscrow"

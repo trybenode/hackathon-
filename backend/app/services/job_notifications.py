@@ -38,14 +38,23 @@ def _naira(job: Job) -> str:
     return f"NGN {job.agreed_amount:,.2f}"
 
 
+#: One retry rides out a dropped connection without holding a request up long.
+SEND_ATTEMPTS = 2
+
+
 async def _send(to: str | None, subject: str, body: str) -> None:
     if not to:
         return
-    try:
-        # Resolved at call time so tests can swap the sender.
-        await email_sender_module.default_email_sender.send(EmailMessage(to=to, subject=subject, body=body))
-    except Exception:  # noqa: BLE001 - a notification must never break the flow
-        logger.exception("Could not send %r to %s", subject, to)
+    for attempt in range(1, SEND_ATTEMPTS + 1):
+        try:
+            # Resolved at call time so tests can swap the sender.
+            await email_sender_module.default_email_sender.send(
+                EmailMessage(to=to, subject=subject, body=body)
+            )
+            return
+        except Exception:  # noqa: BLE001 - a notification must never break the flow
+            if attempt == SEND_ATTEMPTS:
+                logger.exception("Could not send %r to %s", subject, to)
 
 
 async def job_completed(job: Job, worker_name: str, window_hours: int) -> None:

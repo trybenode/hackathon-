@@ -90,6 +90,22 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
+    def payscrow_webhook_endpoint(self) -> str:
+        """PAYSCROW_WEBHOOK_URL with the webhook route on the end.
+
+        A bare host (e.g. a fresh tunnel address) is a common slip that sends
+        Payscrow's webhooks to "/"; the route is added when no path is given.
+        """
+
+        url = self.payscrow_webhook_url.strip()
+        if not url:
+            return ""
+        parts = urlsplit(url)
+        if parts.path in ("", "/"):
+            return urlunsplit(parts._replace(path=f"{self.api_v1_prefix}/webhooks/payscrow"))
+        return url
+
+    @property
     def async_database_url(self) -> str:
         """Convert Neon CLI connection strings to SQLAlchemy asyncpg URLs."""
 

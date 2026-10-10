@@ -321,3 +321,23 @@ async def test_six_character_codes_are_accepted(
     await service.release_by_customer(session, job.link_token, code="5Z093S", rating=4)
 
     assert never_move_real_money.applied[-1] == (escrow.provider_transaction_id, "5Z093S")
+
+
+async def test_a_dropped_email_is_retried_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services import email_sender as email_sender_module
+    from app.services import job_notifications
+
+    attempts: list[str] = []
+
+    class Flaky:
+        name = "flaky"
+
+        async def send(self, message) -> None:
+            attempts.append(message.to)
+            if len(attempts) == 1:
+                raise ConnectionError("bad record mac")
+
+    monkeypatch.setattr(email_sender_module, "default_email_sender", Flaky())
+    await job_notifications._send("sarah@example.com", "Subject", "Body")
+
+    assert attempts == ["sarah@example.com", "sarah@example.com"]
