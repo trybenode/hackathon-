@@ -55,7 +55,7 @@ async def main() -> None:
             for email, account in waiting:
                 print(f"  {email}  {account.full_name} · {account.business_name} "
                       f"({developers.BUSINESS_TYPES.get(account.business_type, account.business_type)}, "
-                      f"RC {account.registration_number}, TIN {account.tax_id}) "
+                      f"reg. no. {account.registration_number}, TIN {account.tax_id}) "
                       f"· documents developer-documents/{account.id}/ · submitted {account.submitted_at:%d %b %H:%M}")
             names = (await session.execute(
                 select(User.email, NameChangeRequest)
