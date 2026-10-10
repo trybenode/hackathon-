@@ -113,6 +113,8 @@ async def assess_worker(
     platform_type: str,
     *,
     job_context: dict[str, str] | None = None,
+    config: PlatformConfig | None = None,
+    policy_name: str | None = None,
 ) -> WorkerAssessment:
     """Return one canonical assessment for all API and ingestion callers.
 
@@ -124,7 +126,8 @@ async def assess_worker(
     if worker is None:
         raise UnknownWorkerError(f"Worker {worker_id} was not found")
 
-    config = PRESETS.get(platform_type, PRESETS["generic"])
+    # A platform's own settings (with their own policy) replace the preset.
+    config = config or PRESETS.get(platform_type, PRESETS["generic"])
     outcomes = list(
         (
             await session.scalars(
@@ -145,7 +148,7 @@ async def assess_worker(
             f"{fingerprint}:{json.dumps(job_context, sort_keys=True)}".encode()
         ).hexdigest()
 
-    policy_name = f"platform:{platform_type if platform_type in PRESETS else 'generic'}"
+    policy_name = policy_name or f"platform:{platform_type if platform_type in PRESETS else 'generic'}"
     policy = await session.scalar(
         select(TrustPolicy).where(TrustPolicy.name == policy_name, TrustPolicy.version == 1)
     )
