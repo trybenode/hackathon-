@@ -11,7 +11,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, UUIDTimestampMixin
@@ -73,3 +73,18 @@ class NameChangeRequest(UUIDTimestampMixin, Base):
         Enum(ReviewStatus, name="review_status"), default=ReviewStatus.UNDER_REVIEW
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ApiRequestLog(UUIDTimestampMixin, Base):
+    """One call made with a platform key: what, when and how it ended. No bodies."""
+
+    __tablename__ = "api_request_logs"
+
+    platform_key_id: Mapped[UUID] = mapped_column(ForeignKey("platform_keys.id", ondelete="CASCADE"), index=True)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    method: Mapped[str] = mapped_column(String(10))
+    #: The route template, e.g. /api/v1/platform/workers/{external_id}/history,
+    #: so worker identifiers never land in the log.
+    path: Mapped[str] = mapped_column(String(300))
+    status_code: Mapped[int] = mapped_column(Integer)
+    duration_ms: Mapped[int] = mapped_column(Integer)
