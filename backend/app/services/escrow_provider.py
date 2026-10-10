@@ -63,8 +63,20 @@ class StartedEscrow:
     total_payable: Decimal
 
 
+@dataclass(frozen=True)
+class EscrowState:
+    """Payscrow's own view of a transaction (status endpoint)."""
+
+    #: Pending, In Progress, Completed, Finalized or Terminated.
+    status: str
+    in_escrow: bool
+    in_dispute: bool
+
+
 class EscrowProvider(Protocol):
     name: str
+
+    async def status(self, transaction_number: str) -> EscrowState: ...
 
     async def start(self, request: EscrowStart) -> StartedEscrow: ...
 
@@ -163,6 +175,24 @@ class PayscrowProvider:
             total_payable=Decimal(str(data.get("totalPayable", request.amount))),
         )
 
+    async def status(self, transaction_number: str) -> EscrowState:
+        try:
+            async with self._client() as client:
+                response = await client.get(
+                    f"/api/v3/marketplace/transactions/{transaction_number}/status"
+                )
+        except httpx.HTTPError as error:
+            raise EscrowProviderError("Could not reach Payscrow.") from error
+        payload = response.json() if response.content else {}
+        data = payload.get("data") or {}
+        if response.status_code >= 400 or not data:
+            raise EscrowProviderError(_error_message(payload, response.status_code))
+        return EscrowState(
+            status=str(data.get("status", "")),
+            in_escrow=bool(data.get("inEscrow")),
+            in_dispute=bool(data.get("inDispute")),
+        )
+
     async def apply_code(self, transaction_id: str, code: str) -> None:
         await self._post(
             "/api/v3/escrow/escrowtransactions/applycode",
@@ -204,6 +234,12 @@ class StubEscrowProvider:
     def __init__(self) -> None:
         self.applied: list[tuple[str, str]] = []
         self.disputes: list[tuple[str, str, str]] = []
+        #: Transaction numbers the stand-in treats as paid, for tests.
+        self.paid: set[str] = set()
+
+    async def status(self, transaction_number: str) -> EscrowState:
+        paid = transaction_number in self.paid
+        return EscrowState(status="In Progress" if paid else "Pending", in_escrow=paid, in_dispute=False)
 
     async def start(self, request: EscrowStart) -> StartedEscrow:
         number = f"STUB-{uuid.uuid4().hex[:8].upper()}"

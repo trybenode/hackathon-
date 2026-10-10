@@ -17,7 +17,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.services.escrow import dispute_overdue_confirmations
+from app.services.escrow import dispute_overdue_confirmations, sync_pending_payments
 from app.services.guarantor import expire_due_instruments
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ async def run_sweep(session_factory: async_sessionmaker) -> int:
 
     # Separate session: a Payscrow hiccup must not undo expiry.
     async with session_factory() as session:
+        await sync_pending_payments(session)
         disputed = await dispute_overdue_confirmations(session)
         await session.commit()
 

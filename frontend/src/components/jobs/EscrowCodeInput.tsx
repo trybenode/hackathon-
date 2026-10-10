@@ -3,11 +3,11 @@
 import { useRef, type ClipboardEvent, type KeyboardEvent } from "react";
 import { cn } from "@/lib/cn";
 
-/** Payscrow's escrow codes are 10 letters and digits. */
-export const ESCROW_CODE_LENGTH = 10;
+/** Payscrow's escrow codes are 6 letters and digits (e.g. 5Z093S). */
+export const ESCROW_CODE_LENGTH = 6;
 
 /**
- * Boxed entry for the escrow code, in two groups of five, behaving like one
+ * Boxed entry for the escrow code, in two groups of three, behaving like one
  * field: typing moves forward, backspace moves back, pasting fills it.
  */
 export function EscrowCodeInput({
@@ -73,7 +73,7 @@ export function EscrowCodeInput({
             onKeyDown={(event) => handleKey(index, event)}
             onPaste={handlePaste}
             className={cn(
-              "h-11 w-6 min-w-0 flex-1 rounded-md border text-center text-body-md font-medium text-grey-900 outline-none transition-colors",
+              "h-12 w-10 min-w-0 flex-1 rounded-lg border text-center text-body-md font-medium text-grey-900 outline-none transition-colors",
               "focus:border-primary-400 focus:ring-2 focus:ring-primary-100",
               char ? "border-primary-400 bg-white" : "border-grey-400 bg-grey-200/60",
             )}

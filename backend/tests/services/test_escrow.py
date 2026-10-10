@@ -289,3 +289,35 @@ async def test_someone_elses_job_is_not_found(session: AsyncSession, worker: Wor
 
     with pytest.raises(service.JobNotFoundError):
         await service.mark_complete(session, stranger, job.id)
+
+
+async def test_missing_webhook_is_caught_by_checking_payscrow(
+    session: AsyncSession, worker: Worker, never_move_real_money: StubEscrowProvider
+) -> None:
+    """Payscrow's guide, step 8: if the paid webhook never comes, read the status."""
+
+    job = await job_link(session, worker)
+    escrow = await service.start_payment(
+        session, job.link_token, name="Sarah Ade", email="sarah@example.com", phone="08012345678"
+    )
+    assert await service.sync_payment(session, job, escrow) is False  # not paid yet
+
+    never_move_real_money.paid.add(escrow.provider_reference)
+    assert await service.sync_payment(session, job, escrow) is True
+
+    assert escrow.status is EscrowStatus.HELD
+    assert job.status is JobStatus.IN_PROGRESS
+    # The status check has no transaction GUID, so release waits for the webhook.
+    await service.mark_complete(session, await worker_user(session, worker), job.id)
+    with pytest.raises(service.EscrowStateError, match="confirmation has not reached us"):
+        await service.release_by_customer(session, job.link_token, code="5Z093S", rating=5)
+
+
+async def test_six_character_codes_are_accepted(
+    session: AsyncSession, worker: Worker, never_move_real_money: StubEscrowProvider
+) -> None:
+    job, escrow = await completed_job(session, worker)
+
+    await service.release_by_customer(session, job.link_token, code="5Z093S", rating=4)
+
+    assert never_move_real_money.applied[-1] == (escrow.provider_transaction_id, "5Z093S")

@@ -288,7 +288,15 @@ async def list_my_jobs(
             select(Job).where(Job.worker_id == worker.id).order_by(Job.created_at.desc())
         )
     ).all()
-    return [await _job_view(session, job, await escrow_service.latest_escrow(session, job.id)) for job in jobs]
+    views: list[JobView] = []
+    synced = False
+    for job in jobs:
+        escrow = await escrow_service.latest_escrow(session, job.id)
+        synced |= await escrow_service.sync_payment(session, job, escrow)
+        views.append(await _job_view(session, job, escrow))
+    if synced:
+        await session.commit()
+    return views
 
 
 @worker_router.get("/{job_id}", response_model=JobView, summary="One of the worker's jobs")
@@ -301,6 +309,9 @@ async def get_my_job(
         job, escrow = await escrow_service.worker_job(session, user, job_id)
     except escrow_service.EscrowError as error:
         raise _http_error(error) from error
+    # A payment whose webhook went missing is picked up here.
+    if await escrow_service.sync_payment(session, job, escrow):
+        await session.commit()
     return await _job_view(session, job, escrow)
 
 
@@ -382,6 +393,9 @@ async def get_public_job(token: str, session: AsyncSession = Depends(get_db_sess
         job, escrow = await escrow_service.job_by_token(session, token)
     except escrow_service.EscrowError as error:
         raise _http_error(error) from error
+    # The customer lands back here from Payscrow: check the payment directly in
+    # case its webhook has not arrived.
+    await escrow_service.sync_payment(session, job, escrow)
     view = await _public_view(session, job, escrow)
     # Assessing stores (or reuses) the worker's assessment.
     await session.commit()

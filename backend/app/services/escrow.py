@@ -342,20 +342,72 @@ async def _apply_payment(
     # Any escrowCode in the payload is ignored: releasing is the customer's
     # call, made by giving us their code.
     escrow.provider_transaction_id = payload.get("transactionId") or escrow.provider_transaction_id
-
-    if escrow.status is EscrowStatus.PENDING:
-        escrow.status = EscrowStatus.HELD
-        escrow.funded_at = _now()
-        if job.status is JobStatus.ACCEPTED:
-            job.status = JobStatus.IN_PROGRESS
-        _audit(session, job, "escrow.funded")
-        # The payment included the premium: no premium, no cover, so only now.
-        if await insurance.activate(session, escrow):
-            _audit(session, job, "insurance.activated")
-        person = await _worker_person(session, job)
-        if person:
-            await job_notifications.payment_received(job, person.email)
+    await _mark_funded(session, escrow, job, via="webhook")
     return "funded"
+
+
+async def _mark_funded(session: AsyncSession, escrow: EscrowTransaction, job: Job, *, via: str) -> None:
+    """The money is in escrow: the job starts. Safe to call more than once."""
+
+    if escrow.status is not EscrowStatus.PENDING:
+        return
+    escrow.status = EscrowStatus.HELD
+    escrow.funded_at = _now()
+    if job.status is JobStatus.ACCEPTED:
+        job.status = JobStatus.IN_PROGRESS
+    _audit(session, job, "escrow.funded", via=via)
+    # The payment included the premium: no premium, no cover, so only now.
+    if await insurance.activate(session, escrow):
+        _audit(session, job, "insurance.activated")
+    person = await _worker_person(session, job)
+    if person:
+        await job_notifications.payment_received(job, person.email)
+
+
+async def sync_payment(
+    session: AsyncSession,
+    job: Job,
+    escrow: EscrowTransaction | None,
+    *,
+    provider: EscrowProvider | None = None,
+) -> bool:
+    """Ask Payscrow whether a still-pending payment has landed.
+
+    Payscrow's guide (step 8): if notifications go missing, read the status.
+    It confirms the money is held, so the job can start; it does not carry the
+    transaction GUID, so releasing still waits for the paid webhook. Never
+    raises: Payscrow being unreachable just means "not yet".
+    """
+
+    if escrow is None or escrow.status is not EscrowStatus.PENDING or not escrow.provider_reference:
+        return False
+    try:
+        state = await _provider(provider).status(escrow.provider_reference)
+    except provider_module.EscrowProviderError:
+        return False
+    if not state.in_escrow:
+        return False
+    await _mark_funded(session, escrow, job, via="status")
+    return True
+
+
+async def sync_pending_payments(session: AsyncSession, *, provider: EscrowProvider | None = None) -> list[UUID]:
+    """The sweep's safety net for paid webhooks that never arrived."""
+
+    pending = (
+        await session.scalars(
+            select(EscrowTransaction).where(
+                EscrowTransaction.status == EscrowStatus.PENDING,
+                EscrowTransaction.created_at >= _now() - timedelta(days=7),
+            )
+        )
+    ).all()
+    synced: list[UUID] = []
+    for escrow in pending:
+        job = await session.get(Job, escrow.job_id)
+        if await sync_payment(session, job, escrow, provider=provider):
+            synced.append(job.id)
+    return synced
 
 
 async def _apply_dispute_update(
@@ -584,7 +636,11 @@ async def release_by_customer(
     if not ESCROW_CODE.match(release_code):
         raise EscrowStateError("That does not look like an escrow code.")
     if not escrow.provider_transaction_id:
-        raise EscrowStateError("Payscrow has not confirmed this payment yet.")
+        # Only Payscrow's paid webhook carries the ID that releasing needs.
+        raise EscrowStateError(
+            "Payscrow's payment confirmation has not reached us yet, so the payment "
+            "cannot be released. Try again in a few minutes."
+        )
 
     await _provider(provider).apply_code(escrow.provider_transaction_id, release_code)
     moment = now or _now()
