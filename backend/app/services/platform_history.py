@@ -6,7 +6,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.domain import NormalizedOutcome, Organization, OutcomeSource, OutcomeStatus, RawOutcome, Worker
 from app.models.portability import HistoryIdentity, ImportReceipt, PlatformGrant, PlatformKey, WorkerLink
 from app.schemas.portability import HistoryImportRequest, HistoryImportResponse, HistoryPage, WorkerLinkResponse
+from app.services import sandbox
 from app.services.portability import FeatureError, audit, aware, digest, history_items, now
+
+
+async def same_environment(session: AsyncSession, principal: PlatformKey, worker_id: UUID) -> None:
+    """Sandbox keys reach only the demo workers; production keys only real ones."""
+    worker = await session.get(Worker, worker_id)
+    if worker is not None and worker.is_sandbox != (principal.environment == sandbox.SANDBOX):
+        raise FeatureError(403, "ENVIRONMENT_MISMATCH",
+            "Sandbox keys work only with sandbox demo workers, and production keys only with real workers.")
 
 
 async def active_grant(session: AsyncSession, grant_id: UUID, principal: PlatformKey, permission: str | None = None) -> PlatformGrant:
@@ -25,10 +34,13 @@ async def link_worker(session: AsyncSession, principal: PlatformKey, external_id
     """Consume consent for one tenant/external account; never match by personal data."""
     # Also serialize competing grants for a previously unseen external account.
     await session.execute(select(Organization.id).where(Organization.id == principal.organization_id).with_for_update())
-    grant = await session.scalar(select(PlatformGrant).where(PlatformGrant.token_hash == digest(token)).with_for_update())
+    # Sandbox keys may use the published demo consent tokens.
+    grant = await sandbox.demo_grant(session, principal, token) or await session.scalar(
+        select(PlatformGrant).where(PlatformGrant.token_hash == digest(token)).with_for_update())
     if grant is None:
         raise FeatureError(403, "CONSENT_REQUIRED", "Worker approval is required.")
     await active_grant(session, grant.id, principal)
+    await same_environment(session, principal, grant.worker_id)
     other = await session.scalar(select(WorkerLink).where(WorkerLink.grant_id == grant.id))
     if other and other.external_worker_id != external_id:
         raise FeatureError(409, "GRANT_ALREADY_LINKED", "This approval is already bound to a different account.")
@@ -52,12 +64,14 @@ async def authorized_link(session: AsyncSession, principal: PlatformKey, externa
         WorkerLink.external_worker_id == external_id))
     if link is None:
         raise FeatureError(404, "WORKER_LINK_NOT_FOUND", "No approved worker link exists for this account.")
+    await same_environment(session, principal, link.worker_id)
     await active_grant(session, link.grant_id, principal, permission)
     return link
 
 
 async def authorize_assessment(session: AsyncSession, principal: PlatformKey, worker_id: UUID) -> None:
     """Require current read consent for assessments addressed by canonical UUID."""
+    await same_environment(session, principal, worker_id)
     links = (await session.scalars(select(WorkerLink).where(WorkerLink.organization_id == principal.organization_id,
         WorkerLink.worker_id == worker_id))).all()
     for link in links:
@@ -80,6 +94,22 @@ async def read_history(session: AsyncSession, principal: PlatformKey, external_i
 
 
 async def import_history(session: AsyncSession, principal: PlatformKey, external_id: str, payload: HistoryImportRequest, key: str) -> HistoryImportResponse:
+    """Atomically ingest a batch; sandbox batches are checked and answered, never kept.
+
+    The demo workers are shared by every sandbox platform, so a sandbox import
+    runs in full inside a savepoint and is rolled back: the response is what
+    production would say, and the demo histories stay the same for everyone.
+    """
+    if principal.environment != sandbox.SANDBOX:
+        return await _import_history(session, principal, external_id, payload, key)
+    savepoint = await session.begin_nested()
+    try:
+        return await _import_history(session, principal, external_id, payload, key)
+    finally:
+        await savepoint.rollback()
+
+
+async def _import_history(session: AsyncSession, principal: PlatformKey, external_id: str, payload: HistoryImportRequest, key: str) -> HistoryImportResponse:
     """Atomically ingest a batch; authenticate provenance without inventing verification."""
     link = await authorized_link(session, principal, external_id, "import_history")
     # Serialize receipts and source initialization across all requests for this tenant.
