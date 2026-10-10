@@ -6,11 +6,7 @@ import { UsageChart } from "@/components/developer/UsageChart";
 import { useDeveloper } from "@/components/developer/useDeveloper";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import type { ApiCall, DeveloperDashboard as Dashboard } from "@/lib/developer";
-
-function formatWhen(at: string) {
-  return new Date(at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-}
+import type { DeveloperDashboard as Dashboard } from "@/lib/developer";
 
 function VerificationCard({ data }: { data: Dashboard }) {
   const reviewing = data.kyb_status === "under_review";
@@ -61,23 +57,6 @@ function VerificationCard({ data }: { data: Dashboard }) {
         )}
       </div>
     </section>
-  );
-}
-
-function ActivityRow({ call }: { call: ApiCall }) {
-  const ok = call.status_code >= 200 && call.status_code < 300;
-  return (
-    <li className="flex items-center justify-between gap-3 border-t border-stroke py-3 first:border-t-0">
-      <span className="flex min-w-0 flex-col">
-        <span className="truncate text-body-sm text-grey-900">
-          <span className="font-medium">{call.method}</span> {call.path.replace(/^\/api\/v1/, "")}
-        </span>
-        <span className="text-xs leading-4 text-grey-600">{formatWhen(call.at)}</span>
-      </span>
-      <span className={cn("shrink-0 text-body-sm font-medium", ok ? "text-success" : "text-error")}>
-        {call.status_code}
-      </span>
-    </li>
   );
 }
 
@@ -170,27 +149,20 @@ export function DeveloperDashboard() {
 
           <section className="flex flex-col gap-4">
             <h2 className="text-body-md font-semibold text-grey-900">Recent API activity</h2>
-            <div className="rounded-xl border border-stroke bg-white px-5 py-4">
-              {data.recent_activity.length ? (
-                <ul>
-                  {data.recent_activity.map((call, index) => (
-                    <ActivityRow key={`${call.at}-${index}`} call={call} />
-                  ))}
-                </ul>
-              ) : (
-                <div className="flex flex-col items-center gap-2 py-2 text-center">
-                  <BarChartIcon className="text-grey-800" />
-                  <p className="pt-2 text-body-md text-grey-900">No API Activity yet</p>
-                  <p className="text-xs leading-4 text-grey-900">
-                    Your API request history will appear here after you start making calls
-                  </p>
-                </div>
-              )}
-            </div>
-            {calls > 0 && (
+            {calls > 0 ? (
+              // A list of calls would push the chart down with every request,
+              // so the card shows the chart alone for now.
               <div className="flex flex-col gap-3 rounded-xl border border-stroke bg-white px-3 pt-4 pb-2">
                 <p className="px-2 text-body-sm text-grey-900">Calls over the last 14 days</p>
                 <UsageChart daily={data.usage.daily} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-stroke bg-white px-5 py-6 text-center">
+                <BarChartIcon className="text-grey-800" />
+                <p className="pt-2 text-body-md text-grey-900">No API Activity yet</p>
+                <p className="text-xs leading-4 text-grey-900">
+                  Your API request history will appear here after you start making calls
+                </p>
               </div>
             )}
           </section>
