@@ -43,6 +43,7 @@ class GuarantorRelationship(StrEnum):
     PARENT = "parent"
     SPOUSE = "spouse"
     COLLEAGUE = "colleague"
+    EMPLOYER = "employer"
     OTHER = "other"
 
 
