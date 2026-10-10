@@ -1,11 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { OtpInput } from "@/components/guarantor/OtpInput";
 import { Button, Input } from "@/components/ui";
 import { ApiError, landingPathFor, requestLoginCode, verifyLoginCode } from "@/lib/guarantor";
+import { OnboardingHero } from "@/components/verification/OnboardingHero";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -74,17 +74,7 @@ export function SignInFlow({
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-col">
-      <div className="relative mt-6 aspect-[400/235] w-full overflow-hidden">
-        <Image
-          src="/guarantor-hero.webp"
-          alt=""
-          fill
-          priority
-          sizes="(max-width: 448px) 100vw, 448px"
-          className="object-cover"
-          style={{ objectPosition: "50% 37%" }}
-        />
-      </div>
+      <OnboardingHero />
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-6 px-6 pt-10 pb-10">
         <div className="flex flex-col gap-1 text-center">
