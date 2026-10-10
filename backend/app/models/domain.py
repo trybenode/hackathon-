@@ -480,7 +480,12 @@ class GuarantorAgreement(UUIDTimestampMixin, Base):
     __tablename__ = "guarantor_agreements"
 
     worker_id: Mapped[UUID] = mapped_column(ForeignKey("workers.id", ondelete="CASCADE"))
-    guarantor_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    #: Unset while a worker's invite link waits for someone to claim it.
+    guarantor_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
+    #: The name the worker gave when inviting, shown until the guarantor signs in.
+    guarantor_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     job_id: Mapped[UUID | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     scope: Mapped[str] = mapped_column(Text)
     conditions: Mapped[str] = mapped_column(Text)
