@@ -6,6 +6,8 @@ Used by: the guarantor sign-in screen and any endpoint needing the signed-in use
 The session is carried by an HTTP-only cookie, so page scripts cannot read it.
 """
 
+from typing import Literal
+
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from pydantic import EmailStr, Field
 from sqlalchemy import exists, select
@@ -13,9 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.session import get_db_session
+from app.models.developer import DeveloperAccount
 from app.models.domain import AgreementStatus, GuarantorAgreement, User, Worker
 from app.schemas.api import ApiModel
 from app.services import auth as auth_service
+from app.services import developers
 from app.services.auth import (
     SESSION_COOKIE,
     AuthError,
@@ -44,6 +48,9 @@ class RequestCodeResponse(ApiModel):
 class VerifyCodeRequest(ApiModel):
     email: EmailStr
     code: str = Field(min_length=4, max_length=8)
+    #: "developer" opens an account and a developer profile for a new address.
+    #: Without it, only existing accounts sign in.
+    sign_up: Literal["developer"] | None = None
 
 
 class SignedInUser(ApiModel):
@@ -55,6 +62,8 @@ class SignedInUser(ApiModel):
     #: Has been asked to stand behind a worker. Drafts the platform has not
     #: sent yet do not count.
     is_guarantor: bool = False
+    #: Has a developer profile.
+    is_developer: bool = False
 
 
 async def _signed_in(session: AsyncSession, user: User) -> SignedInUser:
@@ -72,12 +81,14 @@ async def _signed_in(session: AsyncSession, user: User) -> SignedInUser:
             )
         )
     )
+    is_developer = await session.scalar(select(exists().where(DeveloperAccount.user_id == user.id)))
     return SignedInUser(
         user_id=str(user.id),
         email=user.email,
         display_name=user.display_name,
         is_worker=bool(is_worker),
         is_guarantor=bool(is_guarantor),
+        is_developer=bool(is_developer),
     )
 
 
@@ -138,12 +149,16 @@ async def verify_code(
     session: AsyncSession = Depends(get_db_session),
 ) -> SignedInUser:
     try:
-        user, token = await auth_service.verify_login_code(session, payload.email, payload.code)
+        user, token = await auth_service.verify_login_code(
+            session, payload.email, payload.code, create_account=payload.sign_up is not None
+        )
     except AuthError as error:
         # Attempt counters and consumed codes must survive a rejection.
         await session.commit()
         raise _http_error(error) from error
 
+    if payload.sign_up == "developer":
+        await developers.ensure_developer(session, user)
     await session.commit()
     response.set_cookie(
         SESSION_COOKIE,

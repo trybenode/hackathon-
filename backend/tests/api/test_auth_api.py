@@ -225,3 +225,19 @@ async def test_sign_in_reports_which_sides_the_account_has(
     assert await roles("draft@example.com") == (False, False)
 
     app.dependency_overrides.clear()
+
+
+async def test_a_new_developer_signs_up_with_a_code(session: AsyncSession) -> None:
+    async with client_for(session) as client:
+        requested = await client.post("/api/v1/auth/code", json={"email": "Alex@Company.com"})
+        verified = await client.post(
+            "/api/v1/auth/verify",
+            json={"email": "alex@company.com", "code": requested.json()["debug_code"], "sign_up": "developer"},
+        )
+        assert verified.status_code == 200, verified.text
+        body = verified.json()
+        me = (await client.get("/api/v1/auth/me")).json()
+
+    assert body["is_developer"] is True and me["is_developer"] is True
+    assert body["is_worker"] is False
+    app.dependency_overrides.clear()
