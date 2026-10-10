@@ -139,10 +139,9 @@ export function WorkerHome() {
           </h1>
           <p className="text-body-sm text-grey-900">Manage your jobs and customer payment</p>
         </div>
-        {/* No design yet for the notification list; emails carry them for now. */}
-        <span aria-hidden className="relative mt-1 text-grey-900">
+        <Link href="/worker/notifications" aria-label="Notifications" className="relative mt-1 text-grey-900">
           <BellIcon width={22} height={22} />
-        </span>
+        </Link>
       </header>
 
       <RecordGate loading={loading} error={error}>

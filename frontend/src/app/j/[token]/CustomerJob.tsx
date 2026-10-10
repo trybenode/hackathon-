@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { DisputeDialog } from "@/components/jobs/DisputeDialog";
 import { ESCROW_CODE_LENGTH, EscrowCodeInput } from "@/components/jobs/EscrowCodeInput";
@@ -38,13 +39,13 @@ const STATUS: Record<Job["stage"], { label: string; dot: string }> = {
   refunded: { label: "Refunded", dot: "text-grey-800" },
 };
 
-function Header() {
+function Header({ token }: { token: string }) {
   return (
     <header className="flex items-center justify-between border-b border-stroke px-6 pt-8 pb-5">
       <span className="text-body-lg font-semibold text-grey-900">Credly</span>
-      <span aria-hidden className="text-grey-900">
+      <Link href={`/j/${token}/notifications`} aria-label="Notifications" className="text-grey-900">
         <BellIcon width={22} height={22} />
-      </span>
+      </Link>
     </header>
   );
 }
@@ -398,7 +399,7 @@ export function CustomerJob({ token }: { token: string }) {
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-white">
-      <Header />
+      <Header token={token} />
       {error && (
         <p role="alert" className="px-6 pt-8 text-body-sm text-error">
           {error}

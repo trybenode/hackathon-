@@ -66,6 +66,12 @@ export function getCustomerJob(token: string) {
   return call<CustomerJob>(`/${token}`);
 }
 
+export function getCustomerNotifications(token: string) {
+  return call<
+    { id: string; job_id: string; title: string; body: string; at: string; icon: "check" | "warning" }[]
+  >(`/${token}/notifications`);
+}
+
 export function startPayment(token: string, details: { name: string; email: string; phone: string }) {
   return call<{ payment_link: string; total_payable: string }>(`/${token}/payment`, {
     method: "POST",

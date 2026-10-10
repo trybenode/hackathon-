@@ -79,6 +79,19 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export type WorkerNotification = {
+  id: string;
+  job_id: string;
+  title: string;
+  body: string;
+  at: string;
+  icon: "check" | "warning";
+};
+
+export function getMyNotifications() {
+  return call<WorkerNotification[]>("/me/job-notifications");
+}
+
 export function getMyJobs() {
   return call<WorkerJob[]>("/me/jobs");
 }
