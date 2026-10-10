@@ -32,9 +32,12 @@ from app.models.domain import (
 	Worker,
 )
 
+from app.models.developer import DeveloperAccount, NameChangeRequest
 from app.models.portability import (HistoryIdentity, ImportReceipt, PlatformGrant, PlatformKey, Review, ShareGrant, WorkerLink)
 
 __all__ = [
+    "DeveloperAccount",
+    "NameChangeRequest",
     "HistoryIdentity",
     "ImportReceipt",
     "PlatformGrant",
