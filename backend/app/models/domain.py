@@ -442,6 +442,11 @@ class GuarantorAgreement(UUIDTimestampMixin, Base):
 
     worker_id: Mapped[UUID] = mapped_column(ForeignKey("workers.id", ondelete="CASCADE"))
     guarantor_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    #: The platform that asked for this guarantee through the API; only it may
+    #: send, trigger, resolve or revoke it.
+    organization_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True
+    )
     job_id: Mapped[UUID | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     scope: Mapped[str] = mapped_column(Text)
     conditions: Mapped[str] = mapped_column(Text)
