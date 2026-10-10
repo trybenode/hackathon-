@@ -1,26 +1,17 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Button, Input, NigeriaFlagIcon, Select } from "@/components/ui";
-import { cn } from "@/lib/cn";
-import { ApiError, getInstrument, submitIdentity } from "@/lib/guarantor";
-
-const RELATIONSHIPS = [
-  { value: "sibling", label: "Sibling" },
-  { value: "parent", label: "Parent" },
-  { value: "spouse", label: "Spouse" },
-  { value: "colleague", label: "Colleague" },
-  { value: "other", label: "Other" },
-];
+import { ApiError, RELATIONSHIPS, getInstrument, submitIdentity } from "@/lib/guarantor";
+import { OnboardingHero } from "@/components/verification/OnboardingHero";
+import { UtilityBillInput } from "@/components/verification/UtilityBillInput";
 
 /** Nigerian NIN and BVN are both 11 digits. */
 const ID_LENGTH = 11;
 
 export function IdentityForm({ instrumentId }: { instrumentId: string }) {
   const router = useRouter();
-  const fileRef = useRef<HTMLInputElement>(null);
   // The design shows the placeholder until the guarantor picks one.
   const [relationship, setRelationship] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -91,17 +82,7 @@ export function IdentityForm({ instrumentId }: { instrumentId: string }) {
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-col">
-      <div className="relative mt-6 aspect-[400/235] w-full overflow-hidden">
-        <Image
-          src="/guarantor-hero.webp"
-          alt=""
-          fill
-          priority
-          sizes="(max-width: 448px) 100vw, 448px"
-          className="object-cover"
-          style={{ objectPosition: "50% 37%" }}
-        />
-      </div>
+      <OnboardingHero />
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5 px-6 pt-8 pb-10">
         <div className="flex flex-col gap-1">
@@ -154,40 +135,7 @@ export function IdentityForm({ instrumentId }: { instrumentId: string }) {
 
         <Input name="address" label="Address" placeholder="Input text" required />
 
-        <div className="flex flex-col gap-2">
-          <span className="text-body-sm font-medium text-grey-900">Upload utility bill</span>
-          <div className="flex items-stretch rounded-md border border-stroke">
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className={cn(
-                "shrink-0 rounded-l-md border border-primary-300 px-4 py-3 text-body-sm font-medium",
-                "text-grey-900 outline-none focus-visible:ring-2 focus-visible:ring-primary-300",
-              )}
-            >
-              Upload file
-            </button>
-            <span
-              className={cn(
-                "flex min-w-0 flex-1 items-center truncate px-4 text-body-sm",
-                file ? "text-grey-900" : "text-grey-400",
-              )}
-            >
-              {file?.name ?? "File name"}
-            </span>
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            name="utility_bill"
-            accept="image/jpeg,image/png,application/pdf"
-            className="hidden"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-          />
-          <p className="text-body-sm text-grey-600">
-            We&rsquo;ll never share your details. See our Privacy Policy.
-          </p>
-        </div>
+        <UtilityBillInput file={file} onChange={setFile} />
 
         {error && (
           <p role="alert" className="text-body-sm text-error">
