@@ -295,6 +295,22 @@ async def test_claiming_an_invite_opens_a_guarantor_account(
         assert me["is_guarantor"] is True
         assert me["display_name"] == "Hannah Lazarus"
 
+        # The invite carries no phone; signing goes ahead without one.
+        signed = await client.post(
+            f"/api/v1/guarantor-instruments/{agreement.id}/sign",
+            json={
+                "signer_name": "Hannah Lazarus",
+                "accepted": True,
+                "signature_metadata": {
+                    "ip": "102.89.1.7",
+                    "user_agent": "Mozilla/5.0",
+                    "timestamp": datetime.now(tz=UTC).isoformat(),
+                },
+            },
+        )
+        assert signed.status_code == 200, signed.text
+        assert signed.json()["status"] == "Pending Verification"
+
     app.dependency_overrides.clear()
 
 

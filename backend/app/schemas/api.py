@@ -188,7 +188,8 @@ class SignatureMetadata(ApiModel):
 
 class GuarantorSignRequest(ApiModel):
     signer_name: str = Field(min_length=1, max_length=160)
-    signer_phone: str = Field(min_length=5, max_length=40)
+    #: Empty for a guarantor invited by link: their phone comes with their identity details.
+    signer_phone: str = Field(default="", max_length=40)
     accepted: bool
     signature_metadata: SignatureMetadata
 
