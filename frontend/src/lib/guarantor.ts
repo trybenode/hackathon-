@@ -260,6 +260,8 @@ export type SignedInUser = {
   is_worker: boolean;
   /** Has been asked to stand behind a worker. */
   is_guarantor: boolean;
+  /** Has a developer profile. */
+  is_developer: boolean;
 };
 
 /**
@@ -271,6 +273,7 @@ export type SignedInUser = {
  * landing until the developer sign-in decides where they belong.
  */
 export function landingPathFor(user: SignedInUser) {
+  if (user.is_developer) return "/developer";
   if (user.is_worker) return "/worker/jobs";
   return "/dashboard";
 }
@@ -288,10 +291,11 @@ export function requestLoginCode(email: string) {
   });
 }
 
-export function verifyLoginCode(email: string, code: string) {
+/** Checks a login code. `signUp` opens an account for a new address. */
+export function verifyLoginCode(email: string, code: string, signUp?: "developer") {
   return request<SignedInUser>("/auth/verify", {
     method: "POST",
-    body: JSON.stringify({ email, code }),
+    body: JSON.stringify({ email, code, sign_up: signUp ?? null }),
   });
 }
 
