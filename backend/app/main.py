@@ -21,6 +21,7 @@ from app.api.v1.endpoints.credentials import router as credentials_router
 from app.api.v1.endpoints.portability import router as portability_router, platform_router
 from app.core.feature_http import install_feature_http
 from app.api.v1.endpoints.worker_record import router as worker_record_router
+from app.api.v1.endpoints.onboarding import router as onboarding_router
 from app.api.v1.endpoints.jobs import (
     payscrow_webhook,
     public_router as public_jobs_router,
@@ -88,6 +89,7 @@ app.include_router(credentials_router, prefix=settings.api_v1_prefix)
 app.include_router(portability_router, prefix=settings.api_v1_prefix)
 app.include_router(platform_router, prefix=settings.api_v1_prefix)
 app.include_router(worker_record_router, prefix=settings.api_v1_prefix)
+app.include_router(onboarding_router, prefix=settings.api_v1_prefix)
 app.include_router(public_jobs_router, prefix=settings.api_v1_prefix)
 app.include_router(my_jobs_router, prefix=settings.api_v1_prefix)
 app.include_router(worker_feed_router, prefix=settings.api_v1_prefix)
