@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { BarChartIcon, BuildingIcon, ImageIcon, TickIcon, UserIcon } from "@/components/developer/icons";
+import { UsageChart } from "@/components/developer/UsageChart";
 import { useDeveloper } from "@/components/developer/useDeveloper";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -186,6 +187,12 @@ export function DeveloperDashboard() {
                 </div>
               )}
             </div>
+            {calls > 0 && (
+              <div className="flex flex-col gap-3 rounded-xl border border-stroke bg-white px-3 pt-4 pb-2">
+                <p className="px-2 text-body-sm text-grey-900">Calls over the last 14 days</p>
+                <UsageChart daily={data.usage.daily} />
+              </div>
+            )}
           </section>
         </div>
       )}

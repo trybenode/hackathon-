@@ -28,7 +28,12 @@ export type DeveloperDashboard = {
   review_note: string | null;
   /** Step 1 is saved; step 2 is next. */
   identity_submitted: boolean;
-  usage: { total_calls: number; successful_calls: number };
+  usage: {
+    total_calls: number;
+    successful_calls: number;
+    /** The last 14 days, oldest first; quiet days are zero. */
+    daily: { day: string; total: number; successful: number }[];
+  };
   recent_activity: ApiCall[];
   credentials: { key_id: string | null; environment: Environment; created_at: string }[];
   name_change: { new_name: string; status: ReviewStatus } | null;
