@@ -124,3 +124,14 @@ body {
   color: var(--color-foreground);
   font-family: var(--font-sans);
 }
+
+/* Touch targets and long content in the history pilot, pending Figma review. */
+.history-journey button,
+.history-journey select,
+.history-journey input:not([type="checkbox"]),
+.history-journey textarea {
+  min-block-size: 44px;
+}
+.history-journey p { overflow-wrap: anywhere; }
+.history-journey fieldset { min-inline-size: 0; }
+.history-journey audio { max-inline-size: 100%; }

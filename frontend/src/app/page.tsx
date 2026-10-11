@@ -4,6 +4,8 @@
  * Used by: the root route at `/`.
  */
 
+import { PortableRecord } from "./worker/profile/record/PortableRecord";
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#f5f1e8] text-[#18211b]">
@@ -36,6 +38,8 @@ export default function Home() {
               <span className="border border-[#18211b]/20 bg-white/50 px-4 py-2 text-sm">Next.js</span>
             </div>
           </div>
+
+          <PortableRecord/>
 
           <aside className="border border-[#18211b]/15 bg-[#d8e3d5] p-7 shadow-[12px_12px_0_#18211b]">
             <div className="flex items-center justify-between border-b border-[#18211b]/15 pb-5">

@@ -5,6 +5,9 @@
  */
 
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { LanguageProvider } from "@/components/history/LanguageProvider";
+import { dictionaries, languageOf } from "@/lib/historyLanguage";
 import { Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
@@ -23,13 +26,14 @@ export const metadata: Metadata = {
   description: "Portable trust for independent work.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const language = languageOf((await cookies()).get("history_language")?.value);
   return (
     <html
-      lang="en"
+      lang={language}
       className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col"><LanguageProvider language={language} dictionary={dictionaries[language]}>{children}</LanguageProvider></body>
     </html>
   );
 }
