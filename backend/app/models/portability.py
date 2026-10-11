@@ -22,6 +22,11 @@ class PlatformKey(UUIDTimestampMixin, Base):
     key_id: Mapped[str | None] = mapped_column(String(40), unique=True, nullable=True)
     #: The developer who generated it from the dashboard.
     created_by_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    #: What the developer calls it, e.g. "Checkout server".
+    name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    #: Access groups the key may use; None is full access, future features included.
+    scopes: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ShareGrant(UUIDTimestampMixin, Base):
