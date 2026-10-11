@@ -18,12 +18,12 @@ ADA = sandbox.DEMO_WORKERS[0]
 QUERY = {"platform_type": "generic", "job_context": {"job_type": "cleaning", "value_band": "low"}}
 
 
-async def keyed(session, environment: str):
+async def keyed(session, environment: str, scopes: list[str] | None = None):
     org = Organization(name=f"Dev {environment}", organization_type=OrganizationType.PLATFORM)
     session.add(org)
     await session.flush()
     secret = f"sk_{environment}_{uuid4().hex}"
-    session.add(PlatformKey(organization_id=org.id, key_hash=digest(secret), environment=environment))
+    session.add(PlatformKey(organization_id=org.id, key_hash=digest(secret), environment=environment, scopes=scopes))
     await session.commit()
     return org, {"X-API-Key": secret}
 
@@ -175,3 +175,35 @@ async def test_a_platform_scores_with_its_own_settings(api, session):
     await client.delete("/api/v1/platform/scoring-config/generic", headers=headers)
     rescored = await client.post("/api/v1/trust/query", headers=headers, json=query)
     assert rescored.json()["band"] == "High"
+
+
+async def test_a_key_only_reaches_the_access_it_was_given(api, session):
+    client, _ = api
+    _, headers = await keyed(session, "sandbox", scopes=["trust"])
+    linked = await client.post(
+        "/api/v1/platform/worker-links", headers=headers,
+        json={"external_worker_id": "user-1", "consent_token": ADA.consent_token},
+    )
+    assert linked.status_code == 201
+    scored = await client.post("/api/v1/trust/query", headers=headers, json={"worker_id": linked.json()["worker_id"], **QUERY})
+    assert scored.status_code == 200
+
+    for refused in (
+        await client.get("/api/v1/platform/workers/user-1/history", headers=headers),
+        await client.get("/api/v1/platform/scoring-config", headers=headers),
+        await client.get(f"/api/v1/guarantor-instruments?worker_id={linked.json()['worker_id']}", headers=headers),
+    ):
+        assert refused.status_code == 403
+        assert refused.json()["code"] == "SCOPE_REQUIRED"
+
+
+async def test_using_a_key_records_when_it_was_last_used(api, session):
+    client, _ = api
+    _, headers = await keyed(session, "sandbox")
+    key = await session.scalar(select(PlatformKey).where(PlatformKey.key_hash == digest(headers["X-API-Key"])))
+    assert key.last_used_at is None
+
+    await client.get("/api/v1/platform/scoring-config", headers=headers)
+
+    await session.refresh(key)
+    assert key.last_used_at is not None

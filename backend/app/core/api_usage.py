@@ -1,4 +1,4 @@
-"""Purpose: Record each call made with a platform key for the developer dashboard.
+"""Purpose: Record each call made with a platform key, and when each key was last used.
 
 Dependencies: Starlette middleware, app.db.session and app.models.developer.
 Used by: app.main; the platform-key check marks the request with its key.
@@ -14,8 +14,11 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
+from sqlalchemy import func, update
+
 from app.db.session import get_db_session
 from app.models.developer import ApiRequestLog
+from app.models.portability import PlatformKey
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +56,9 @@ class ApiUsageMiddleware(BaseHTTPMiddleware):
         try:
             session = await anext(sessions)
             session.add(row)
+            await session.execute(
+                update(PlatformKey).where(PlatformKey.id == row.platform_key_id).values(last_used_at=func.now())
+            )
             await session.commit()
         except Exception:  # A lost usage row must never fail the call itself.
             logger.warning("Could not record platform API usage", exc_info=True)
