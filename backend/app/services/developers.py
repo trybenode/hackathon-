@@ -368,6 +368,33 @@ async def revoke_key(session: AsyncSession, user: User, key: UUID, *, now: datet
     await session.flush()
 
 
+async def request_attest(session: AsyncSession, user: User, key: UUID, *, now: datetime | None = None) -> PlatformKey:
+    """Ask for this key's imported records to count as verified; an operator decides.
+
+    Asking again while a request waits changes nothing.
+    """
+
+    found = await key_for(session, user, key)
+    if found.environment != "production":
+        raise InvalidChoiceError("Only production keys can attest; sandbox records never count as verified.")
+    if found.can_attest:
+        raise StepOutOfOrderError("This key is already approved to attest.")
+    if found.attest_requested_at is None:
+        found.attest_requested_at = now or _now()
+        await session.flush()
+    return found
+
+
+async def decide_attest(session: AsyncSession, key: PlatformKey, *, approved: bool) -> None:
+    """An operator's decision; after a decline the developer may ask again."""
+
+    if key.attest_requested_at is None:
+        raise StepOutOfOrderError("No attest request is waiting on this key.")
+    key.can_attest = approved
+    key.attest_requested_at = None
+    await session.flush()
+
+
 @dataclass(frozen=True)
 class KeyActivity:
     #: Calls over the chart's window.

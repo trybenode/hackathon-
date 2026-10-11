@@ -214,3 +214,29 @@ async def test_editing_rotating_and_revoking_a_key(session: AsyncSession) -> Non
     assert await service.credentials(session, account) == []
     with pytest.raises(service.KeyNotFoundError):
         await service.rotate_key(session, user, key.id)
+
+
+async def test_attest_requests_wait_for_an_operator(session: AsyncSession) -> None:
+    user = await approved(session)
+    sandbox_key, _ = await service.create_key(session, user, environment="sandbox")
+    live, _ = await service.create_key(session, user, environment="production")
+
+    with pytest.raises(service.InvalidChoiceError):
+        await service.request_attest(session, user, sandbox_key.id)
+
+    requested = await service.request_attest(session, user, live.id)
+    first_ask = requested.attest_requested_at
+    assert first_ask is not None and not requested.can_attest
+    # Asking again keeps the original request.
+    assert (await service.request_attest(session, user, live.id)).attest_requested_at == first_ask
+
+    await service.decide_attest(session, live, approved=False)
+    assert (live.can_attest, live.attest_requested_at) == (False, None)
+    with pytest.raises(service.StepOutOfOrderError):
+        await service.decide_attest(session, live, approved=True)
+
+    await service.request_attest(session, user, live.id)
+    await service.decide_attest(session, live, approved=True)
+    assert live.can_attest
+    with pytest.raises(service.StepOutOfOrderError):
+        await service.request_attest(session, user, live.id)
