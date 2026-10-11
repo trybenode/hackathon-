@@ -4,6 +4,8 @@ Dependencies: pytest, httpx ASGI transport, and the in-memory session fixture.
 Used by: the backend test suite and CI.
 """
 
+from uuid import UUID
+
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -186,5 +188,50 @@ async def test_managing_an_api_key(session: AsyncSession) -> None:
         assert (await client.get("/api/v1/me/developer/keys")).json()["items"] == []
         gone = await client.get("/api/v1/platform/scoring-config", headers={"X-API-Key": new_secret})
         assert gone.status_code == 401
+
+    app.dependency_overrides.clear()
+
+
+async def test_the_call_log_and_last_use(session: AsyncSession) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.developer import ApiRequestLog
+    from app.models.portability import PlatformKey
+
+    async with client_for(session) as client:
+        await sign_up(client)
+        await verify(client)
+        await approve(session)
+        first = (await client.post("/api/v1/me/developer/keys", json={"name": "Server", "environment": "sandbox"})).json()
+        second = (await client.post("/api/v1/me/developer/keys", json={"name": "Batch", "environment": "sandbox"})).json()
+
+        # A call logged before keys recorded their own last use.
+        key = await session.get(PlatformKey, UUID(first["key"]["id"]))
+        earlier = datetime.now(UTC) - timedelta(days=2)
+        session.add(ApiRequestLog(platform_key_id=key.id, organization_id=key.organization_id, method="POST",
+                                  path="/api/v1/trust/query", status_code=200, duration_ms=40, created_at=earlier))
+        await session.commit()
+        await client.get("/api/v1/platform/scoring-config", headers={"X-API-Key": second["secret"]})
+        await client.get("/api/v1/platform/workers/nobody/history", headers={"X-API-Key": second["secret"]})
+
+        keys = {item["name"]: item for item in (await client.get("/api/v1/me/developer/keys")).json()["items"]}
+        assert keys["Server"]["last_used_at"] is not None
+        assert keys["Server"]["recent_calls"] == 1
+
+        everything = (await client.get("/api/v1/me/developer/logs")).json()
+        assert everything["total"] == 3
+        assert [entry["key"]["name"] for entry in everything["items"]] == ["Batch", "Batch", "Server"]
+        errors = (await client.get("/api/v1/me/developer/logs?outcome=error")).json()
+        assert [entry["status_code"] for entry in errors["items"]] == [404]
+        by_key = (await client.get(f"/api/v1/me/developer/logs?key={first['key']['id']}")).json()
+        assert by_key["total"] == 1 and by_key["items"][0]["path"] == "/api/v1/trust/query"
+        paged = (await client.get("/api/v1/me/developer/logs?size=2&page=2")).json()
+        assert (paged["pages"], len(paged["items"])) == (2, 1)
+
+        # A revoked key's calls stay, under its name.
+        await client.delete(f"/api/v1/me/developer/keys/{first['key']['id']}")
+        after = (await client.get("/api/v1/me/developer/logs")).json()
+        revoked = next(item for item in after["keys"] if item["name"] == "Server")
+        assert revoked["revoked"] is True and after["total"] == 3
 
     app.dependency_overrides.clear()

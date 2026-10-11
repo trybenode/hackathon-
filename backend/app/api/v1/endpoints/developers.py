@@ -5,9 +5,11 @@ Used by: the developer screens (dashboard, KYB steps, credentials, profile).
 """
 
 from datetime import date, datetime
+from math import ceil
+from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -143,6 +145,34 @@ class ApiKeyUpdate(ApiModel):
     scopes: list[str] | None
 
 
+class LogKeyView(ApiModel):
+    id: UUID
+    name: str
+    key_id: str | None
+    environment: str
+    revoked: bool
+
+
+class LogEntryView(ApiModel):
+    at: datetime
+    method: str
+    #: The route template; worker ids never appear.
+    path: str
+    status_code: int
+    duration_ms: int
+    key: LogKeyView
+
+
+class LogPageView(ApiModel):
+    items: list[LogEntryView]
+    total: int
+    page: int
+    size: int
+    pages: int
+    #: Every key, revoked ones too, for filtering.
+    keys: list[LogKeyView]
+
+
 class ApiKeySecret(ApiModel):
     key: ApiKeyView
     #: Shown once; send it as X-API-Key.
@@ -159,7 +189,13 @@ def _http_error(error: service.DeveloperError) -> HTTPException:
     return HTTPException(status_code=422, detail=str(error))
 
 
-def _key_view(key, calls: dict) -> ApiKeyView:
+def _key_view(key, activity: dict) -> ApiKeyView:
+    used = activity.get(key.id)
+    # The newer of the key's own record and its latest logged call.
+    last_used = max(
+        (moment for moment in (key.last_used_at, used.last_call_at if used else None) if moment),
+        default=None,
+    )
     return ApiKeyView(
         id=key.id,
         name=key.name or "API key",
@@ -168,8 +204,8 @@ def _key_view(key, calls: dict) -> ApiKeyView:
         scopes=key.scopes,
         can_attest=key.can_attest,
         created_at=key.created_at,
-        last_used_at=key.last_used_at,
-        recent_calls=calls.get(key.id, 0),
+        last_used_at=last_used,
+        recent_calls=used.recent_calls if used else 0,
     )
 
 
@@ -290,6 +326,45 @@ async def submit_business(
     return await _dashboard(session, user)
 
 
+def _log_key(key) -> LogKeyView:
+    return LogKeyView(
+        id=key.id, name=key.name or "API key", key_id=key.key_id,
+        environment=key.environment, revoked=key.revoked_at is not None,
+    )
+
+
+@router.get("/logs", response_model=LogPageView, summary="Calls made with your API keys")
+async def call_log(
+    page: int = Query(1, ge=1),
+    size: int = Query(25, ge=1, le=100),
+    key: UUID | None = Query(default=None),
+    outcome: Literal["all", "success", "error"] = Query("all"),
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> LogPageView:
+    """Newest first. Method, route, status and duration only: no bodies or headers."""
+
+    async def build() -> LogPageView:
+        account = await service.account_for(session, user)
+        found = await service.call_log(session, account, page=page, size=size, key=key, outcome=outcome)
+        return LogPageView(
+            items=[
+                LogEntryView(
+                    at=log.created_at, method=log.method, path=log.path, status_code=log.status_code,
+                    duration_ms=log.duration_ms, key=_log_key(owner),
+                )
+                for log, owner in found.rows
+            ],
+            total=found.total,
+            page=page,
+            size=size,
+            pages=max(1, ceil(found.total / size)),
+            keys=[_log_key(item) for item in await service.all_keys(session, account)],
+        )
+
+    return await _guarded(session, build)
+
+
 @router.get("/keys", response_model=ApiKeyList, summary="Your active API keys")
 async def list_keys(
     user: User = Depends(current_user),
@@ -299,9 +374,9 @@ async def list_keys(
 
     async def build() -> ApiKeyList:
         account = await service.account_for(session, user)
-        calls = await service.calls_per_key(session, account)
+        activity = await service.activity_per_key(session, account)
         return ApiKeyList(
-            items=[_key_view(key, calls) for key in await service.credentials(session, account)],
+            items=[_key_view(key, activity) for key in await service.credentials(session, account)],
             access_groups=[
                 AccessGroupView(id=group, label=label, description=ACCESS_DESCRIPTIONS[group])
                 for group, label in SCOPES.items()
