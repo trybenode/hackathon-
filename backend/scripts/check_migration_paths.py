@@ -16,7 +16,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 
 BACKEND = Path(__file__).resolve().parents[1]
-STARTS = (None, "1d7fe6fb9d97", "8f41c20a9e37")
+STARTS = (None, "1d7fe6fb9d97", "8f41c20a9e37", "a83c2d43e9f2", "f69a915488e3")
 
 
 async def main() -> None:
