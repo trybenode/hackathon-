@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
@@ -27,6 +28,8 @@ function toneFor(name: string) {
 }
 
 function JobCard({ job }: { job: WorkerJob }) {
+  const { w, language } = useWorkerCopy();
+
   const tab = jobTab(job);
 
   return (
@@ -42,42 +45,43 @@ function JobCard({ job }: { job: WorkerJob }) {
             {job.client_name ? initialsOf(job.client_name) : "?"}
           </span>
           <span className="flex flex-col">
-            <span className="text-body-md text-grey-900">{job.client_name ?? "Awaiting customer"}</span>
-            <span className="text-body-sm text-grey-600">Client</span>
+            <span className="text-body-md text-grey-900">{job.client_name ?? w("Awaiting customer")}</span>
+            <span className="text-body-sm text-grey-600">{w("Client")}</span>
           </span>
         </div>
         <span className="flex items-center gap-1.5 text-body-sm text-grey-900">
           <DotIcon className="shrink-0 text-success" />
-          {tab}
+          {w(tab)}
         </span>
       </header>
 
       <div className="flex flex-col gap-1">
         <p className="text-body-lg font-semibold text-grey-900">{job.title}</p>
-        <p className="text-body-sm text-grey-600">{formatNaira(Number(job.amount))}</p>
+        <p className="text-body-sm text-grey-600">{formatNaira(Number(job.amount), language)}</p>
       </div>
 
       <dl className="flex flex-col gap-1 text-body-sm">
         <div className="flex gap-1.5">
-          <dt className="font-medium text-grey-900">Job status</dt>
-          <dd className="text-grey-900">{jobStatusLabel(job)}</dd>
+          <dt className="font-medium text-grey-900">{w("Job status")}</dt>
+          <dd className="text-grey-900">{w(jobStatusLabel(job))}</dd>
         </div>
         <div className="flex gap-1.5">
-          <dt className="font-medium text-grey-900">Payment status</dt>
-          <dd className="text-grey-900">{paymentStatusLabel(job)}</dd>
+          <dt className="font-medium text-grey-900">{w("Payment status")}</dt>
+          <dd className="text-grey-900">{w(paymentStatusLabel(job))}</dd>
         </div>
       </dl>
 
       <Link href={`/worker/jobs/${job.id}`} className="self-end">
         <Button variant="outline" size="md" className="rounded-pill px-6">
-          Job Details
-        </Button>
+          {w("Job Details")}</Button>
       </Link>
     </article>
   );
 }
 
 export function JobsList() {
+  const { w } = useWorkerCopy();
+
   const load = useCallback(() => getMyJobs(), []);
   const { data, error, loading } = useWorkerResource(load, "This account has no worker profile.");
   const jobs = data ?? [];
@@ -87,10 +91,10 @@ export function JobsList() {
   return (
     <main className="flex flex-col">
       <header className="border-b border-stroke px-6 pt-8 pb-5">
-        <h1 className="text-body-lg font-semibold text-grey-900">Jobs</h1>
+        <h1 className="text-body-lg font-semibold text-grey-900">{w("Jobs")}</h1>
       </header>
 
-      <div role="tablist" aria-label="Filter jobs" className="flex border-b border-stroke px-6 pt-4">
+      <div role="tablist" aria-label={w("Filter jobs")} className="flex border-b border-stroke px-6 pt-4">
         {TABS.map((name) => {
           const selected = tab === name;
           return (
@@ -107,16 +111,16 @@ export function JobsList() {
                   : "border-transparent text-grey-400",
               )}
             >
-              {name}
+              {w(name)}
             </button>
           );
         })}
       </div>
 
-      <RecordGate loading={loading} error={error}>
+      <RecordGate loading={loading} error={error ? error : null}>
         <div className="flex flex-col gap-4 px-6 pt-6">
           {shown.length === 0 ? (
-            <p className="text-body-sm text-grey-600">Nothing here yet.</p>
+            <p className="text-body-sm text-grey-600">{w("Nothing here yet.")}</p>
           ) : (
             shown.map((job) => <JobCard key={job.id} job={job} />)
           )}

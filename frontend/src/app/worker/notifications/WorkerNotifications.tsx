@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
@@ -9,6 +10,8 @@ import { useWorkerResource } from "@/components/worker/useWorkerResource";
 import { getMyNotifications } from "@/lib/workerJobs";
 
 export function WorkerNotifications() {
+  const { w } = useWorkerCopy();
+
   const router = useRouter();
   // The load time travels with the data, so Recent/Earlier is decided once.
   const load = useCallback(async () => ({ items: await getMyNotifications(), now: Date.now() }), []);
@@ -17,12 +20,12 @@ export function WorkerNotifications() {
   return (
     <main className="flex flex-col">
       <header className="flex items-center gap-3 border-b border-stroke px-6 pt-8 pb-5">
-        <button type="button" aria-label="Back" onClick={() => router.back()} className="text-grey-900">
+        <button type="button" aria-label={w("Back")} onClick={() => router.back()} className="text-grey-900">
           <ArrowLeftIcon />
         </button>
-        <h1 className="text-body-lg font-semibold text-grey-900">Notifications</h1>
+        <h1 className="text-body-lg font-semibold text-grey-900">{w("Notifications")}</h1>
       </header>
-      <RecordGate loading={loading} error={error}>
+      <RecordGate loading={loading} error={error ? error : null}>
         {data && (
           <div className="px-6 pt-6 pb-6">
             <NotificationList items={data.items} now={data.now} hrefFor={(item) => `/worker/jobs/${item.job_id}`} />

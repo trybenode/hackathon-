@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import Link from "next/link";
 import { AssessmentConfidence } from "@/components/worker/AssessmentConfidence";
@@ -12,19 +13,21 @@ import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
 import { initialsOf } from "@/lib/workerFormat";
 
 export function Profile() {
+  const { w } = useWorkerCopy();
+
   const router = useRouter();
   const { data: record, error, loading, refresh } = useWorkerRecord();
 
   return (
     <main className="flex flex-col">
       <header className="flex items-center gap-3 border-b border-stroke px-6 pt-8 pb-5">
-        <button type="button" aria-label="Back" onClick={() => router.back()} className="text-grey-900">
+        <button type="button" aria-label={w("Back")} onClick={() => router.back()} className="text-grey-900">
           <ArrowLeftIcon />
         </button>
-        <h1 className="text-body-lg font-semibold text-grey-900">Profile</h1>
+        <h1 className="text-body-lg font-semibold text-grey-900">{w("Profile")}</h1>
       </header>
 
-      <RecordGate loading={loading} error={error} onRetry={refresh} hasData={!!record}>
+      <RecordGate loading={loading} error={error ? error : null} onRetry={refresh} hasData={!!record}>
       {record && (
       <div className="flex flex-col gap-8 px-6 pt-8">
         <section className="flex flex-col items-center gap-1 border-b border-stroke pb-5">
@@ -34,25 +37,24 @@ export function Profile() {
           <p className="flex items-center gap-1.5 text-body-md font-medium text-grey-900">
             {record.name}
             {record.identity_verified && (
-              <VerifiedIcon className="text-success" aria-label="Identity verified" role="img" />
+              <VerifiedIcon className="text-success" aria-label={w("Identity verified")} role="img" />
             )}
           </p>
           <p className="text-body-sm text-grey-900">{record.role}</p>
-          <p className="text-body-sm text-grey-600">Identity: {record.identity_status === "sandbox" ? "Sandbox check · demo" : record.identity_status.replace("_", " ")}</p>
+          <p className="text-body-sm text-grey-600">{w("Identity:")}{record.identity_status === "sandbox" ? w("Sandbox check · demo") : record.identity_status.replace("_", " ")}</p>
         </section>
 
         <section className="flex flex-col gap-5 rounded-xl border border-stroke bg-white px-4 pt-5 pb-7">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-body-md text-grey-900">Trust Band</h2>
+            <h2 className="text-body-md text-grey-900">{w("Trust Band")}</h2>
             <TrustBandBadge band={record.assessment.band} />
           </div>
           <div className="flex items-center gap-4">
             <ScoreRing score={record.assessment.score} size={48} thickness={5} />
             <div className="flex flex-col gap-1">
-              <p className="text-body-sm text-grey-900">Trust Score</p>
+              <p className="text-body-sm text-grey-900">{w("Trust Score")}</p>
               <p className="text-xs leading-4 text-grey-900">
-                Based on {record.verified_outcomes} verified outcomes
-              </p>
+                {w("Based on")}{record.verified_outcomes} {w("verified outcomes")}</p>
             </div>
           </div>
           <AssessmentConfidence assessment={record.assessment} />
@@ -64,8 +66,8 @@ export function Profile() {
         >
           <RecordIcon className="shrink-0 text-grey-800" />
           <span className="flex flex-1 flex-col gap-0.5">
-            <span className="text-body-md font-medium text-grey-900">Portable Record</span>
-            <span className="text-body-sm text-grey-600">Your verified work history</span>
+            <span className="text-body-md font-medium text-grey-900">{w("Portable Record")}</span>
+            <span className="text-body-sm text-grey-600">{w("Your verified work history")}</span>
           </span>
           <ChevronRightIcon className="shrink-0 text-grey-900" />
         </Link>

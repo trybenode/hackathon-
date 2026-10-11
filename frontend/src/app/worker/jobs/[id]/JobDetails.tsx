@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
@@ -17,6 +18,8 @@ import { WORKER_ISSUE_REASONS, completeJob, getMyJob, reportIssue } from "@/lib/
 import { formatClock, formatDayMonth, formatNaira, initialsOf } from "@/lib/workerFormat";
 
 export function JobDetails({ jobId }: { jobId: string }) {
+  const { w, language } = useWorkerCopy();
+
   const router = useRouter();
   const load = useCallback(() => getMyJob(jobId), [jobId]);
   const { data: job, error, loading, reload } = useWorkerResource(load, "We could not find that job.");
@@ -44,13 +47,13 @@ export function JobDetails({ jobId }: { jobId: string }) {
   return (
     <main className="flex flex-col">
       <header className="flex items-center gap-3 border-b border-stroke px-6 pt-8 pb-5">
-        <button type="button" aria-label="Back" onClick={() => router.back()} className="text-grey-900">
+        <button type="button" aria-label={w("Back")} onClick={() => router.back()} className="text-grey-900">
           <ArrowLeftIcon />
         </button>
-        <h1 className="text-body-lg font-semibold text-grey-900">Job Details</h1>
+        <h1 className="text-body-lg font-semibold text-grey-900">{w("Job Details")}</h1>
       </header>
 
-      <RecordGate loading={loading} error={error}>
+      <RecordGate loading={loading} error={error ? error : null}>
         {job && (
           <div className="flex flex-col gap-6 px-6 pt-8">
             <section className="flex flex-col gap-4 rounded-xl border border-stroke bg-white p-4 shadow-1">
@@ -60,9 +63,9 @@ export function JobDetails({ jobId }: { jobId: string }) {
                 </span>
                 <span className="flex flex-col">
                   <span className="text-body-md text-grey-900">
-                    {job.client_name ?? "Waiting for your customer"}
+                    {job.client_name ?? w("Waiting for your customer")}
                   </span>
-                  <span className="text-xs leading-4 text-grey-600">Client</span>
+                  <span className="text-xs leading-4 text-grey-600">{w("Client")}</span>
                 </span>
               </div>
               <p className="text-body-sm font-medium text-grey-900">{job.title}</p>
@@ -77,11 +80,11 @@ export function JobDetails({ jobId }: { jobId: string }) {
                   <>
                     <span className="flex items-center gap-1.5">
                       <ClockIcon className="shrink-0" width={14} height={14} />
-                      {formatClock(job.scheduled_at)}
+                      {formatClock(job.scheduled_at, language)}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <CalendarIcon className="shrink-0" width={14} height={14} />
-                      {formatDayMonth(job.scheduled_at)}
+                      {formatDayMonth(job.scheduled_at, language)}
                     </span>
                   </>
                 )}
@@ -89,46 +92,42 @@ export function JobDetails({ jobId }: { jobId: string }) {
               {job.stage === "awaiting_customer" && (
                 <div className="flex flex-col gap-2 border-t border-stroke pt-4">
                   <p className="text-body-sm text-grey-900">
-                    Send your customer this link. Their details appear here once they pay.
-                  </p>
+                    {w("Send your customer this link. Their details appear here once they pay.")}</p>
                   <CopyLinkButton link={job.link} />
                 </div>
               )}
             </section>
 
             <section className="flex flex-col gap-4">
-              <h2 className="text-body-md font-semibold text-grey-900">Job Progress</h2>
+              <h2 className="text-body-md font-semibold text-grey-900">{w("Job Progress")}</h2>
               <Timeline steps={jobProgress(job, "worker")} />
             </section>
 
             <section className="flex flex-col gap-2 rounded-lg bg-primary-25 p-4">
               <h2 className="flex items-center gap-2 text-body-md font-medium text-grey-900">
                 <ShieldIcon className="text-info" />
-                Payment Protected
-              </h2>
-              <p className="pl-7 text-body-md font-semibold text-grey-900">{formatNaira(Number(job.amount))}</p>
+                {w("Payment Protected")}</h2>
+              <p className="pl-7 text-body-md font-semibold text-grey-900">{formatNaira(Number(job.amount), language)}</p>
               <p className="pl-7 text-xs leading-4 text-grey-900">
                 {job.stage === "awaiting_customer" || job.stage === "awaiting_payment"
-                  ? "Held securely in escrow once your customer pays"
+                  ? w("Held securely in escrow once your customer pays")
                   : job.stage === "released"
-                    ? "Released to you"
-                    : "Held securely until job is confirmed"}
+                    ? w("Released to you")
+                    : w("Held securely until job is confirmed")}
               </p>
             </section>
 
             {job.stage === "held" && (
               <div className="flex flex-col items-center gap-3 pb-4">
                 <Button size="lg" className="w-56 rounded-xl px-0 text-body-lg font-semibold" onClick={() => setConfirming(true)}>
-                  Mark as complete
-                </Button>
+                  {w("Mark as complete")}</Button>
                 <Button
                   size="lg"
                   variant="outline"
                   className="w-56 rounded-xl px-0 text-body-lg font-semibold"
                   onClick={() => setReporting(true)}
                 >
-                  Report an issue
-                </Button>
+                  {w("Report an issue")}</Button>
               </div>
             )}
 
@@ -140,8 +139,7 @@ export function JobDetails({ jobId }: { jobId: string }) {
                   className="w-56 rounded-xl px-0 text-body-lg font-semibold"
                   onClick={() => setViewingDispute(true)}
                 >
-                  View dispute
-                </Button>
+                  {w("View dispute")}</Button>
               </div>
             )}
 
@@ -152,24 +150,23 @@ export function JobDetails({ jobId }: { jobId: string }) {
         )}
       </RecordGate>
 
-      <WorkerDialog open={confirming} onClose={() => setConfirming(false)} label="Confirm Completion">
+      <WorkerDialog open={confirming} onClose={() => setConfirming(false)} label={w("Confirm Completion")}>
         <div className="flex flex-col items-center gap-4 text-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-pill bg-primary-500">
             <CheckIcon className="text-white" width={28} height={28} />
           </span>
-          <h2 className="text-body-lg font-semibold text-grey-900">Confirm Completion</h2>
-          <p className="text-body-md text-grey-900">Confirm that you have completed this job</p>
+          <h2 className="text-body-lg font-semibold text-grey-900">{w("Confirm Completion")}</h2>
+          <p className="text-body-md text-grey-900">{w("Confirm that you have completed this job")}</p>
           {actionError && (
             <p role="alert" className="text-body-sm text-error">
-              {actionError}
+              {w(actionError)}
             </p>
           )}
           <div className="mt-2 flex w-full gap-4">
             <Button variant="outline" size="lg" fullWidth className="min-w-0 rounded-xl px-0" onClick={() => setConfirming(false)}>
-              Cancel
-            </Button>
+              {w("Cancel")}</Button>
             <Button size="lg" fullWidth className="min-w-0 rounded-xl px-0" disabled={busy} onClick={confirmCompletion}>
-              {busy ? "Confirming…" : "Confirm"}
+              {busy ? w("Confirming…") : w("Confirm")}
             </Button>
           </div>
         </div>

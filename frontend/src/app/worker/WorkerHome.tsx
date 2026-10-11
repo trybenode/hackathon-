@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
@@ -61,6 +62,8 @@ function currentJob(jobs: WorkerJob[]) {
 }
 
 function CurrentJobCard({ job }: { job: WorkerJob }) {
+  const { w, language } = useWorkerCopy();
+
   const progress = paymentProgress(job);
   const status = STATUS[job.stage];
 
@@ -76,21 +79,21 @@ function CurrentJobCard({ job }: { job: WorkerJob }) {
             {status && (
               <span className="flex shrink-0 items-center gap-1.5 text-body-sm text-grey-900">
                 <DotIcon className={cn("shrink-0", status.dot)} />
-                {status.label}
+                {w(status.label)}
               </span>
             )}
           </div>
           <p className="text-body-sm text-grey-900">
-            Customer · {job.client_name ? job.client_name.split(" ")[0] + " " + (job.client_name.split(" ")[1]?.[0] ?? "") : "not yet"}
+            {w("Customer ·")}{job.client_name ? job.client_name.split(" ")[0] + " " + (job.client_name.split(" ")[1]?.[0] ?? "") : w("not yet")}
           </p>
-          <p className="text-body-md font-semibold text-grey-900">{formatNaira(Number(job.amount))}</p>
+          <p className="text-body-md font-semibold text-grey-900">{formatNaira(Number(job.amount), language)}</p>
         </div>
       </div>
 
       <div className="flex flex-col gap-3 border-t border-stroke pt-4">
         <div className="flex items-center justify-between text-body-sm text-grey-900">
-          <span>Payment progress</span>
-          <span>{progress.step} of 3</span>
+          <span>{w("Payment progress")}</span>
+          <span>{progress.step} {w("of 3")}</span>
         </div>
         <div className="flex gap-1" aria-hidden>
           {[1, 2, 3].map((segment) => (
@@ -103,14 +106,13 @@ function CurrentJobCard({ job }: { job: WorkerJob }) {
         <div className="flex items-start gap-2">
           <CheckCircleIcon className="mt-0.5 shrink-0 text-success" width={18} height={18} />
           <span className="flex flex-col">
-            <span className="text-body-sm text-grey-900">{progress.title}</span>
-            <span className="text-xs leading-4 text-grey-900">{progress.note}</span>
+            <span className="text-body-sm text-grey-900">{w(progress.title)}</span>
+            <span className="text-xs leading-4 text-grey-900">{w(progress.note)}</span>
           </span>
         </div>
         <Link href={`/worker/jobs/${job.id}`} className="self-end">
           <Button variant="outline" size="md" className="rounded-xl px-8">
-            View job details
-          </Button>
+            {w("View job details")}</Button>
         </Link>
       </div>
     </article>
@@ -118,6 +120,8 @@ function CurrentJobCard({ job }: { job: WorkerJob }) {
 }
 
 export function WorkerHome() {
+  const { w, language } = useWorkerCopy();
+
   const loadJobs = useCallback(() => getMyJobs(), []);
   const { data: jobs, error, loading, reload } = useWorkerResource(loadJobs, "This account has no worker profile.");
   const { data: record } = useWorkerRecord();
@@ -134,17 +138,17 @@ export function WorkerHome() {
       <header className="flex items-start justify-between gap-3 border-b border-stroke px-6 pt-8 pb-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-body-lg font-semibold text-grey-900">
-            {hello}
+            {w(hello)}
             {record ? `, ${record.name.split(" ")[0]}` : ""}
           </h1>
-          <p className="text-body-sm text-grey-900">Manage your jobs and customer payment</p>
+          <p className="text-body-sm text-grey-900">{w("Manage your jobs and customer payment")}</p>
         </div>
-        <Link href="/worker/notifications" aria-label="Notifications" className="relative mt-1 text-grey-900">
+        <Link href="/worker/notifications" aria-label={w("Notifications")} className="relative mt-1 text-grey-900">
           <BellIcon width={22} height={22} />
         </Link>
       </header>
 
-      <RecordGate loading={loading} error={error}>
+      <RecordGate loading={loading} error={error ? error : null}>
         <div className="flex flex-col gap-5 px-6 pt-4 pb-6">
           <section className="flex flex-col gap-4 rounded-xl border border-stroke bg-white p-4">
             <div className="flex items-start gap-3">
@@ -152,13 +156,12 @@ export function WorkerHome() {
                 <LinkIcon />
               </span>
               <div className="flex flex-col gap-1">
-                <h2 className="text-body-md text-grey-900">Create a job link</h2>
-                <p className="text-xs leading-4 text-grey-900">Create a job agreement and send it your customer</p>
+                <h2 className="text-body-md text-grey-900">{w("Create a job link")}</h2>
+                <p className="text-xs leading-4 text-grey-900">{w("Create a job agreement and send it your customer")}</p>
               </div>
             </div>
             <Button fullWidth className="rounded-lg font-semibold" onClick={() => setCreating(true)}>
-              Create Job
-            </Button>
+              {w("Create Job")}</Button>
           </section>
 
           <section className="grid grid-cols-2 gap-3">
@@ -178,7 +181,7 @@ export function WorkerHome() {
                 <span className="flex h-10 w-10 items-center justify-center rounded-pill bg-primary-50">{stat.icon}</span>
                 <span className="flex flex-col gap-1">
                   <span className="text-body-lg text-grey-900">{stat.value}</span>
-                  <span className="text-body-sm text-grey-600">{stat.label}</span>
+                  <span className="text-body-sm text-grey-600">{w(stat.label)}</span>
                 </span>
               </div>
             ))}
@@ -186,13 +189,13 @@ export function WorkerHome() {
 
           {current && (
             <section className="flex flex-col gap-3">
-              <h2 className="text-body-md font-semibold text-grey-900">Current job</h2>
+              <h2 className="text-body-md font-semibold text-grey-900">{w("Current job")}</h2>
               <CurrentJobCard job={current} />
             </section>
           )}
 
           <section className="flex flex-col gap-3">
-            <h2 className="text-body-md font-semibold text-grey-900">My Guarantee</h2>
+            <h2 className="text-body-md font-semibold text-grey-900">{w("My Guarantee")}</h2>
             <article className="flex flex-col gap-4 rounded-xl border border-stroke bg-white p-4">
               {guarantor ? (
                 <>
@@ -203,18 +206,18 @@ export function WorkerHome() {
                       </span>
                       <span className="flex flex-col">
                         <span className="text-body-md text-grey-900">{guarantor.name}</span>
-                        <span className="text-body-sm text-grey-600">Your Guarantor</span>
+                        <span className="text-body-sm text-grey-600">{w("Your Guarantor")}</span>
                       </span>
                     </div>
                     <span className="flex items-center gap-1.5 text-body-sm text-grey-900">
                       <DotIcon className={guarantor.status === "Active" ? "text-success" : "text-grey-800"} />
-                      {guarantor.status}
+                      {w(guarantor.status)}
                     </span>
                   </div>
-                  <p className="text-body-sm text-grey-900">Valid until - {formatShortDate(guarantor.valid_until)}</p>
+                  <p className="text-body-sm text-grey-900">{w("Valid until -")}{formatShortDate(guarantor.valid_until, language)}</p>
                 </>
               ) : (
-                <p className="text-body-sm text-grey-600">You have no guarantor yet.</p>
+                <p className="text-body-sm text-grey-600">{w("You have no guarantor yet.")}</p>
               )}
             </article>
           </section>
