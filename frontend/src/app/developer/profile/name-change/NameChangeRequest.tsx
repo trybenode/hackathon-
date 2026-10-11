@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { ChoiceList } from "@/components/developer/ChoiceList";
 import { DocumentUpload } from "@/components/developer/DocumentUpload";
-import { useDeveloper } from "@/components/developer/useDeveloper";
+import { useDeveloper } from "@/components/developer/DeveloperContext";
 import { Button, Input } from "@/components/ui";
 import { NAME_CHANGE_REASONS, requestNameChange } from "@/lib/developer";
 import { ApiError } from "@/lib/guarantor";

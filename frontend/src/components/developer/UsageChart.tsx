@@ -22,7 +22,7 @@ export function UsageChart({ daily }: { daily: Day[] }) {
   }));
 
   return (
-    <div className="h-48 w-full" role="img" aria-label="API calls per day over the last 14 days">
+    <div className="h-64 w-full" role="img" aria-label="API calls per day over the last 14 days">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 8, right: 4, bottom: 0, left: -24 }}>
           <CartesianGrid vertical={false} stroke={COLORS.grid} />

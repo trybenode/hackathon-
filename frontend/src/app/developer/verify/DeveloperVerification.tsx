@@ -5,7 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ChoiceList } from "@/components/developer/ChoiceList";
 import { DocumentUpload } from "@/components/developer/DocumentUpload";
 import { StepNotice } from "@/components/developer/StepNotice";
-import { useDeveloper } from "@/components/developer/useDeveloper";
+import { useDeveloper } from "@/components/developer/DeveloperContext";
 import { Button, Input, Modal, Select, Switch } from "@/components/ui";
 import {
   BUSINESS_TYPES,

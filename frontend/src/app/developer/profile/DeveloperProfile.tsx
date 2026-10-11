@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TickIcon } from "@/components/developer/icons";
-import { useDeveloper } from "@/components/developer/useDeveloper";
+import { useDeveloper } from "@/components/developer/DeveloperContext";
 import { ArrowLeftIcon } from "@/components/worker/icons";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
