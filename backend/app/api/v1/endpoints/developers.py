@@ -67,6 +67,8 @@ class SandboxWorkerView(ApiModel):
     role: str
     #: The trust band the demo history lands in.
     band: str
+    #: The demo guarantee: "active", "pending", "expired", or null for none.
+    guarantor: str | None
     #: Link this worker with POST /platform/worker-links using a sandbox key.
     consent_token: str
 
@@ -207,7 +209,10 @@ async def _dashboard(session: AsyncSession, user: User) -> DeveloperDashboard:
         if name_change
         else None,
         sandbox_workers=[
-            SandboxWorkerView(name=demo.name, role=demo.role, band=demo.band, consent_token=demo.consent_token)
+            SandboxWorkerView(
+                name=demo.name, role=demo.role, band=demo.band, guarantor=demo.guarantee,
+                consent_token=demo.consent_token,
+            )
             for demo in sandbox.DEMO_WORKERS
         ],
     )

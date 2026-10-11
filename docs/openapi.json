@@ -7738,6 +7738,17 @@
             "type": "string",
             "title": "Band"
           },
+          "guarantor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guarantor"
+          },
           "consent_token": {
             "type": "string",
             "title": "Consent Token"
@@ -7749,6 +7760,7 @@
           "name",
           "role",
           "band",
+          "guarantor",
           "consent_token"
         ],
         "title": "SandboxWorkerView"
