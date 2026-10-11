@@ -105,13 +105,13 @@ async def test_credentials_wait_for_approval(session: AsyncSession) -> None:
     user = await submitted(session)
 
     with pytest.raises(service.StepOutOfOrderError):
-        await service.generate_credentials(session, user, "sandbox")
+        await service.create_key(session, user, environment="sandbox")
 
 
 async def test_credentials_are_platform_keys_with_a_secret_shown_once(session: AsyncSession) -> None:
     user = await approved(session)
 
-    key, secret = await service.generate_credentials(session, user, "production")
+    key, secret = await service.create_key(session, user, environment="production")
 
     assert key.key_id.startswith("pk_live_")
     assert secret.startswith("sk_live_")
@@ -124,7 +124,7 @@ async def test_credentials_are_platform_keys_with_a_secret_shown_once(session: A
 async def test_a_sandbox_key_brings_the_demo_workers(session: AsyncSession) -> None:
     user = await approved(session)
 
-    key, secret = await service.generate_credentials(session, user, "sandbox")
+    key, secret = await service.create_key(session, user, environment="sandbox")
 
     assert key.key_id.startswith("pk_sandbox_") and secret.startswith("sk_sandbox_")
     demos = await session.scalar(select(func.count()).select_from(Worker).where(Worker.is_sandbox.is_(True)))
@@ -133,7 +133,7 @@ async def test_a_sandbox_key_brings_the_demo_workers(session: AsyncSession) -> N
 
 async def test_usage_counts_the_platform_calls(session: AsyncSession) -> None:
     user = await approved(session)
-    key, _ = await service.generate_credentials(session, user, "sandbox")
+    key, _ = await service.create_key(session, user, environment="sandbox")
     for status in (200, 201, 404):
         session.add(ApiRequestLog(platform_key_id=key.id, organization_id=key.organization_id, method="GET",
                                   path="/api/v1/trust/query", status_code=status, duration_ms=12))
@@ -164,3 +164,53 @@ async def test_name_change_needs_a_verified_name_and_one_at_a_time(session: Asyn
     await service.review_name_change(session, request, approved=True)
     assert account.full_name == "Alex Daniel Morgan"
     assert pending.display_name == "Alex Daniel Morgan"
+
+
+async def test_a_key_carries_a_name_and_its_access(session: AsyncSession) -> None:
+    user = await approved(session)
+
+    key, _ = await service.create_key(
+        session, user, environment="production", name="  Checkout server ", scopes=["history", "trust"]
+    )
+
+    assert key.name == "Checkout server"
+    # Kept in the dashboard's order.
+    assert key.scopes == ["trust", "history"]
+
+
+@pytest.mark.parametrize("scopes, message", [([], "at least one"), (["payments"], "Unknown access")])
+async def test_access_must_name_known_groups(session: AsyncSession, scopes, message) -> None:
+    user = await approved(session)
+
+    with pytest.raises(service.InvalidChoiceError, match=message):
+        await service.create_key(session, user, environment="sandbox", scopes=scopes)
+
+
+async def test_active_keys_are_capped_per_environment(session: AsyncSession) -> None:
+    user = await approved(session)
+    for _ in range(service.MAX_ACTIVE_KEYS):
+        await service.create_key(session, user, environment="sandbox")
+
+    with pytest.raises(service.LimitReachedError):
+        await service.create_key(session, user, environment="sandbox")
+    # The other environment has its own allowance.
+    await service.create_key(session, user, environment="production")
+
+
+async def test_editing_rotating_and_revoking_a_key(session: AsyncSession) -> None:
+    user = await approved(session)
+    key, first = await service.create_key(session, user, environment="sandbox", scopes=["trust"])
+
+    edited = await service.update_key(session, user, key.id, name="Back office", scopes=None)
+    assert (edited.name, edited.scopes) == ("Back office", None)
+
+    rotated, second = await service.rotate_key(session, user, key.id)
+    assert second != first
+    assert rotated.key_hash == digest(second)
+    assert rotated.key_id == key.key_id
+
+    await service.revoke_key(session, user, key.id)
+    account = await service.account_for(session, user)
+    assert await service.credentials(session, account) == []
+    with pytest.raises(service.KeyNotFoundError):
+        await service.rotate_key(session, user, key.id)
