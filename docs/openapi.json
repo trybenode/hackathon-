@@ -810,6 +810,125 @@
         }
       }
     },
+    "/api/v1/auth/email-change/code": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Email a code to a new address",
+        "description": "The first step of changing the account's email: prove the new one is yours.",
+        "operationId": "request_email_change_api_v1_auth_email_change_code_post",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestCodeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/email-change": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Confirm a new email address",
+        "operationId": "confirm_email_change_api_v1_auth_email_change_post",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailChangeConfirm"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedInUser"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/me": {
       "get": {
         "tags": [
@@ -1485,6 +1604,71 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiKeySecret"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/developer/keys/{key_id}/attest-request": {
+      "post": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Ask for attest approval",
+        "description": "For production keys: records this key imports would count as verified once approved.",
+        "operationId": "request_attest_api_v1_me_developer_keys__key_id__attest_request_post",
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Key Id"
+            }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyView"
                 }
               }
             }
@@ -5318,6 +5502,10 @@
             "type": "boolean",
             "title": "Can Attest"
           },
+          "attest_requested": {
+            "type": "boolean",
+            "title": "Attest Requested"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -5349,6 +5537,7 @@
           "environment",
           "scopes",
           "can_attest",
+          "attest_requested",
           "created_at",
           "last_used_at",
           "recent_calls"
@@ -5902,6 +6091,43 @@
           "sandbox_workers"
         ],
         "title": "DeveloperDashboard"
+      },
+      "EmailChangeConfirm": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 4,
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email",
+          "code"
+        ],
+        "title": "EmailChangeConfirm"
+      },
+      "EmailChangeRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "EmailChangeRequest"
       },
       "EvidenceAssessment": {
         "properties": {
