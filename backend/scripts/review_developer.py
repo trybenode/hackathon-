@@ -1,14 +1,16 @@
-"""Operator review of developer verification (KYC + KYB) and name changes.
+"""Operator review of developer verification (KYC + KYB), name changes and attest requests.
 
     python scripts/review_developer.py list
     python scripts/review_developer.py approve alex@company.com
     python scripts/review_developer.py reject alex@company.com --note "CAC certificate is unreadable"
     python scripts/review_developer.py approve-name alex@company.com
     python scripts/review_developer.py reject-name alex@company.com
+    python scripts/review_developer.py approve-attest pk_live_3f9a1c2b4d5e6f70
+    python scripts/review_developer.py reject-attest pk_live_3f9a1c2b4d5e6f70
 
 Approval makes the developer's platform organization, which unlocks API
-credentials on their dashboard. Documents are in the bucket under
-developer-documents/<account id>/.
+credentials on their dashboard. Verification and attest decisions are emailed
+to the developer. Documents are in the bucket under developer-documents/<account id>/.
 """
 import argparse
 import asyncio
@@ -20,7 +22,9 @@ from sqlalchemy import select  # noqa: E402
 
 from app.db.session import async_session_factory  # noqa: E402
 from app.models.developer import DeveloperAccount, NameChangeRequest, ReviewStatus  # noqa: E402
-from app.models.domain import User  # noqa: E402
+from app.models.domain import Organization, User  # noqa: E402
+from app.models.portability import PlatformKey  # noqa: E402
+from app.services import developer_notifications as notify  # noqa: E402
 from app.services import developers  # noqa: E402
 
 
@@ -34,12 +38,15 @@ async def account_by_email(session, email: str) -> DeveloperAccount:
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("action", choices=["list", "approve", "reject", "approve-name", "reject-name"])
-    parser.add_argument("email", nargs="?")
+    parser.add_argument(
+        "action",
+        choices=["list", "approve", "reject", "approve-name", "reject-name", "approve-attest", "reject-attest"],
+    )
+    parser.add_argument("email", nargs="?", help="The developer's email, or a key ID for attest decisions")
     parser.add_argument("--note", default="", help="Why a submission is rejected; the developer sees it")
     args = parser.parse_args()
     if args.action != "list" and not args.email:
-        parser.error("an email is required")
+        parser.error("an email (or, for attest decisions, a key ID) is required")
     if args.action == "reject" and not args.note.strip():
         parser.error("--note is required when rejecting, so the developer knows what to fix")
 
@@ -67,22 +74,49 @@ async def main() -> None:
             for email, request in names:
                 print(f"  {email}  {request.current_name} → {request.new_name} "
                       f"({developers.NAME_CHANGE_REASONS.get(request.reason, request.reason)})")
+            attests = (await session.execute(
+                select(PlatformKey, Organization.name)
+                .join(Organization, Organization.id == PlatformKey.organization_id)
+                .where(PlatformKey.attest_requested_at.is_not(None), PlatformKey.revoked_at.is_(None))
+                .order_by(PlatformKey.attest_requested_at)
+            )).all()
+            print(f"Attest requests: {len(attests)}")
+            for key, business in attests:
+                print(f"  {key.key_id}  {business} · {key.name} · asked {key.attest_requested_at:%d %b %H:%M}")
+            return
+
+        if args.action in ("approve-attest", "reject-attest"):
+            key = await session.scalar(select(PlatformKey).where(PlatformKey.key_id == args.email.strip()))
+            if key is None:
+                sys.exit("No key with that ID.")
+            approved = args.action == "approve-attest"
+            await developers.decide_attest(session, key, approved=approved)
+            owner = await session.get(User, key.created_by_user_id) if key.created_by_user_id else None
+            await session.commit()
+            if owner:
+                await notify.attest_decided(owner.email, key.name or "API key", approved)
+            print("Attest " + ("approved: its imports now count as verified." if approved else "declined."))
             return
 
         account = await account_by_email(session, args.email)
+        email = args.email.strip().casefold()
         if args.action == "approve":
             organization = await developers.approve(session, account)
-            print(f"Approved. Platform organization: {organization.name} ({organization.id})")
+            await session.commit()
+            await notify.kyb_approved(email, organization.name)
+            print(f"Approved and emailed. Platform organization: {organization.name} ({organization.id})")
         elif args.action == "reject":
             await developers.reject(session, account, args.note)
-            print("Rejected; the developer can fix it and submit again.")
+            await session.commit()
+            await notify.kyb_rejected(email, args.note.strip())
+            print("Rejected and emailed; the developer can fix it and submit again.")
         else:
             request = await developers.open_name_change(session, account)
             if request is None:
                 sys.exit("No name change under review for that developer.")
             await developers.review_name_change(session, request, approved=args.action == "approve-name")
+            await session.commit()
             print("Name change " + ("approved." if args.action == "approve-name" else "rejected."))
-        await session.commit()
 
 
 if __name__ == "__main__":
