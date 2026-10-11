@@ -10,7 +10,7 @@ from app.models.domain import Dispute, DisputeStatus, EscrowStatus, EscrowTransa
 from app.models.portability import Review
 from app.schemas.portability import ReviewEligibility, ReviewRequest, ReviewResponse
 from app.schemas.portability import CustomerJobPage
-from app.services.portability import FeatureError, audit, aware, digest, now
+from app.services.feature_common import FeatureError, audit, aware, digest, now
 from app.services.trust_scoring.assessment import assess_worker
 
 

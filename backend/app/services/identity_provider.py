@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from app.core.config import get_settings
+from app.services.feature_common import FeatureError
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -89,6 +91,8 @@ class StubIdentityProvider:
     ID_LENGTH = 11
 
     async def verify(self, submission: IdentitySubmission) -> IdentityResult:
+        if get_settings().environment != "development":
+            raise FeatureError(503, "IDENTITY_UNAVAILABLE", "Identity verification is not configured.")
         plausible = (
             submission.nin.isdigit()
             and len(submission.nin) == self.ID_LENGTH
@@ -115,6 +119,8 @@ class StubLivenessProvider:
     MIN_FRAME_BYTES = 128
 
     async def check(self, submission: LivenessSubmission) -> IdentityResult:
+        if get_settings().environment != "development":
+            raise FeatureError(503, "LIVENESS_UNAVAILABLE", "Liveness verification is not configured.")
         return IdentityResult(
             provider=self.name,
             reference=f"STUB-LIVE-{uuid.uuid4().hex[:12].upper()}",

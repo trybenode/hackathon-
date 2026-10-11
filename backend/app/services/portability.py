@@ -1,6 +1,5 @@
 """Worker-owned records and expiring public/platform consent grants."""
-from datetime import UTC, datetime, timedelta
-from hashlib import sha256
+from datetime import timedelta
 from math import ceil
 import secrets
 import json
@@ -10,33 +9,12 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.domain import AuditEvent, NormalizedOutcome, Organization, User, Worker
+from app.models.domain import NormalizedOutcome, Organization, User, Worker
+from app.services.feature_common import FeatureError, audit, aware, digest, now, own_worker
 from app.services.worker_record import WorkerRecord as RecordSnapshot, load_record, completion_labels
 from app.services.trust_scoring.evidence import scoring_inputs
 from app.models.portability import PlatformGrant, PlatformKey, ShareGrant
 from app.schemas.portability import EvidenceAssessment, GrantList, GrantResponse, HistoryItem, HistoryPage, IdentitySummary, VerificationSummary, WorkerRecord
-
-
-class FeatureError(Exception):
-    """Expected domain failure with a stable HTTP-facing code."""
-    def __init__(self, status: int, code: str, detail: str, retry_after: int | None = None) -> None:
-        self.status, self.code, self.detail, self.retry_after = status, code, detail, retry_after
-        super().__init__(detail)
-
-
-def now() -> datetime:
-    """Return the clock used by expiring grants and review windows."""
-    return datetime.now(UTC)
-
-
-def aware(value: datetime) -> datetime:
-    """Normalize SQLite timestamps without changing Postgres timestamps."""
-    return value if value.tzinfo else value.replace(tzinfo=UTC)
-
-
-def digest(value: str) -> str:
-    """Hash random bearer credentials before persistence."""
-    return sha256(value.encode()).hexdigest()
 
 
 def general_area(location: str | None) -> str | None:
@@ -53,19 +31,6 @@ def general_area(location: str | None) -> str | None:
         if re.search(r"\b" + re.escape(area) + r"\b", location, re.IGNORECASE):
             return area
     return None
-
-
-def audit(session: AsyncSession, actor_id: UUID | None, entity_type: str, entity_id: UUID, action: str, metadata: dict | None = None) -> None:
-    """Record meaningful changes without bearer tokens or private comments."""
-    session.add(AuditEvent(actor_id=actor_id, entity_type=entity_type, entity_id=entity_id, action=action, event_metadata=metadata or {}))
-
-
-async def own_worker(session: AsyncSession, user: User) -> Worker:
-    """Resolve an active user's worker record; never trust a caller's UUID."""
-    worker = await session.scalar(select(Worker).where(Worker.user_id == user.id))
-    if not user.is_active or worker is None:
-        raise FeatureError(404, "WORKER_NOT_FOUND", "No worker record is linked to this account.")
-    return worker
 
 
 def history_item(row: NormalizedOutcome, source_name: str | None = None) -> HistoryItem:
@@ -101,7 +66,7 @@ def summary_from_record(record: RecordSnapshot) -> VerificationSummary:
     return VerificationSummary(display_name=name, role=record.role, location=general_area(record.location), identity=IdentitySummary(status=record.identity_status),
         assessment=EvidenceAssessment(decision=record.decision, band=record.band, confidence=float(record.confidence), status=record.status, explanation_summary=record.explanation_summary, signals_used=record.signals_used, assessed_at=record.assessed_at),
         verified_outcomes=record.verified_outcomes, self_declared_outcomes=record.self_declared_outcomes, completed_jobs=record.completed_jobs, completion_rate=record.completion_rate,
-        active_guarantor=bool(record.guarantor and record.guarantor.status == "Active" and (record.guarantor.verified or record.guarantor.sandbox)), guarantor_sandbox=bool(record.guarantor and record.guarantor.status == "Active" and record.guarantor.sandbox), updated_at=record.last_updated)
+        active_guarantor=bool(record.guarantor and record.guarantor.status == "Active" and (record.guarantor.verified or record.guarantor.sandbox)), guarantor_sandbox=bool(record.guarantor and record.guarantor.status == "Active" and record.guarantor.sandbox), updated_at=record.last_updated, informal_history=record.informal_history or {})
 
 
 async def worker_record(session: AsyncSession, worker: Worker, *, page: int = 1, size: int = 20) -> WorkerRecord:

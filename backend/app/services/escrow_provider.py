@@ -238,10 +238,12 @@ class StubEscrowProvider:
         self.paid: set[str] = set()
 
     async def status(self, transaction_number: str) -> EscrowState:
+        self._require_development()
         paid = transaction_number in self.paid
         return EscrowState(status="In Progress" if paid else "Pending", in_escrow=paid, in_dispute=False)
 
     async def start(self, request: EscrowStart) -> StartedEscrow:
+        self._require_development()
         number = f"STUB-{uuid.uuid4().hex[:8].upper()}"
         return StartedEscrow(
             provider=self.name,
@@ -251,12 +253,18 @@ class StubEscrowProvider:
         )
 
     async def apply_code(self, transaction_id: str, code: str) -> None:
+        self._require_development()
         self.applied.append((transaction_id, code))
 
     async def raise_dispute(
         self, transaction_number: str, *, requested_by: str, complaint: str
     ) -> None:
+        self._require_development()
         self.disputes.append((transaction_number, requested_by, complaint))
+
+    def _require_development(self) -> None:
+        if get_settings().environment != "development":
+            raise EscrowProviderError("Escrow is not configured for production.")
 
 
 def sign_webhook(secret: str, body: bytes, timestamp: int | None = None) -> dict[str, str]:

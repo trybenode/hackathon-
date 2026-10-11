@@ -51,6 +51,8 @@ class LoggingEmailSender:
         self.sent: list[EmailMessage] = []
 
     async def send(self, message: EmailMessage) -> None:
+        if get_settings().environment != "development":
+            raise EmailDeliveryError("Transactional email is not configured.")
         self.sent.append(message)
         logger.info("Email to %s: %s\n%s", message.to, message.subject, message.body)
 
