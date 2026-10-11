@@ -55,6 +55,10 @@ class UnknownAccountError(AuthError):
     """No account exists for that address."""
 
 
+class EmailTakenError(AuthError):
+    """The new address is already the user's, or another account's."""
+
+
 def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -188,6 +192,70 @@ async def verify_login_code(
         )
     )
     return user, token
+
+
+async def _check_code(session: AsyncSession, address: str, code: str, moment: datetime) -> LoginCode:
+    """The latest unused code for the address, if this one matches it.
+
+    Same rules as signing in: it expires, and attempts are capped.
+    """
+
+    record = await session.scalar(
+        select(LoginCode)
+        .where(LoginCode.email == address, LoginCode.consumed_at.is_(None))
+        .order_by(LoginCode.created_at.desc())
+        .limit(1)
+    )
+    if record is None:
+        raise InvalidCodeError("That code is not valid. Ask for a new one.")
+    if _as_aware(record.expires_at) <= moment:
+        raise InvalidCodeError("That code has expired. Ask for a new one.")
+    if record.attempts >= MAX_ATTEMPTS:
+        raise InvalidCodeError("Too many attempts. Ask for a new code.")
+    record.attempts += 1
+    if not hmac.compare_digest(record.code_hash, _hash(code.strip())):
+        raise InvalidCodeError("That code is not correct.")
+    return record
+
+
+async def _free_address(session: AsyncSession, user: User, email: str) -> str:
+    address = normalise_email(email)
+    if address == user.email:
+        raise EmailTakenError("That is already your email address.")
+    if await session.scalar(select(User.id).where(User.email == address)):
+        raise EmailTakenError("Another account already uses that email address.")
+    return address
+
+
+async def request_email_change(
+    session: AsyncSession,
+    user: User,
+    new_email: str,
+    *,
+    sender: EmailSender | None = None,
+    now: datetime | None = None,
+) -> str:
+    """Email a code to the new address, to prove the user can read it."""
+
+    address = await _free_address(session, user, new_email)
+    return await request_login_code(session, address, sender=sender, now=now)
+
+
+async def confirm_email_change(
+    session: AsyncSession, user: User, new_email: str, code: str, *, now: datetime | None = None
+) -> User:
+    """Move the account to the new address once its code checks out.
+
+    The user's sessions stay valid; they sign in with the new address next time.
+    """
+
+    moment = now or _now()
+    address = await _free_address(session, user, new_email)
+    record = await _check_code(session, address, code, moment)
+    record.consumed_at = moment
+    user.email = address
+    await session.flush()
+    return user
 
 
 async def resolve_session(
