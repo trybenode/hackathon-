@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { ChoiceList } from "@/components/developer/ChoiceList";
 import { DocumentUpload } from "@/components/developer/DocumentUpload";
+import { PageHeader } from "@/components/developer/PageHeader";
 import { StepNotice } from "@/components/developer/StepNotice";
 import { useDeveloper } from "@/components/developer/DeveloperContext";
 import { Button, Input, Modal, Select, Switch } from "@/components/ui";
@@ -27,7 +28,7 @@ function message(cause: unknown, fallback: string) {
  */
 export function DeveloperVerification() {
   const router = useRouter();
-  const { data, error: loadError } = useDeveloper();
+  const { data, error: loadError, reload } = useDeveloper();
   const [chosenStep, setStep] = useState<1 | 2 | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,16 +41,12 @@ export function DeveloperVerification() {
   const [cacDocument, setCacDocument] = useState<File | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
+  // Under review or approved: nothing to submit, so the page shows the status.
   const settled = data?.kyb_status === "under_review" || data?.kyb_status === "approved";
   // A first try with step 1 saved picks up at step 2; after a rejection both
   // steps are redone.
   const step = chosenStep ?? (!data || settled ? null : data.identity_submitted && data.kyb_status === "not_started" ? 2 : 1);
   const fullName = typedName ?? data?.full_name ?? "";
-
-  // Under review or approved: nothing to submit.
-  useEffect(() => {
-    if (settled) router.replace("/developer");
-  }, [settled, router]);
 
   async function submitIdentity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,6 +85,7 @@ export function DeveloperVerification() {
         },
         cacDocument,
       );
+      reload();
       router.push("/developer");
     } catch (cause) {
       setError(message(cause, "Could not submit your business details. Try again."));
@@ -98,11 +96,33 @@ export function DeveloperVerification() {
   const failure = error ?? loadError;
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-col px-6 pt-8 pb-10">
-      <div className="flex flex-col gap-1 pb-6">
-        <h1 className="text-body-lg font-semibold text-grey-900">Business Verification</h1>
-        <p className="text-body-sm text-grey-900">Step {step ?? 1} of account Verification</p>
-      </div>
+    <div className="flex max-w-2xl flex-col">
+      <PageHeader
+        title="Business Verification"
+        description={settled ? "Your identity (KYC) and business (KYB)" : `Step ${step ?? 1} of account Verification`}
+      />
+
+      {settled && data && (
+        <section className="flex flex-col rounded-xl border border-stroke">
+          <div className="flex items-center justify-between gap-3 border-b border-stroke px-5 py-4">
+            <span className="text-body-md font-medium text-grey-900">{data.business_name}</span>
+            <span
+              className={
+                data.kyb_status === "approved"
+                  ? "rounded-pill bg-success-light px-3 py-0.5 text-xs text-grey-900"
+                  : "rounded-pill bg-warning-light px-3 py-0.5 text-xs text-grey-900"
+              }
+            >
+              {data.kyb_status === "approved" ? "Verified" : "Under review"}
+            </span>
+          </div>
+          <p className="px-5 py-4 text-body-sm text-grey-600">
+            {data.kyb_status === "approved"
+              ? `Verified as ${data.full_name}. API access is unlocked; create credentials from API keys.`
+              : "We've received your identity and business documents. API access unlocks once an operator approves them."}
+          </p>
+        </section>
+      )}
 
       {step === 1 && (
         <form onSubmit={submitIdentity} className="flex flex-col gap-6">
@@ -199,6 +219,6 @@ export function DeveloperVerification() {
           We&rsquo;re securely checking your details. This should only take a moment
         </p>
       </Modal>
-    </main>
+    </div>
   );
 }
