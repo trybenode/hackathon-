@@ -1,0 +1,74 @@
+# Free demo only: no persistent audio or background processing; see docs/free_deployment.md.
+services:
+  - type: keyvalue
+    name: trust-demo-redis
+    region: frankfurt
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+  - type: web
+    name: trust-demo-api
+    runtime: docker
+    region: frankfurt
+    plan: free
+    healthCheckPath: /api/v1/health/ready
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: "off"
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PORT
+        value: "8000"
+      - key: DATABASE_URL
+        sync: false
+      - key: MIGRATION_DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: trust-demo-redis
+          property: connectionString
+      - key: CREDENTIAL_SIGNING_SECRET
+        generateValue: true
+      - key: INTERNAL_PROXY_SECRET
+        generateValue: true
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
+      - key: FRONTEND_BASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SMS_PROVIDER
+        value: disabled
+      - key: HISTORY_AUDIO_DIR
+        value: /var/lib/trust/history
+      - key: RUN_HISTORY_WORKER
+        value: "false"
+      - key: HISTORY_AI_ENABLED
+        value: "false"
+      - key: HISTORY_SPEECH_ENABLED
+        value: "false"
+  - type: web
+    name: trust-demo-web
+    runtime: docker
+    region: frankfurt
+    plan: free
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: "off"
+    healthCheckPath: /health
+    envVars:
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: /api/v1
+      - key: API_PROXY_ORIGIN
+        sync: false
+      - key: INTERNAL_PROXY_SECRET
+        fromService:
+          type: web
+          name: trust-demo-api
+          envVarKey: INTERNAL_PROXY_SECRET
+      - key: PROXY_TRUSTED_HOPS
+        value: "0"
