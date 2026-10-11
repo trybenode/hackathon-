@@ -368,18 +368,92 @@ async def revoke_key(session: AsyncSession, user: User, key: UUID, *, now: datet
     await session.flush()
 
 
-async def calls_per_key(session: AsyncSession, account: DeveloperAccount, *, now: datetime | None = None) -> dict[UUID, int]:
-    """Calls each key made over the chart's window."""
+@dataclass(frozen=True)
+class KeyActivity:
+    #: Calls over the chart's window.
+    recent_calls: int
+    #: The key's latest logged call, ever.
+    last_call_at: datetime | None
+
+
+async def activity_per_key(
+    session: AsyncSession, account: DeveloperAccount, *, now: datetime | None = None
+) -> dict[UUID, KeyActivity]:
+    """Each key's recent calls and latest call, from the call log.
+
+    The log is the record of use, so a key's last use counts calls made
+    before keys tracked it themselves.
+    """
 
     if account.organization_id is None:
         return {}
     since = (now or _now()) - timedelta(days=CHART_DAYS)
     rows = await session.execute(
-        select(ApiRequestLog.platform_key_id, func.count())
-        .where(ApiRequestLog.organization_id == account.organization_id, ApiRequestLog.created_at >= since)
+        select(
+            ApiRequestLog.platform_key_id,
+            func.sum(case((ApiRequestLog.created_at >= since, 1), else_=0)),
+            func.max(ApiRequestLog.created_at),
+        )
+        .where(ApiRequestLog.organization_id == account.organization_id)
         .group_by(ApiRequestLog.platform_key_id)
     )
-    return {key: count for key, count in rows.all()}
+    return {key: KeyActivity(int(recent or 0), last) for key, recent, last in rows.all()}
+
+
+@dataclass(frozen=True)
+class LogPage:
+    rows: list[tuple[ApiRequestLog, PlatformKey]]
+    total: int
+
+
+async def call_log(
+    session: AsyncSession,
+    account: DeveloperAccount,
+    *,
+    page: int = 1,
+    size: int = 25,
+    key: UUID | None = None,
+    outcome: str = "all",
+) -> LogPage:
+    """The platform's calls, newest first; by key, and by success or error."""
+
+    if account.organization_id is None:
+        return LogPage([], 0)
+    filters = [ApiRequestLog.organization_id == account.organization_id]
+    if key is not None:
+        filters.append(ApiRequestLog.platform_key_id == key)
+    if outcome == "success":
+        filters.append(ApiRequestLog.status_code.between(200, 299))
+    elif outcome == "error":
+        filters.append(~ApiRequestLog.status_code.between(200, 299))
+    total = await session.scalar(select(func.count()).select_from(ApiRequestLog).where(*filters))
+    rows = (
+        await session.execute(
+            select(ApiRequestLog, PlatformKey)
+            .join(PlatformKey, PlatformKey.id == ApiRequestLog.platform_key_id)
+            .where(*filters)
+            .order_by(ApiRequestLog.created_at.desc(), ApiRequestLog.id)
+            .offset((page - 1) * size)
+            .limit(size)
+        )
+    ).all()
+    return LogPage([(log, owner) for log, owner in rows], total or 0)
+
+
+async def all_keys(session: AsyncSession, account: DeveloperAccount) -> list[PlatformKey]:
+    """Every key, revoked ones included, so old calls keep their key's name."""
+
+    if account.organization_id is None:
+        return []
+    return list(
+        (
+            await session.scalars(
+                select(PlatformKey)
+                .where(PlatformKey.organization_id == account.organization_id)
+                .order_by(PlatformKey.created_at.desc())
+            )
+        ).all()
+    )
 
 
 async def usage(session: AsyncSession, account: DeveloperAccount, *, now: datetime | None = None) -> Usage:
