@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { TickIcon } from "@/components/developer/icons";
 import { useDeveloper } from "@/components/developer/DeveloperContext";
+import { EmailChangeDialog } from "@/components/developer/EmailChangeDialog";
 import { PageHeader } from "@/components/developer/PageHeader";
-import { Button } from "@/components/ui";
+import { Button, PencilIcon } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { ReviewStatus } from "@/lib/developer";
 
@@ -36,7 +38,8 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 /** The developer's verified details; the name changes only through review. */
 export function DeveloperProfile() {
-  const { data, error } = useDeveloper();
+  const { data, error, reload } = useDeveloper();
+  const [changingEmail, setChangingEmail] = useState(false);
   const canRequest = data?.kyc_status === "approved" && !data.name_change;
 
   return (
@@ -80,7 +83,17 @@ export function DeveloperProfile() {
           <section className="flex flex-col px-6 pt-8">
             <h2 className="text-body-md text-grey-900">Personal Information</h2>
             <Row label="Full Name">{data.full_name ?? "—"}</Row>
-            <Row label="Email address">{data.email}</Row>
+            <Row label="Email address">
+              <button
+                type="button"
+                onClick={() => setChangingEmail(true)}
+                className="inline-flex items-center gap-2 hover:text-primary-500"
+                aria-label={`Change email address ${data.email}`}
+              >
+                {data.email}
+                <PencilIcon width={16} height={16} className="shrink-0" />
+              </button>
+            </Row>
             {data.name_change && <Row label="Requested name">{data.name_change.new_name} · under review</Row>}
           </section>
 
@@ -106,6 +119,17 @@ export function DeveloperProfile() {
             </Button>
           </div>
         </div>
+      )}
+
+      {changingEmail && data && (
+        <EmailChangeDialog
+          current={data.email}
+          onClose={() => setChangingEmail(false)}
+          onChanged={() => {
+            setChangingEmail(false);
+            reload();
+          }}
+        />
       )}
     </div>
   );
