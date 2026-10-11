@@ -36,6 +36,8 @@ from app.db.session import async_session_factory
 from app.services.expiry import sweep_forever
 
 settings = get_settings()
+if settings.deployment_mode == "serverless":
+    validate_production_settings(settings)
 logger = logging.getLogger(__name__)
 
 
@@ -50,7 +52,7 @@ async def lifespan(_: FastAPI):
 
     validate_production_settings(settings)
     task: asyncio.Task | None = None
-    if settings.expiry_sweep_seconds > 0:
+    if settings.deployment_mode != "serverless" and settings.expiry_sweep_seconds > 0:
         task = asyncio.create_task(
             sweep_forever(async_session_factory, settings.expiry_sweep_seconds)
         )

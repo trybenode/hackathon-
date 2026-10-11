@@ -1,0 +1,7 @@
+# Exclude local browser credentials and generated build/cache files from CLI uploads.
+.env
+.env.*
+node_modules
+.next
+.pnpm-store
+*.tsbuildinfo

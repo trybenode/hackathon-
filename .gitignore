@@ -12,6 +12,7 @@ node_modules/
 .next/
 out/
 .turbo/
+.vercel/
 .pnpm-store/
 
 # Environment and secrets

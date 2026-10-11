@@ -135,3 +135,27 @@ Real email/SMS/identity/payment/AI/speech providers, managed-ingress IP mapping,
 backup restoration, native-language review, staging browser flows, Figma/360 px
 and physical Android testing remain separate launch gates. See
 [production deployment](production_deployment.md) for deployment and rollback.
+
+## Vercel demo preparation — 2026-10-11
+
+Added separate backend/frontend Vercel configurations, Python 3.12 entrypoint
+metadata, environment templates and setup instructions. Serverless mode selects
+NullPool, rejects development/worker/AI/speech/timer configuration, and does not
+start the continuous expiry loop. Container defaults and scoring are preserved.
+Actual model processing and timed maintenance need external services/operations;
+no continuously running worker or persistent private audio is supplied here.
+
+- SQLite suite: **285 passed, 5 skipped**; eight new serverless regressions.
+- Full disposable PostgreSQL/Redis suite: **290 passed**, no skipped tests.
+- Frontend type checking/lint and existing production proxy smoke passed.
+- Both Vercel JSON configs passed the published configuration constraints;
+  entrypoint TOML parsed. The published schema mixes draft keywords, so validation
+  used a Draft 7 constraint evaluator rather than its incompatible meta-schema.
+- Local serverless API readiness, infrastructure preflight and no-worker startup
+  smoke passed against disposable PostgreSQL/Redis; this check is also in CI.
+- OpenAPI exported with the same 85 paths; no new API contract or migration.
+
+No Vercel projects/resources were created, repository changes pushed or cloud
+database modified. Vercel cloud builds, deployment protection/domain configuration,
+deployed browser flows and existing native/Figma/device/provider gates remain open.
+See [Vercel deployment](vercel_deployment.md) for operator steps and demo limits.

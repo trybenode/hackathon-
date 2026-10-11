@@ -64,3 +64,14 @@ Identity/liveness and no-key payment stubs are blocked outside development.
 SMS, model/speech validation, native copy/pronunciation review and browser/device
 checks remain separate release gates. Docs/Presentation must not claim those
 providers or a live deployment based on container/configuration checks alone.
+
+## Vercel demo handoff
+
+Current demo hosting is two Vercel projects: backend/FastAPI and frontend/Next.js.
+See vercel_deployment.md for environment templates and root-directory settings.
+Software configures isolated Neon/Upstash, email, domains, matching proxy secrets,
+migrations, deployment protection and ingress verification. No background worker
+or expiry/payment maintenance loop runs in this profile; Software must supply an
+external scheduler/operator before claiming automatic lifecycle operation.
+Voice/AI/speech stay disabled. Vercel build and deployed browser acceptance remain
+separate from local checks; Hobby is limited to personal, non-commercial use.

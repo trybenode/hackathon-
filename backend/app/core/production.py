@@ -6,9 +6,16 @@ from app.core.config import Settings
 
 def validate_production_settings(cfg: Settings) -> None:
     """Fail startup on unsafe non-development configuration; optional providers stay off."""
+    if cfg.environment == 'development' and cfg.deployment_mode == 'serverless':
+        raise RuntimeError('Serverless deployment requires ENVIRONMENT=staging or production')
     if cfg.environment == 'development':
         return
     errors: list[str] = []
+    if cfg.deployment_mode == 'serverless':
+        if cfg.run_history_worker or cfg.history_ai_enabled or cfg.history_speech_enabled:
+            errors.append('Serverless requires RUN_HISTORY_WORKER/HISTORY_AI_ENABLED/HISTORY_SPEECH_ENABLED=false')
+        if cfg.expiry_sweep_seconds != 0:
+            errors.append('Serverless requires EXPIRY_SWEEP_SECONDS=0; schedule maintenance separately')
     if cfg.environment not in {'production', 'staging', 'test'}:
         errors.append('ENVIRONMENT')
     db = urlsplit(cfg.database_url)

@@ -6,6 +6,7 @@
 **/.env.*
 **/node_modules
 **/.pnpm-store
+**/.vercel
 **/.next
 **/.venv
 **/__pycache__

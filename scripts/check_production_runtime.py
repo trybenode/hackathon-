@@ -17,6 +17,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--database-url', required=True, help='Disposable migrated local PostgreSQL database only.')
     parser.add_argument('--redis-url', default='redis://localhost:6379/15')
+    parser.add_argument('--serverless', action='store_true', help='Check the no-worker serverless demo profile.')
     args = parser.parse_args()
     if not args.database_url.startswith('postgresql+asyncpg://') or '@localhost:' not in args.database_url:
         raise SystemExit('This local smoke test requires an explicit disposable localhost database.')
@@ -33,6 +34,9 @@ def main() -> None:
                'SMS_PROVIDER':'disabled', 'RUN_HISTORY_WORKER':'true', 'HISTORY_AUDIO_DIR':private,
                'HISTORY_WORKER_HEARTBEAT':str(Path(private)/'heartbeat'), 'HISTORY_AI_ENABLED':'false',
                'HISTORY_SPEECH_ENABLED':'false', 'PAYSCROW_API_KEY':'', 'PLATFORM_API_KEY':''}
+        env['DEPLOYMENT_MODE'] = 'serverless' if args.serverless else 'container'
+        if args.serverless:
+            env.update(RUN_HISTORY_WORKER='false', EXPIRY_SWEEP_SECONDS='0')
         with tempfile.TemporaryFile() as log:
             process = subprocess.Popen([str(python), '-m', 'scripts.start_production'], cwd=backend, env=env, stdout=log, stderr=log)
             try:
@@ -48,6 +52,11 @@ def main() -> None:
                 assert ready, 'API/worker did not become ready.'
                 checked = subprocess.run([str(python), '-m', 'scripts.check_production', '--online'], cwd=backend, env=env, capture_output=True)
                 assert checked.returncode == 0, 'Online production preflight failed.'
+                if args.serverless:
+                    children = subprocess.check_output(['pgrep', '-P', str(process.pid)], text=True).split()
+                    assert len(children) == 1, 'Serverless profile started a worker.'
+                    print('Serverless runtime smoke passed: API readiness, online preflight and no worker process.')
+                    return
                 # Kill only our own worker child to prove fail-together supervision.
                 children = subprocess.check_output(['pgrep', '-P', str(process.pid)], text=True).split()
                 worker = next(int(pid) for pid in children if 'scripts.history_worker' in subprocess.check_output(['ps', '-p', pid, '-o', 'command='], text=True))

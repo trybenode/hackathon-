@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "fastapi",
+  "installCommand": "uv pip install -r requirements-runtime.txt",
+  "functions": {
+    "app/main.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{tests/**,scripts/**,alembic/**,.venv/**,.venv-history-models/**,__pycache__/**,**/*.pyc,.env,.env.*}"
+    }
+  }
+}

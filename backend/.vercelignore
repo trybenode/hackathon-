@@ -1,0 +1,10 @@
+# Prevent local credentials, model environments and test artifacts from being uploaded.
+.env
+.env.*
+.venv
+.venv-history-models
+.pytest_cache
+**/__pycache__
+**/*.pyc
+tests
+local_dev.db

@@ -94,6 +94,10 @@ jobs:
         working-directory: backend
         run: python ../scripts/check_production_runtime.py --database-url "$DATABASE_URL"
 
+      - name: Check serverless profile
+        working-directory: backend
+        run: python ../scripts/check_production_runtime.py --serverless --database-url "$DATABASE_URL"
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest

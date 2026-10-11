@@ -1,0 +1,3 @@
+# Vercel imports the existing ASGI app; dependencies remain in requirements-runtime.txt.
+[tool.vercel]
+entrypoint = "app.main:app"

@@ -1,5 +1,12 @@
 # Railway / Render deployment
 
+The current no-card demo target is [Vercel](vercel_deployment.md). This guide
+remains the container-based option for reliable workers/private audio storage.
+
+For a free, text-only demo, use [free_deployment.md](free_deployment.md) and
+[render.free.yaml](../render.free.yaml). The configuration below includes paid
+services and durable storage for production preparation.
+
 This repository provides buildable containers and production guards. It has not
 been deployed to a production account. Use a staging environment first; service
 creation and disk/compute plans can incur charges. Existing registration and

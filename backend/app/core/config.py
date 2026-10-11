@@ -5,6 +5,8 @@ Used by: app.db.session, app.main, and Alembic.
 """
 
 from functools import lru_cache
+import os
+from typing import Literal
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -25,6 +27,9 @@ class Settings(BaseSettings):
     )
 
     environment: str = "development"
+    deployment_mode: Literal["container", "serverless"] = Field(
+        default_factory=lambda: "serverless" if os.environ.get("VERCEL") == "1" else "container"
+    )
     migration_database_url: str = ""
     internal_proxy_secret: str = ""
     run_history_worker: bool = False
