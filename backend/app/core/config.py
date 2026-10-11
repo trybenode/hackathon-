@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     )
 
     environment: str = "development"
+    migration_database_url: str = ""
+    internal_proxy_secret: str = ""
+    run_history_worker: bool = False
+    history_worker_heartbeat: str = "/tmp/trust-history-worker.heartbeat"
+    history_speech_reviewed_languages: str = ""
     api_v1_prefix: str = "/api/v1"
     database_url: str = Field(
         "postgresql+asyncpg://placeholder:placeholder@localhost:5432/placeholder",
@@ -92,6 +97,14 @@ class Settings(BaseSettings):
     history_ai_api_key: str = ""
     history_ai_enabled: bool = False
     history_audio_dir: str = ""
+    history_speech_provider: str = "gateway"
+    history_speech_voices: str = ""
+    history_speech_enabled: bool = False
+    history_speech_base_url: str = ""
+    history_speech_api_key: str = ""
+    history_speech_model: str = ""
+    history_speech_version: str = ""
+    history_speech_languages: str = ""
 
     @property
     def email_enabled(self) -> bool:

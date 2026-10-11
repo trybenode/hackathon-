@@ -4,6 +4,7 @@ from typing import Literal
 from uuid import UUID
 from pydantic import ConfigDict, Field, model_validator
 from app.schemas.api import ApiModel
+from app.schemas.history import InformalHistoryCounts
 
 
 class EvidenceAssessment(ApiModel):
@@ -34,6 +35,7 @@ class VerificationSummary(ApiModel):
     active_guarantor: bool
     guarantor_sandbox: bool = False
     updated_at: datetime
+    informal_history: InformalHistoryCounts = Field(default_factory=InformalHistoryCounts)
 
 
 class HistoryItem(ApiModel):

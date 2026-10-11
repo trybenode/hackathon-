@@ -15,7 +15,7 @@ class RedactVerificationToken(logging.Filter):
     def filter(self, record):
         if isinstance(record.args, tuple) and len(record.args) >= 3:
             args = list(record.args)
-            args[2] = re.sub(r"(/(?:api/v1/verification|verify)/)[^? /]+", r"\1[redacted]", str(args[2]))
+            args[2] = re.sub(r"((?:/[^? /]+)*/(?:verification|history-confirmations|verify|confirm-work)/)[^? /]+", r"\1[redacted]", str(args[2]))
             record.args = tuple(args)
         return True
 
@@ -24,7 +24,7 @@ class PrivateResponses(BaseHTTPMiddleware):
     """Never cache mutable consent/records and do not send bearer URLs as referrers."""
     async def dispatch(self, request, call_next):
         response = await call_next(request)
-        if any(segment in request.url.path for segment in ("/me/", "/verification/", "/platform/", "/credentials/", "/review")):
+        if any(segment in request.url.path for segment in ("/me/", "/verification/", "/history-confirmations/", "/platform/", "/credentials/", "/review")):
             response.headers["Cache-Control"] = "no-store, private"
             response.headers["Referrer-Policy"] = "no-referrer"
             response.headers["X-Robots-Tag"] = "noindex, nofollow"
@@ -59,6 +59,7 @@ def install_feature_http(app) -> None:
         schema = get_openapi(title=app.title, version=app.version, description=app.description, routes=app.routes)
         schema.setdefault("components", {}).setdefault("securitySchemes", {}).update({
             "UserSession": {"type": "apiKey", "in": "cookie", "name": "guarantor_session", "description": "Existing signed-in session. These features do not create accounts or change sign-in."},
+            "HistoryRecipient": {"type": "apiKey", "in": "cookie", "name": "history_recipient", "description": "Short-lived access limited to one contact-verified history request. This is not an account session. Native jobs require the existing hiring-customer UserSession instead."},
             "PlatformKey": {"type": "apiKey", "in": "header", "name": "X-API-Key", "description": "Dedicated platform key with live worker consent; legacy shared keys are limited to development trust queries."}})
         for path, operations in schema["paths"].items():
             for method, operation in operations.items():
@@ -70,7 +71,15 @@ def install_feature_http(app) -> None:
                 invalid_input = operation.get("responses", {}).get("422", {})
                 if invalid_input.get("description") in {"Unprocessable Entity", "Unprocessable Content"}:
                     invalid_input["description"] = "Unprocessable Content"
-                if "/platform/" in path or path.endswith("/trust/query"):
+                if "/history-confirmations/" in path:
+                    if path.endswith(("/challenge", "/challenge/check")):
+                        operation["security"] = []
+                    elif method == "get" and path.endswith("/{token}"):
+                        operation["security"] = [{}, {"HistoryRecipient": []}, {"UserSession": []}]
+                    else:
+                        operation["security"] = [{"HistoryRecipient": []}, {"UserSession": []}]
+                    operation["description"] = operation.get("description", "") + "\nThe link alone never authorizes private details, messages or decisions. Contact control establishes no historical hiring relationship; native jobs match the live hiring account. No history operation changes protected-review eligibility or trust scoring."
+                elif "/platform/" in path or path.endswith("/trust/query"):
                     operation["security"] = [{"PlatformKey": []}]
                 elif "/me/" in path or "/review" in path or "/credentials/" in path:
                     operation["security"] = [{"UserSession": []}]
