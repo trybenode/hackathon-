@@ -18,6 +18,7 @@ from app.core.platform_auth import SCOPES
 from app.db.session import get_db_session
 from app.models.domain import User
 from app.schemas.api import ApiModel
+from app.services import developer_notifications as notifications
 from app.services import developers as service
 from app.services import sandbox
 from app.services.document_store import (
@@ -119,6 +120,8 @@ class ApiKeyView(ApiModel):
     scopes: list[str] | None
     #: Operator-approved: imported records count as verified.
     can_attest: bool
+    #: Waiting on an operator's attest decision.
+    attest_requested: bool
     created_at: datetime
     last_used_at: datetime | None
     #: Calls over the last 14 days.
@@ -203,6 +206,7 @@ def _key_view(key, activity: dict) -> ApiKeyView:
         environment=key.environment,
         scopes=key.scopes,
         can_attest=key.can_attest,
+        attest_requested=key.attest_requested_at is not None,
         created_at=key.created_at,
         last_used_at=last_used,
         recent_calls=used.recent_calls if used else 0,
@@ -430,6 +434,21 @@ async def rotate_key(
     key, secret = await _guarded(session, lambda: service.rotate_key(session, user, key_id))
     await session.commit()
     return ApiKeySecret(key=_key_view(key, {}), secret=secret)
+
+
+@router.post("/keys/{key_id}/attest-request", response_model=ApiKeyView, summary="Ask for attest approval")
+async def request_attest(
+    key_id: UUID,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> ApiKeyView:
+    """For production keys: records this key imports would count as verified once approved."""
+
+    key = await _guarded(session, lambda: service.request_attest(session, user, key_id))
+    account = await service.account_for(session, user)
+    await session.commit()
+    await notifications.attest_requested(account.business_name or user.email, key.name or "API key", key.key_id or "")
+    return _key_view(key, {})
 
 
 @router.delete("/keys/{key_id}", status_code=204, summary="Revoke a key")

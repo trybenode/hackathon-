@@ -235,3 +235,22 @@ async def test_the_call_log_and_last_use(session: AsyncSession) -> None:
         assert revoked["revoked"] is True and after["total"] == 3
 
     app.dependency_overrides.clear()
+
+
+async def test_asking_for_attest_approval_tells_operations(session: AsyncSession, monkeypatch, never_send_real_email) -> None:
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "ops_email", "ops@credly.test")
+    async with client_for(session) as client:
+        await sign_up(client)
+        await verify(client)
+        await approve(session)
+        live = (await client.post("/api/v1/me/developer/keys", json={"name": "Imports", "environment": "production"})).json()
+
+        asked = await client.post(f"/api/v1/me/developer/keys/{live['key']['id']}/attest-request")
+        assert asked.status_code == 200, asked.text
+        assert asked.json()["attest_requested"] is True and asked.json()["can_attest"] is False
+
+    sent = [message for message in never_send_real_email.sent if message.to == "ops@credly.test"]
+    assert len(sent) == 1 and "Energies Technologies Ltd." in sent[0].subject
+    app.dependency_overrides.clear()
