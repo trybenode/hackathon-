@@ -25,6 +25,7 @@ from app.services.auth import (
     AuthError,
     InvalidCodeError,
     ResendTooSoonError,
+    EmailTakenError,
     UnknownAccountError,
 )
 from app.services.email_sender import EmailDeliveryError
@@ -99,6 +100,8 @@ def _http_error(error: AuthError) -> HTTPException:
         return HTTPException(status_code=400, detail=str(error))
     if isinstance(error, UnknownAccountError):
         return HTTPException(status_code=404, detail=str(error))
+    if isinstance(error, EmailTakenError):
+        return HTTPException(status_code=409, detail=str(error))
     return HTTPException(status_code=400, detail=str(error))
 
 
@@ -169,6 +172,53 @@ async def verify_code(
         max_age=int(auth_service.SESSION_TTL.total_seconds()),
         path="/",
     )
+    return await _signed_in(session, user)
+
+
+class EmailChangeRequest(ApiModel):
+    email: EmailStr
+
+
+class EmailChangeConfirm(ApiModel):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=8)
+
+
+@router.post("/email-change/code", response_model=RequestCodeResponse, summary="Email a code to a new address")
+async def request_email_change(
+    payload: EmailChangeRequest,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> RequestCodeResponse:
+    """The first step of changing the account's email: prove the new one is yours."""
+
+    try:
+        code = await auth_service.request_email_change(session, user, payload.email)
+    except AuthError as error:
+        raise _http_error(error) from error
+    except EmailDeliveryError as error:
+        raise HTTPException(
+            status_code=502, detail="We could not send the code. Try again in a moment."
+        ) from error
+
+    await session.commit()
+    return RequestCodeResponse(debug_code=code if _is_development() else None)
+
+
+@router.post("/email-change", response_model=SignedInUser, summary="Confirm a new email address")
+async def confirm_email_change(
+    payload: EmailChangeConfirm,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> SignedInUser:
+    try:
+        await auth_service.confirm_email_change(session, user, payload.email, payload.code)
+    except AuthError as error:
+        # Attempt counters must survive a wrong code.
+        await session.commit()
+        raise _http_error(error) from error
+
+    await session.commit()
     return await _signed_in(session, user)
 
 

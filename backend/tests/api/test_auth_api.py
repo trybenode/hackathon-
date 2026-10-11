@@ -241,3 +241,30 @@ async def test_a_new_developer_signs_up_with_a_code(session: AsyncSession) -> No
     assert body["is_developer"] is True and me["is_developer"] is True
     assert body["is_worker"] is False
     app.dependency_overrides.clear()
+
+
+async def test_changing_the_account_email(session: AsyncSession) -> None:
+    session.add_all([User(email="alex@company.com", display_name="Alex"), User(email="taken@company.com", display_name="T")])
+    await session.flush()
+
+    async with client_for(session) as client:
+        signed_out = await client.post("/api/v1/auth/email-change/code", json={"email": "alex@newco.io"})
+        assert signed_out.status_code == 401
+
+        code = (await client.post("/api/v1/auth/code", json={"email": "alex@company.com"})).json()["debug_code"]
+        await client.post("/api/v1/auth/verify", json={"email": "alex@company.com", "code": code})
+
+        taken = await client.post("/api/v1/auth/email-change/code", json={"email": "taken@company.com"})
+        assert taken.status_code == 409
+
+        sent = await client.post("/api/v1/auth/email-change/code", json={"email": "alex@newco.io"})
+        wrong = await client.post("/api/v1/auth/email-change", json={"email": "alex@newco.io", "code": "000000"})
+        assert wrong.status_code == 400
+        changed = await client.post(
+            "/api/v1/auth/email-change", json={"email": "alex@newco.io", "code": sent.json()["debug_code"]}
+        )
+        assert changed.status_code == 200, changed.text
+        assert changed.json()["email"] == "alex@newco.io"
+        assert (await client.get("/api/v1/auth/me")).json()["email"] == "alex@newco.io"
+
+    app.dependency_overrides.clear()
