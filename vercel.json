@@ -3,7 +3,7 @@
   "services": {
     "backend": {
       "framework": "fastapi",
-      "installCommand": "uv pip install -r requirements-runtime.txt",
+      "installCommand": "uv pip install -r requirements.txt",
       "functions": {
         "app/main.py": {
           "maxDuration": 60,
