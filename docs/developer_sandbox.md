@@ -6,7 +6,17 @@ Sandbox credentials work against the same API as production, but they can only r
 
 1. Sign up on the developer page with your work email.
 2. Complete both verification steps (identity, then business). An operator reviews them; until then credentials stay locked.
-3. Once approved, choose **Generate API credentials → Sandbox**. Copy the secret straight away: it is shown once. Send it as the `X-API-Key` header.
+3. Once approved, open **API keys → Create API key**, name it, pick **Sandbox** and its access. Copy the secret straight away: it is shown once. Send it as the `X-API-Key` header.
+
+## Managing keys
+
+API keys lists every active key with its key ID, access, last use and calls over 14 days. From there you can:
+
+- **Edit** a key's name and access: full access (including features added later) or any of Trust & workers, Work history, Guarantees and Scoring settings. A call outside a key's access gets `403 SCOPE_REQUIRED`.
+- **Rotate** its secret: a new secret is shown once and the old one stops working at once; the key ID and access stay.
+- **Revoke** it: it stops working at once and leaves the list.
+
+Each environment allows up to 5 active keys. The environment is fixed when a key is made.
 
 ## Demo workers
 
