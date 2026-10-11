@@ -29,6 +29,8 @@ from app.api.v1.endpoints.jobs import (
     worker_router as my_jobs_router,
 )
 from app.api.v1.endpoints.history import router as history_router
+from app.core.production_http import ProductionProxyMiddleware
+from app.core.production import validate_production_settings
 from app.core.config import get_settings
 from app.db.session import async_session_factory
 from app.services.expiry import sweep_forever
@@ -46,6 +48,7 @@ async def lifespan(_: FastAPI):
     run lifespan, so the loop never starts there.
     """
 
+    validate_production_settings(settings)
     task: asyncio.Task | None = None
     if settings.expiry_sweep_seconds > 0:
         task = asyncio.create_task(
@@ -79,6 +82,7 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware, minimum_size=500)
 install_feature_http(app)
+app.add_middleware(ProductionProxyMiddleware)
 
 app.include_router(health_router, prefix=settings.api_v1_prefix)
 app.include_router(guarantor_router, prefix=settings.api_v1_prefix)

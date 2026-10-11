@@ -1,17 +1,5 @@
+-r requirements-runtime.txt
 aiosqlite==0.21.0
-alembic==1.16.5
-asyncpg==0.30.0
-boto3==1.43.105
-email-validator==2.3.0
-fastapi==0.116.1
-greenlet==3.2.4
-httpx==0.28.1
 hypothesis==6.168.1
-pydantic==2.13.5
-pydantic-settings==2.10.1
 pytest-asyncio==1.1.0
 pytest==8.4.1
-python-multipart==0.0.32
-redis==6.4.0
-sqlalchemy==2.0.43
-uvicorn[standard]==0.35.0

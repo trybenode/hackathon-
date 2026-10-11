@@ -1,0 +1,10 @@
+# Optional separate model environment; do not install into the API environment.
+# Validate versions/model terms with ML before deployment; no weights bundled.
+fastapi>=0.116,<1
+uvicorn>=0.35,<1
+python-multipart>=0.0.32,<1
+transformers>=4.50,<5
+accelerate>=1,<2
+torch>=2.6,<3
+soundfile>=0.13,<1
+numpy>=2,<3

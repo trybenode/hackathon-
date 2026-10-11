@@ -93,10 +93,12 @@ The runtime database is hosted on Neon so the team shares one database environme
 ```bash
 docker compose up -d redis
 ```
+
 ## db upgrade
+
 ```bash
 PYTHONPATH=backend alembic -c alembic.ini upgrade head --sql
-``` 
+```
 
 ## Backend
 
@@ -106,6 +108,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
+docker compose up -d redis
 ```
 
 The API health endpoint is `GET http://localhost:8000/api/v1/health`.
@@ -120,6 +123,47 @@ pnpm dev
 
 The web app is available at `http://localhost:3000`.
 
+http://localhost:3000/worker/profile/record/history
+
+make dev-voice
+
+`make dev`
+
+`docker compose stop redis`
+
 ## Team database workflow
 
 Alembic migrations target the shared Neon database through `DATABASE_URL`. Coordinate migration changes, review them before applying, and never put credentials in source control.
+
+files to revert changes
+
+a summary reference note of changes and why
+
+## Customer history and language pilot
+
+The revisioned history/confirmation journey reuses existing sessions and keeps declarations
+separate from scoring. See [setup and API flows](docs/history_and_language.md),
+[request examples](docs/history_examples.http), [iteration plans](docs/iterations/01-customer-attribution.md)
+and [validation and release gates](docs/history_validation.md). SMS and official-model
+processing require provider configuration; non-English copy awaits native review.
+
+Worker screens now use the shared English/Yoruba/Hausa/Igbo language preference
+(candidate translations; native review pending). Private translated-message
+speech is opt-in and requires a separately configured, validated speech gateway
+and the durable history worker (`make dev-voice`). Setup, route contracts and
+limitations are documented in [history and language](docs/history_and_language.md).
+Check presentation localization with `cd frontend && pnpm test:language`.
+
+Private speech now supports direct Spitch playback as well as the existing custom
+gateway. See the **Direct Spitch playback adapter** section in
+[history and language setup](docs/history_and_language.md) for the API key,
+explicit language-to-voice mapping and development configuration. Speech remains
+disabled by default; candidate voices require native-language review.
+
+## Managed production deployment
+
+See [Railway/Render deployment](docs/production_deployment.md) and
+[Render blueprint](render.yaml). Production images, same-origin cookie proxy,
+configuration guards, dependency/worker readiness and coordinated migration
+commands are included. Optional speech, SMS, identity and payment capabilities
+have separate provider/review gates; the repository is not deployed by these files.

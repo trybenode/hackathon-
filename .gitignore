@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-history-models/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -32,3 +33,4 @@ htmlcov/
 .neon
 backend/local_dev.db
 frontend/public/mediapipe/
+!deploy/production.env.example

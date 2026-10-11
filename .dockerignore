@@ -1,6 +1,22 @@
-.env
+# Keep local credentials, dependencies and user data out of both image build contexts.
 .git
-node_modules
-.next
-.venv
-__pycache__
+.env
+.env.*
+**/.env
+**/.env.*
+**/node_modules
+**/.pnpm-store
+**/.next
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+**/*.log
+**/*.tsbuildinfo
+**/tests
+**/local_dev.db
+.neon
+.aws
+.codex
+.agents
+.DS_Store
