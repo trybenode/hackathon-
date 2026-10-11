@@ -57,7 +57,7 @@ function KeyIdCopy({ keyId }: { keyId: string | null }) {
           // The id stays on screen to select by hand.
         }
       }}
-      className="flex min-w-0 items-center gap-1.5 font-mono text-body-sm text-grey-900 hover:text-primary-500"
+      className="flex max-w-full min-w-0 items-center gap-1.5 font-mono text-xs text-grey-900 hover:text-primary-500"
       aria-label={`Copy key ID ${keyId}`}
     >
       <span className="truncate">{keyId}</span>
@@ -68,12 +68,12 @@ function KeyIdCopy({ keyId }: { keyId: string | null }) {
 
 function Actions({ onEdit, onRotate, onRevoke }: { onEdit: () => void; onRotate: () => void; onRevoke: () => void }) {
   return (
-    <span className="flex flex-wrap items-center gap-4 text-body-sm font-medium">
+    <span className="flex flex-wrap items-center gap-x-4 gap-y-2 text-body-sm font-medium whitespace-nowrap">
       <button type="button" onClick={onEdit} className="text-grey-900 hover:text-primary-500">
         Edit
       </button>
       <button type="button" onClick={onRotate} className="text-grey-900 hover:text-primary-500">
-        Rotate secret
+        Rotate
       </button>
       <button type="button" onClick={onRevoke} className="text-error hover:underline">
         Revoke
@@ -171,12 +171,12 @@ export function ApiKeys() {
             <table className="w-full table-fixed text-left">
               <thead className="bg-grey-50 text-xs text-grey-600">
                 <tr>
-                  <th className="w-[22%] px-5 py-3 font-medium">Name</th>
-                  <th className="w-[22%] px-5 py-3 font-medium">Key ID</th>
-                  <th className="w-[22%] px-5 py-3 font-medium">Access</th>
-                  <th className="w-[11%] px-5 py-3 font-medium">Last used</th>
-                  <th className="w-[8%] px-5 py-3 font-medium">Calls (14d)</th>
-                  <th className="w-[15%] px-5 py-3 font-medium">
+                  <th className="w-[19%] px-4 py-3 font-medium">Name</th>
+                  <th className="w-[24%] px-4 py-3 font-medium">Key ID</th>
+                  <th className="w-[18%] px-4 py-3 font-medium">Access</th>
+                  <th className="w-[11%] px-4 py-3 font-medium">Last used</th>
+                  <th className="w-[8%] px-4 py-3 font-medium whitespace-nowrap">Calls · 14d</th>
+                  <th className="w-[20%] px-4 py-3 font-medium">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
@@ -184,7 +184,7 @@ export function ApiKeys() {
               <tbody>
                 {keys.map((key) => (
                   <tr key={key.id} className="border-t border-stroke align-top">
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-4">
                       <span className="flex flex-col gap-1.5">
                         <span className="truncate text-body-sm font-medium text-grey-900">{key.name}</span>
                         <span className="flex items-center gap-2">
@@ -193,15 +193,15 @@ export function ApiKeys() {
                         </span>
                       </span>
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-4">
                       <KeyIdCopy keyId={key.key_id} />
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-4">
                       <AccessChips groups={groups} scopes={key.scopes} />
                     </td>
-                    <td className="px-5 py-4 text-body-sm text-grey-900">{lastUsed(key)}</td>
-                    <td className="px-5 py-4 text-body-sm text-grey-900">{key.recent_calls}</td>
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-4 text-body-sm text-grey-900">{lastUsed(key)}</td>
+                    <td className="px-4 py-4 text-body-sm text-grey-900">{key.recent_calls}</td>
+                    <td className="px-4 py-4">
                       <Actions
                         onEdit={() => setOpen({ kind: "edit", key })}
                         onRotate={() => setOpen({ kind: "rotate", key })}
