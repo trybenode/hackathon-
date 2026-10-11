@@ -1084,14 +1084,67 @@
         ]
       }
     },
-    "/api/v1/me/developer/credentials": {
+    "/api/v1/me/developer/keys": {
+      "get": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Your active API keys",
+        "description": "Revoked keys are hidden; secrets are never returned here.",
+        "operationId": "list_keys_api_v1_me_developer_keys_get",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      },
       "post": {
         "tags": [
           "developers"
         ],
-        "summary": "Generate API credentials",
+        "summary": "Create an API key",
         "description": "The secret is in this response only; store it before leaving the screen.",
-        "operationId": "generate_credentials_api_v1_me_developer_credentials_post",
+        "operationId": "create_key_api_v1_me_developer_keys_post",
         "parameters": [
           {
             "name": "guarantor_session",
@@ -1115,7 +1168,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CredentialsRequest"
+                "$ref": "#/components/schemas/ApiKeyCreate"
               }
             }
           }
@@ -1126,7 +1179,202 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GeneratedCredentials"
+                  "$ref": "#/components/schemas/ApiKeySecret"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/developer/keys/{key_id}": {
+      "patch": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Rename a key or change its access",
+        "operationId": "update_key_api_v1_me_developer_keys__key_id__patch",
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Key Id"
+            }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiKeyUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Revoke a key",
+        "description": "The key stops working at once and leaves the list. This cannot be undone.",
+        "operationId": "revoke_key_api_v1_me_developer_keys__key_id__delete",
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Key Id"
+            }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/developer/keys/{key_id}/rotate": {
+      "post": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Replace a key's secret",
+        "description": "The old secret stops working at once; the new one is shown only here.",
+        "operationId": "rotate_key_api_v1_me_developer_keys__key_id__rotate_post",
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Key Id"
+            }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeySecret"
                 }
               }
             }
@@ -4667,6 +4915,30 @@
   },
   "components": {
     "schemas": {
+      "AccessGroupView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "description"
+        ],
+        "title": "AccessGroupView"
+      },
       "ActivityItem": {
         "properties": {
           "id": {
@@ -4777,6 +5049,201 @@
             "detail": "Worker approval has expired or been revoked."
           }
         ]
+      },
+      "ApiKeyCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scopes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "environment"
+        ],
+        "title": "ApiKeyCreate"
+      },
+      "ApiKeyList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiKeyView"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "access_groups": {
+            "items": {
+              "$ref": "#/components/schemas/AccessGroupView"
+            },
+            "type": "array",
+            "title": "Access Groups"
+          },
+          "max_active_per_environment": {
+            "type": "integer",
+            "title": "Max Active Per Environment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "access_groups",
+          "max_active_per_environment"
+        ],
+        "title": "ApiKeyList"
+      },
+      "ApiKeySecret": {
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/ApiKeyView"
+          },
+          "secret": {
+            "type": "string",
+            "title": "Secret"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "secret"
+        ],
+        "title": "ApiKeySecret"
+      },
+      "ApiKeyUpdate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scopes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "title": "ApiKeyUpdate"
+      },
+      "ApiKeyView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Id"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scopes"
+          },
+          "can_attest": {
+            "type": "boolean",
+            "title": "Can Attest"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "recent_calls": {
+            "type": "integer",
+            "title": "Recent Calls"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "key_id",
+          "environment",
+          "scopes",
+          "can_attest",
+          "created_at",
+          "last_used_at",
+          "recent_calls"
+        ],
+        "title": "ApiKeyView"
       },
       "Body_complete_liveness_api_v1_guarantor_instruments__instrument_id__liveness_post": {
         "properties": {
@@ -5073,20 +5540,6 @@
           "new_band"
         ],
         "title": "CredentialsImportResponse"
-      },
-      "CredentialsRequest": {
-        "properties": {
-          "environment": {
-            "type": "string",
-            "title": "Environment"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "environment"
-        ],
-        "title": "CredentialsRequest"
       },
       "CustomerJob": {
         "properties": {
@@ -5392,36 +5845,6 @@
           "assessed_at"
         ],
         "title": "EvidenceAssessment"
-      },
-      "GeneratedCredentials": {
-        "properties": {
-          "key_id": {
-            "type": "string",
-            "title": "Key Id"
-          },
-          "secret": {
-            "type": "string",
-            "title": "Secret"
-          },
-          "environment": {
-            "type": "string",
-            "title": "Environment"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "key_id",
-          "secret",
-          "environment",
-          "created_at"
-        ],
-        "title": "GeneratedCredentials"
       },
       "GrantList": {
         "properties": {

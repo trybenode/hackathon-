@@ -67,7 +67,7 @@ async def test_submitting_both_steps_waits_for_review(session: AsyncSession) -> 
     async with client_for(session) as client:
         await sign_up(client)
         dashboard = await verify(client)
-        early = await client.post("/api/v1/me/developer/credentials", json={"environment": "sandbox"})
+        early = await client.post("/api/v1/me/developer/keys", json={"name": "Server", "environment": "sandbox"})
 
     assert (dashboard["kyc_status"], dashboard["kyb_status"]) == ("under_review", "under_review")
     assert early.status_code == 409
@@ -95,7 +95,7 @@ async def test_approved_developer_calls_the_api_with_a_sandbox_key(session: Asyn
         await verify(client)
         await approve(session)
 
-        generated = await client.post("/api/v1/me/developer/credentials", json={"environment": "sandbox"})
+        generated = await client.post("/api/v1/me/developer/keys", json={"name": "Server", "environment": "sandbox"})
         assert generated.status_code == 201, generated.text
         secret = generated.json()["secret"]
 
@@ -109,7 +109,7 @@ async def test_approved_developer_calls_the_api_with_a_sandbox_key(session: Asyn
         dashboard = (await client.get("/api/v1/me/developer")).json()
 
     assert dashboard["kyb_status"] == "approved"
-    assert dashboard["credentials"][0]["key_id"] == generated.json()["key_id"]
+    assert dashboard["credentials"][0]["key_id"] == generated.json()["key"]["key_id"]
     assert (dashboard["usage"]["total_calls"], dashboard["usage"]["successful_calls"]) == (1, 1)
     assert dashboard["usage"]["daily"][-1] == {"day": dashboard["usage"]["daily"][-1]["day"], "total": 1, "successful": 1}
     assert dashboard["recent_activity"][0]["path"] == "/api/v1/platform/worker-links"
@@ -142,4 +142,49 @@ async def test_the_dashboard_is_for_developers(session: AsyncSession) -> None:
 
     assert signed_out.status_code == 401
     assert not_developer.status_code == 404
+    app.dependency_overrides.clear()
+
+
+async def test_managing_an_api_key(session: AsyncSession) -> None:
+    async with client_for(session) as client:
+        await sign_up(client)
+        await verify(client)
+        await approve(session)
+
+        created = await client.post(
+            "/api/v1/me/developer/keys", json={"name": "Checkout", "environment": "sandbox", "scopes": ["history"]}
+        )
+        assert created.status_code == 201, created.text
+        key, secret = created.json()["key"], created.json()["secret"]
+        assert (key["name"], key["scopes"], key["environment"]) == ("Checkout", ["history"], "sandbox")
+
+        listed = (await client.get("/api/v1/me/developer/keys")).json()
+        assert [item["id"] for item in listed["items"]] == [key["id"]]
+        assert "secret" not in listed["items"][0]
+        assert [group["id"] for group in listed["access_groups"]] == ["trust", "history", "guarantees", "scoring"]
+        assert listed["max_active_per_environment"] == 5
+
+        # History only: linking a worker is Trust & workers access.
+        link = {"external_worker_id": "user-1", "consent_token": sandbox.DEMO_WORKERS[0].consent_token}
+        refused = await client.post("/api/v1/platform/worker-links", headers={"X-API-Key": secret}, json=link)
+        assert refused.json()["code"] == "SCOPE_REQUIRED"
+
+        widened = await client.patch(f"/api/v1/me/developer/keys/{key['id']}", json={"name": "Checkout", "scopes": None})
+        assert widened.json()["scopes"] is None
+        allowed = await client.post("/api/v1/platform/worker-links", headers={"X-API-Key": secret}, json=link)
+        assert allowed.status_code == 201
+
+        rotated = await client.post(f"/api/v1/me/developer/keys/{key['id']}/rotate")
+        new_secret = rotated.json()["secret"]
+        assert rotated.json()["key"]["key_id"] == key["key_id"]
+        old = await client.get("/api/v1/platform/scoring-config", headers={"X-API-Key": secret})
+        new = await client.get("/api/v1/platform/scoring-config", headers={"X-API-Key": new_secret})
+        assert (old.status_code, new.status_code) == (401, 200)
+
+        revoked = await client.delete(f"/api/v1/me/developer/keys/{key['id']}")
+        assert revoked.status_code == 204
+        assert (await client.get("/api/v1/me/developer/keys")).json()["items"] == []
+        gone = await client.get("/api/v1/platform/scoring-config", headers={"X-API-Key": new_secret})
+        assert gone.status_code == 401
+
     app.dependency_overrides.clear()

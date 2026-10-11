@@ -5,11 +5,14 @@ Used by: the developer screens (dashboard, KYB steps, credentials, profile).
 """
 
 from datetime import date, datetime
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import current_user
+from app.core.platform_auth import SCOPES
 from app.db.session import get_db_session
 from app.models.domain import User
 from app.schemas.api import ApiModel
@@ -86,24 +89,86 @@ class DeveloperDashboard(ApiModel):
     sandbox_workers: list[SandboxWorkerView]
 
 
-class CredentialsRequest(ApiModel):
+#: What each access group lets a key do, for the key screens.
+ACCESS_DESCRIPTIONS = {
+    "trust": "Link workers with their consent and ask for trust assessments.",
+    "history": "Read a linked worker's work history and import your own records.",
+    "guarantees": "View a worker's guarantees and ask for, trigger or revoke your own.",
+    "scoring": "Read and change how your platform's trust scores are calculated.",
+}
+
+
+class AccessGroupView(ApiModel):
+    id: str
+    label: str
+    description: str
+
+
+class ApiKeyView(ApiModel):
+    id: UUID
+    name: str
+    #: Public; safe to show and copy. The secret is never shown again.
+    key_id: str | None
+    #: "sandbox" or "production"; fixed when the key is made.
     environment: str
+    #: The groups this key may use; null is full access, future features included.
+    scopes: list[str] | None
+    #: Operator-approved: imported records count as verified.
+    can_attest: bool
+    created_at: datetime
+    last_used_at: datetime | None
+    #: Calls over the last 14 days.
+    recent_calls: int
 
 
-class GeneratedCredentials(ApiModel):
-    key_id: str
+class ApiKeyList(ApiModel):
+    items: list[ApiKeyView]
+    access_groups: list[AccessGroupView]
+    #: Active keys allowed per environment.
+    max_active_per_environment: int
+
+
+class ApiKeyCreate(ApiModel):
+    name: str = Field(min_length=1, max_length=80)
+    environment: str
+    #: Omit or null for full access.
+    scopes: list[str] | None = None
+
+
+class ApiKeyUpdate(ApiModel):
+    name: str = Field(min_length=1, max_length=80)
+    #: Null for full access.
+    scopes: list[str] | None
+
+
+class ApiKeySecret(ApiModel):
+    key: ApiKeyView
     #: Shown once; send it as X-API-Key.
     secret: str
-    environment: str
-    created_at: datetime
 
 
 def _http_error(error: service.DeveloperError) -> HTTPException:
     if isinstance(error, service.NotADeveloperError):
         return HTTPException(status_code=404, detail=str(error))
-    if isinstance(error, service.StepOutOfOrderError):
+    if isinstance(error, service.KeyNotFoundError):
+        return HTTPException(status_code=404, detail=str(error))
+    if isinstance(error, (service.StepOutOfOrderError, service.LimitReachedError)):
         return HTTPException(status_code=409, detail=str(error))
     return HTTPException(status_code=422, detail=str(error))
+
+
+def _key_view(key, calls: dict) -> ApiKeyView:
+    return ApiKeyView(
+        id=key.id,
+        name=key.name or "API key",
+        key_id=key.key_id,
+        environment=key.environment,
+        scopes=key.scopes,
+        can_attest=key.can_attest,
+        created_at=key.created_at,
+        last_used_at=key.last_used_at,
+        recent_calls=calls.get(key.id, 0),
+    )
 
 
 async def _read(upload: UploadFile) -> tuple[str, bytes]:
@@ -220,19 +285,84 @@ async def submit_business(
     return await _dashboard(session, user)
 
 
-@router.post(
-    "/credentials", response_model=GeneratedCredentials, status_code=201, summary="Generate API credentials"
-)
-async def generate_credentials(
-    payload: CredentialsRequest,
+@router.get("/keys", response_model=ApiKeyList, summary="Your active API keys")
+async def list_keys(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_db_session),
-) -> GeneratedCredentials:
+) -> ApiKeyList:
+    """Revoked keys are hidden; secrets are never returned here."""
+
+    async def build() -> ApiKeyList:
+        account = await service.account_for(session, user)
+        calls = await service.calls_per_key(session, account)
+        return ApiKeyList(
+            items=[_key_view(key, calls) for key in await service.credentials(session, account)],
+            access_groups=[
+                AccessGroupView(id=group, label=label, description=ACCESS_DESCRIPTIONS[group])
+                for group, label in SCOPES.items()
+            ],
+            max_active_per_environment=service.MAX_ACTIVE_KEYS,
+        )
+
+    return await _guarded(session, build)
+
+
+@router.post("/keys", response_model=ApiKeySecret, status_code=201, summary="Create an API key")
+async def create_key(
+    payload: ApiKeyCreate,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> ApiKeySecret:
     """The secret is in this response only; store it before leaving the screen."""
 
-    key, secret = await _guarded(session, lambda: service.generate_credentials(session, user, payload.environment))
+    key, secret = await _guarded(
+        session,
+        lambda: service.create_key(
+            session, user, environment=payload.environment, name=payload.name, scopes=payload.scopes
+        ),
+    )
     await session.commit()
-    return GeneratedCredentials(key_id=key.key_id, secret=secret, environment=key.environment, created_at=key.created_at)
+    return ApiKeySecret(key=_key_view(key, {}), secret=secret)
+
+
+@router.patch("/keys/{key_id}", response_model=ApiKeyView, summary="Rename a key or change its access")
+async def update_key(
+    key_id: UUID,
+    payload: ApiKeyUpdate,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> ApiKeyView:
+    key = await _guarded(
+        session, lambda: service.update_key(session, user, key_id, name=payload.name, scopes=payload.scopes)
+    )
+    await session.commit()
+    return _key_view(key, {})
+
+
+@router.post("/keys/{key_id}/rotate", response_model=ApiKeySecret, summary="Replace a key's secret")
+async def rotate_key(
+    key_id: UUID,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> ApiKeySecret:
+    """The old secret stops working at once; the new one is shown only here."""
+
+    key, secret = await _guarded(session, lambda: service.rotate_key(session, user, key_id))
+    await session.commit()
+    return ApiKeySecret(key=_key_view(key, {}), secret=secret)
+
+
+@router.delete("/keys/{key_id}", status_code=204, summary="Revoke a key")
+async def revoke_key(
+    key_id: UUID,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> Response:
+    """The key stops working at once and leaves the list. This cannot be undone."""
+
+    await _guarded(session, lambda: service.revoke_key(session, user, key_id))
+    await session.commit()
+    return Response(status_code=204)
 
 
 @router.post("/name-change", response_model=DeveloperDashboard, summary="Ask to change the verified name")
