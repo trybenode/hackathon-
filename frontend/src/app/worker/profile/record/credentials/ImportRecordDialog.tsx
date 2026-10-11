@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import { useState } from "react";
 import { WorkerDialog } from "@/components/worker/WorkerDialog";
@@ -21,11 +22,13 @@ export function ImportRecordDialog({
   onClose: () => void;
   onImported: () => Promise<void> | void;
 }) {
+  const { w } = useWorkerCopy();
+
   const [file, setFile] = useState<File | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const [done, setDone] = useState<{ count: number } | null>(null);
 
   function close() {
     setFile(null);
@@ -52,13 +55,7 @@ export function ImportRecordDialog({
       }
       // The server skips outcomes already on the record, so a re-import adds none.
       const result = await importCredentials(workerId, token);
-      setDone(
-        result.imported_outcomes === 0
-          ? "Nothing new to add: every outcome in that record is already on your profile."
-          : result.imported_outcomes === 1
-            ? "1 verified outcome was added to your record."
-            : `${result.imported_outcomes} verified outcomes were added to your record.`,
-      );
+      setDone({ count: result.imported_outcomes });
       await onImported();
     } catch (cause) {
       setError(errorMessage(cause));
@@ -68,25 +65,24 @@ export function ImportRecordDialog({
   }
 
   return (
-    <WorkerDialog open={open} onClose={close} label="Import Record">
+    <WorkerDialog open={open} onClose={close} label={w("Import Record")}>
       <div className="flex flex-col gap-5">
-        <h2 className="text-body-md font-semibold text-grey-900">Import Record</h2>
+        <h2 className="text-body-md font-semibold text-grey-900">{w("Import Record")}</h2>
 
         {done ? (
           <>
             <p role="status" className="text-body-sm text-grey-900">
-              {done}
+              {done.count === 0 ? w("Nothing new to add: every outcome in that record is already on your profile.") : `${done.count} ${w("verified outcomes were added to your record.")}`}
             </p>
             <Button size="lg" className="w-[calc(50%-0.5rem)] rounded-xl px-0" onClick={close}>
-              Done
-            </Button>
+              {w("Done")}</Button>
           </>
         ) : (
           <>
             <FileDropzone
-              title="Choose a file or drag & drop it here."
-              hint="Your exported portable record (.json)."
-              buttonLabel="Browse File"
+              title={w("Choose a file or drag & drop it here.")}
+              hint={w("Your exported portable record (.json).")}
+              buttonLabel={w("Browse File")}
               accept="application/json,.json"
               onFiles={(files) => setFile(files[0] ?? null)}
             />
@@ -105,24 +101,22 @@ export function ImportRecordDialog({
               onChange={setAgreed}
               label={
                 <span className="text-body-sm text-grey-900">
-                  I agree to the guarantee{" "}
+                  {w("I agree to the guarantee")}{" "}
                   <a href="/terms" className="text-primary-400">
-                    terms and conditions
-                  </a>
+                    {w("terms and conditions")}</a>
                 </span>
               }
             />
 
             {error && (
               <p role="alert" className="text-body-sm text-error">
-                {error}
+                {w(error)}
               </p>
             )}
 
             <div className="flex gap-4">
               <Button variant="outline" size="lg" fullWidth className="min-w-0 rounded-xl px-0" onClick={close}>
-                Cancel
-              </Button>
+                {w("Cancel")}</Button>
               <Button
                 size="lg"
                 fullWidth
@@ -130,7 +124,7 @@ export function ImportRecordDialog({
                 disabled={!file || !agreed || busy}
                 onClick={submit}
               >
-                {busy ? "Importing…" : "Submit"}
+                {busy ? w("Importing…") : w("Submit")}
               </Button>
             </div>
           </>

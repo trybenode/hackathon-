@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -70,6 +71,8 @@ function CredentialCard({
  * guarantor, and work history imported from elsewhere.
  */
 export function CredentialList() {
+  const { w } = useWorkerCopy();
+
   const router = useRouter();
   const { data, error, loading, refresh } = useWorkerRecord();
   const [importOpen, setImportOpen] = useState(false);
@@ -77,14 +80,14 @@ export function CredentialList() {
   return (
     <main className="flex flex-col">
       <header className="flex items-center gap-3 border-b border-stroke px-6 pt-8 pb-5">
-        <button type="button" aria-label="Back" onClick={() => router.back()} className="text-grey-900">
+        <button type="button" aria-label={w("Back")} onClick={() => router.back()} className="text-grey-900">
           <ArrowLeftIcon />
         </button>
-        <h1 className="text-body-lg font-semibold text-grey-900">Verified Credentials</h1>
+        <h1 className="text-body-lg font-semibold text-grey-900">{w("Verified Credentials")}</h1>
       </header>
 
-      <RecordGate loading={loading} error={error} onRetry={refresh} hasData={!!data}>
-        {data && <><CredentialCards credentials={data.credentials} onImport={() => setImportOpen(true)} />{data.self_declared_outcomes > 0 && <p className="px-6 py-4 text-body-sm">{data.self_declared_outcomes} self-declared records are listed separately in your work history.</p>}</>}
+      <RecordGate loading={loading} error={error ? error : null} onRetry={refresh} hasData={!!data}>
+        {data && <><CredentialCards credentials={data.credentials} onImport={() => setImportOpen(true)} />{data.self_declared_outcomes > 0 && <p className="px-6 py-4 text-body-sm">{data.self_declared_outcomes} {w("self-declared records are listed separately in your work history.")}</p>}</>}
       </RecordGate>
       {data && <ImportRecordDialog workerId={data.worker_id} open={importOpen} onClose={() => setImportOpen(false)} onImported={refresh} />}
     </main>
@@ -92,6 +95,8 @@ export function CredentialList() {
 }
 
 function CredentialCards({ credentials, onImport }: { credentials: Credentials; onImport: () => void }) {
+  const { w, language } = useWorkerCopy();
+
   const [guarantorOpen, setGuarantorOpen] = useState(false);
   const { identity, guarantor, imported_record: importedRecord } = credentials;
   const none = !identity && !guarantor && !importedRecord;
@@ -100,47 +105,47 @@ function CredentialCards({ credentials, onImport }: { credentials: Credentials; 
     <>
 
       <div className="flex flex-col gap-8 px-6 pt-10">
-        {none && <p className="text-body-sm text-grey-600">No verified credentials yet.</p>}
+        {none && <p className="text-body-sm text-grey-600">{w("No verified credentials yet.")}</p>}
 
         {identity && (
           <CredentialCard
-            title="Identity Verification"
+            title={w("Identity Verification")}
             verified={identity.status === "verified"}
-            label={identity.status === "sandbox" ? "Sandbox · demo" : "Not verified"}
+            label={identity.status === "sandbox" ? w("Sandbox · demo") : w("Not verified")}
             checks={
               <>
-                <li className="text-body-sm">{identity.status === "sandbox" ? "Successful sandbox check" : identity.status === "verified" ? "Identity provider check passed" : "Latest identity check did not verify identity"}</li>
-                {identity.nin_verified && <Check>NIN verified</Check>}
-                {identity.bvn_verified && <Check>BVN verified</Check>}
+                <li className="text-body-sm">{identity.status === "sandbox" ? w("Successful sandbox check") : identity.status === "verified" ? w("Identity provider check passed") : w("Latest identity check did not verify identity")}</li>
+                {identity.nin_verified && <Check>{w("NIN verified")}</Check>}
+                {identity.bvn_verified && <Check>{w("BVN verified")}</Check>}
               </>
             }
-            footer={`Checked - ${formatShortDate(identity.verified_at)}`}
+            footer={`Checked - ${formatShortDate(identity.verified_at, language)}`}
           />
         )}
 
         {guarantor && (
           <CredentialCard
-            title="Guarantor Agreement"
+            title={w("Guarantor Agreement")}
             verified={guarantor.verified && guarantor.status === "Active"}
-            label={guarantor.sandbox ? "Sandbox · demo" : guarantor.status}
+            label={guarantor.sandbox ? w("Sandbox · demo") : guarantor.status}
             checks={
               <>
-                <Check>Guarantor linked</Check>
-                {!guarantor.verified && !guarantor.sandbox && <li className="text-body-sm text-grey-600">Identity/liveness evidence is not verified</li>}
+                <Check>{w("Guarantor linked")}</Check>
+                {!guarantor.verified && !guarantor.sandbox && <li className="text-body-sm text-grey-600">{w("Identity/liveness evidence is not verified")}</li>}
                 {guarantor.status === "Active" ? (
-                  <Check>Agreement active</Check>
+                  <Check>{w("Agreement active")}</Check>
                 ) : (
                   <li className="flex items-center gap-2 text-body-sm text-grey-900">
                     <ClockIcon className="shrink-0 text-grey-600" />
-                    Agreement {guarantor.status.toLowerCase()}
+                    {w("Agreement")}{guarantor.status.toLowerCase()}
                   </li>
                 )}
               </>
             }
             footer={
               guarantor.status === "Active"
-                ? `Activated - ${formatShortDate(guarantor.activated_at)}`
-                : `${guarantor.status} · Term ends ${formatShortDate(guarantor.valid_until)}`
+                ? `Activated - ${formatShortDate(guarantor.activated_at, language)}`
+                : `${guarantor.status} · Term ends ${formatShortDate(guarantor.valid_until, language)}`
             }
             onOpen={() => setGuarantorOpen(true)}
           />
@@ -148,9 +153,9 @@ function CredentialCards({ credentials, onImport }: { credentials: Credentials; 
 
         {importedRecord && (
           <CredentialCard
-            title="Imported Work Record"
+            title={w("Imported Work Record")}
             verified={true}
-            checks={<Check>{importedRecord.verified_outcomes} verified outcomes</Check>}
+            checks={<Check>{importedRecord.verified_outcomes} {w("verified outcomes")}</Check>}
             footer={`Updated - ${formatRelative(importedRecord.updated_at)}`}
           />
         )}
@@ -161,8 +166,7 @@ function CredentialCards({ credentials, onImport }: { credentials: Credentials; 
           size="lg"
           className="mt-4 mb-4 w-46 self-center rounded-xl px-0 text-body-md font-semibold"
         >
-          Import record
-        </Button>
+          {w("Import record")}</Button>
       </div>
 
       {guarantor && (
