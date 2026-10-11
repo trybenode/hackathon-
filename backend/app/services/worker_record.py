@@ -143,6 +143,31 @@ async def completion_labels(session: AsyncSession, rows: list[NormalizedOutcome]
     return {row.id: ("Client Confirmed" if row.job_id in confirmed else "Released" if row.job_id in jobs and jobs[row.job_id].status == JobStatus.RELEASED else "Completion unconfirmed" if row.job_id in jobs else "Recorded work" if row.verified else "Self-declared record") for row in rows}
 
 
+async def _record_outcomes(session: AsyncSession, rows: list[NormalizedOutcome]) -> list[RecordOutcome]:
+    """Completed outcomes as the record lists them: the job, where, who, rating and dispute."""
+    if not rows:
+        return []
+    jobs = {job.id: job for job in (await session.scalars(select(Job).where(Job.id.in_({item.job_id for item in rows if item.job_id})))).all()}
+    labels = await completion_labels(session, rows)
+    return [RecordOutcome(row.id, jobs[row.job_id].title if row.job_id in jobs else "Recorded job", _as_aware(row.occurred_at), row.amount if row.amount is not None else jobs[row.job_id].agreed_amount if row.job_id in jobs else None, labels[row.id],
+        location=jobs[row.job_id].location if row.job_id in jobs else None,
+        client_name=jobs[row.job_id].client_name if row.job_id in jobs else None,
+        rating=float(row.rating) if row.rating is not None else None,
+        dispute=row.dispute_resolution if row.dispute_resolution in ("dismissed", "upheld") else "none",
+        source=row.source_platform) for row in rows]
+
+
+async def completed_outcomes(session: AsyncSession, user: User, *, page: int = 1, size: int = PREVIEW_SIZE) -> tuple[list[RecordOutcome], int]:
+    """Every completed verified outcome, a page at a time; the record shows only the first page."""
+    worker = await session.scalar(select(Worker).where(Worker.user_id == user.id))
+    if worker is None or not user.is_active:
+        raise NotAWorkerError("This account has no active worker profile.")
+    rows = list((await session.scalars(select(NormalizedOutcome).where(NormalizedOutcome.worker_id == worker.id, NormalizedOutcome.verified.is_(True)).order_by(NormalizedOutcome.occurred_at.desc(), NormalizedOutcome.id))).all())
+    inputs = await scoring_inputs(session, rows)
+    completed = [row for row, evidence in zip(rows, inputs, strict=True) if row.status == OutcomeStatus.COMPLETED and "completion_rate" in evidence["available_signals"]]
+    return await _record_outcomes(session, completed[(page - 1) * size : page * size]), len(completed)
+
+
 async def load_record(session: AsyncSession, user: User, *, include_history: bool = True, include_starting_history: bool = True) -> WorkerRecord:
     """Build shared evidence semantics; public callers skip private history work."""
     worker = await session.scalar(select(Worker).where(Worker.user_id == user.id).with_for_update())
@@ -158,14 +183,7 @@ async def load_record(session: AsyncSession, user: User, *, include_history: boo
     known_clients = [item["client_id"] for item in inputs if item["client_id"]]
     known_disputes = [item for item in inputs if "dispute_rate" in item["available_signals"]]
     preview = completed[:PREVIEW_SIZE] if include_history else []
-    jobs = {job.id: job for job in (await session.scalars(select(Job).where(Job.id.in_({item.job_id for item in preview if item.job_id})))).all()} if preview else {}
-    labels = await completion_labels(session, preview)
-    history = [RecordOutcome(row.id, jobs[row.job_id].title if row.job_id in jobs else "Recorded job", _as_aware(row.occurred_at), row.amount if row.amount is not None else jobs[row.job_id].agreed_amount if row.job_id in jobs else None, labels[row.id],
-        location=jobs[row.job_id].location if row.job_id in jobs else None,
-        client_name=jobs[row.job_id].client_name if row.job_id in jobs else None,
-        rating=float(row.rating) if row.rating is not None else None,
-        dispute=row.dispute_resolution if row.dispute_resolution in ("dismissed", "upheld") else "none",
-        source=row.source_platform) for row in preview]
+    history = await _record_outcomes(session, preview)
     imported_count, imported_at = (await session.execute(select(func.count(NormalizedOutcome.id), func.max(NormalizedOutcome.created_at)).where(NormalizedOutcome.worker_id == worker.id, NormalizedOutcome.verified.is_(True), NormalizedOutcome.import_method != "native"))).one()
     initial = None
     if include_starting_history and total > len(rows):
