@@ -34,7 +34,7 @@ await new Promise(resolve => reservation.listen(0, "127.0.0.1", resolve));
 const webPort = reservation.address().port;
 await new Promise(resolve => reservation.close(resolve));
 let logs = "";
-const child = spawn(process.execPath, [serverFile.pathname], { env: { ...process.env, HOSTNAME: "127.0.0.1", PORT: String(webPort), API_PROXY_ORIGIN: `http://127.0.0.1:${apiPort}`, INTERNAL_PROXY_SECRET: secret, PROXY_TRUSTED_HOPS: "1" }, stdio: ["ignore", "pipe", "pipe"] });
+const child = spawn(process.execPath, [serverFile.pathname], { env: { ...process.env, HOSTNAME: "127.0.0.1", PORT: String(webPort), BACKEND_URL: `http://127.0.0.1:${apiPort}`, API_PROXY_ORIGIN: "http://127.0.0.1:1", INTERNAL_PROXY_SECRET: secret, PROXY_TRUSTED_HOPS: "1" }, stdio: ["ignore", "pipe", "pipe"] });
 child.stdout.on("data", data => { logs += data.toString(); });
 child.stderr.on("data", data => { logs += data.toString(); });
 const origin = `http://127.0.0.1:${webPort}`;

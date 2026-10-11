@@ -104,7 +104,7 @@ PYTHONPATH=backend alembic -c alembic.ini upgrade head --sql
 ## Backend
 
 Current demo hosting: see [Vercel deployment](docs/vercel_deployment.md) for the
-two-project setup, Neon/Upstash settings and serverless feature boundaries.
+single-project services setup, Neon/Upstash settings and serverless feature boundaries.
 
 ```bash
 cd backend

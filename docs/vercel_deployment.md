@@ -1,17 +1,23 @@
 # Vercel demo deployment
 
-Deploy **two projects from the same repository**, with Neon PostgreSQL and
+Deploy **one project with backend and frontend services**, with Neon PostgreSQL and
 Upstash Redis. This replaces Render for the current demo; container configs
 remain available. Vercel Hobby is for personal, non-commercial use; commercial
 launch, reliable continuous processing and full voice need a separate plan.
 
 ## 1. Reserve projects and configure data stores
 
-Create `trust-api` with Root Directory **backend**, Framework **FastAPI**, and
-`trust-web` with Root Directory **frontend**, Framework **Next.js**. Do not deploy
-the repository root as a single project or use the Docker startup command.
-Backend uses Python 3.12; select Node.js 24.x for the frontend. Use their actual
-allocated production domains below, not example names.
+Import the repository with Root Directory **repository root**. The root
+`vercel.json` builds `backend` (FastAPI, Python 3.12) and `frontend` (Next.js,
+Node.js 24.x) independently. Per-directory configs remain standalone fallbacks.
+Do not use the Docker startup command. Services are currently beta.
+
+Public traffic goes to frontend, including `/api/v1`, where the existing proxy
+preserves cookies and trusted headers. Backend remains internal. Frontend has a
+`BACKEND_URL` binding to backend; Vercel injects it into runtime functions. Do not
+set that variable manually or use it in builds or middleware. Public SSR and
+readiness use the same resolver. Confirm names, visibility and binding before
+release; no direct backend public rewrite is configured.
 
 Use an isolated Neon database for the demo. Copy its pooled URL for `DATABASE_URL`
 and direct/unpooled URL for `MIGRATION_DATABASE_URL`. Create an Upstash free Redis
@@ -23,15 +29,15 @@ External provider/account verification and free quotas remain provider policies.
 
 Backend: use [vercel.backend.env.example](../deploy/vercel.backend.env.example).
 Frontend: use [vercel.frontend.env.example](../deploy/vercel.frontend.env.example).
-Enter values into each project's Settings → Environment Variables.
+Enter both sets into the single project's Settings → Environment Variables.
 
 Generate separate signing/proxy secrets with `openssl rand -hex 32`. The proxy
-secret must match in both projects; keep the credential signing secret stable
-and backend-only. Configure a real Resend key and verified sender for sign-in.
+secret is configured once in the shared project; keep the credential signing
+secret stable. Project environment variables are shared across services. Configure a real Resend key and verified sender for sign-in.
 Never enter secrets as `NEXT_PUBLIC_*` variables.
 
-Backend `FRONTEND_BASE_URL` and `CORS_ORIGINS` are the frontend's exact HTTPS origin.
-Frontend `API_PROXY_ORIGIN` is the backend's HTTPS origin, without `/api/v1`.
+`FRONTEND_BASE_URL` and `CORS_ORIGINS` are the single project's exact HTTPS origin.
+Remove manual `API_PROXY_ORIGIN` and `API_INTERNAL_BASE_URL` overrides for this profile.
 Set `NEXT_PUBLIC_API_BASE_URL=/api/v1` at build time. Enable Corepack with
 `ENABLE_EXPERIMENTAL_COREPACK=1` so the frontend uses its pinned pnpm version.
 Keep the normal `pnpm build` command. No rewrites bypassing our API proxy are needed.
@@ -66,16 +72,14 @@ schema-changing releases. No deployed function needs migration permissions.
 
 ## 4. Deploy and check
 
-Deploy the backend, then frontend. Backend `/api/v1/health/ready` should return
+Deploy the project from repository root. Public `/api/v1/health/ready` should return
 `{"status":"ready"}`; frontend `/health` checks that backend too. Exercise email
 sign-in, canonical worker record, JSON credential import/export, share/revoke
 and authorized text history. Ineligible protected reviews must remain blocked.
 Check cookie paths, same-origin POSTs, retry receipts and public-field exclusion.
 
-Backend deployment protection can block the frontend's server-to-server calls.
-For this intentionally public demo API, check project protection settings. Do
-not disable protection on unrelated private projects. Keep application-level
-authentication/API keys; never expose a protection bypass token in browser code.
+Deployment protection applies to the shared public surface. Internal backend calls
+use the binding. Keep existing application authentication and API keys.
 Use stable production domains. Configure separate database/settings for Preview
 if enabled; do not allow every `*.vercel.app` origin or point previews at valued
 production data. Environment edits require redeployment; public build variables
@@ -105,3 +109,14 @@ Sources: [FastAPI on Vercel](https://vercel.com/docs/frameworks/backend/fastapi)
 [Python runtime](https://vercel.com/docs/functions/runtimes/python),
 [package managers](https://vercel.com/docs/package-managers),
 [Hobby restrictions](https://vercel.com/docs/plans/hobby).
+
+## Local services verification
+
+Run `vercel dev -L` from repository root (or `vercel dev` with a linked account).
+Bindings are injected automatically. Supply disposable local database/Redis and
+existing development provider settings; do not use production data. Verify
+`/health`, `/api/v1/health/ready`, sign-in and worker/share flows. Local checks
+cannot establish cloud routing or successful Vercel builds.
+
+See [Services](https://vercel.com/docs/services) and
+[bindings](https://vercel.com/docs/services/bindings).

@@ -17,7 +17,7 @@ export default async function VerificationPage({ params }: { params: Promise<{ t
   if (!/^[A-Za-z0-9_-]{32,128}$/.test(token)) message = "This verification link is invalid.";
   else {
     try {
-      const response = await fetch(`${process.env.API_INTERNAL_BASE_URL ?? (getApiProxyOrigin() ? `${getApiProxyOrigin()}/api/v1` : apiBaseUrl)}/verification/${encodeURIComponent(token)}`, { cache: "no-store", signal: AbortSignal.timeout(8000) });
+      const response = await fetch(`${(getApiProxyOrigin() ? `${getApiProxyOrigin()}/api/v1` : process.env.API_INTERNAL_BASE_URL ?? apiBaseUrl)}/verification/${encodeURIComponent(token)}`, { cache: "no-store", signal: AbortSignal.timeout(8000) });
       if (response.ok) record = await response.json() as VerificationSummary;
       else if (response.status === 410) message = "This verification link has expired or been revoked. Ask the worker for a new link.";
       else if (response.status === 404) message = "This verification link is invalid. Check the link with the worker.";
