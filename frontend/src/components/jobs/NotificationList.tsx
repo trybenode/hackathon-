@@ -1,3 +1,5 @@
+"use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 import Link from "next/link";
 import { CheckIcon, WarningTriangleIcon } from "@/components/ui";
 import { ChevronRightIcon } from "@/components/worker/recordIcons";
@@ -16,6 +18,8 @@ export type JobNotification = {
 const RECENT_MS = 24 * 60 * 60 * 1000;
 
 function Card({ item, href }: { item: JobNotification; href: string }) {
+  const { w, language } = useWorkerCopy(true);
+
   return (
     <article className="flex flex-col gap-3 rounded-xl border border-stroke bg-white p-4">
       <div className="flex items-start gap-4">
@@ -24,15 +28,14 @@ function Card({ item, href }: { item: JobNotification; href: string }) {
         </span>
         <div className="flex flex-1 flex-col gap-1">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="text-body-md font-medium text-grey-900">{item.title}</h3>
-            <span className="shrink-0 text-xs leading-5 text-grey-600">{formatRelative(item.at)}</span>
+            <h3 className="text-body-md font-medium text-grey-900">{w(item.title)}</h3>
+            <span className="shrink-0 text-xs leading-5 text-grey-600">{language === "en" ? formatRelative(item.at) : new Intl.DateTimeFormat(`${language}-NG`, { day:"numeric", month:"short", hour:"numeric", minute:"2-digit", timeZone:"Africa/Lagos" }).format(new Date(item.at))}</span>
           </div>
-          <p className="text-body-sm text-grey-600">{item.body}</p>
+          <p className="text-body-sm text-grey-600">{w(item.body)}</p>
         </div>
       </div>
       <Link href={href} className="flex items-center gap-1 self-end text-body-sm font-medium text-grey-900">
-        View
-        <ChevronRightIcon width={18} height={18} />
+        {w("View")}<ChevronRightIcon width={18} height={18} />
       </Link>
     </article>
   );
@@ -49,8 +52,10 @@ export function NotificationList({
   /** When the list was loaded, so render stays pure. */
   now: number;
 }) {
+  const { w } = useWorkerCopy(true);
+
   if (items.length === 0) {
-    return <p className="text-body-sm text-grey-600">No notifications yet.</p>;
+    return <p className="text-body-sm text-grey-600">{w("No notifications yet.")}</p>;
   }
 
   const recent = items.filter((item) => now - new Date(item.at).getTime() < RECENT_MS);
@@ -64,7 +69,7 @@ export function NotificationList({
       ].map(([label, group]) =>
         (group as JobNotification[]).length ? (
           <section key={label as string} className="flex flex-col gap-3">
-            <h2 className="text-body-md text-grey-900">{label as string}</h2>
+            <h2 className="text-body-md text-grey-900">{w(label as string)}</h2>
             {(group as JobNotification[]).map((item) => (
               <Card key={item.id} item={item} href={hrefFor(item)} />
             ))}

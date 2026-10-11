@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import { useRef, type ClipboardEvent, type KeyboardEvent } from "react";
 import { cn } from "@/lib/cn";
@@ -19,6 +20,8 @@ export function EscrowCodeInput({
   onChange: (value: string) => void;
   disabled?: boolean;
 }) {
+  const { w } = useWorkerCopy(true);
+
   const boxes = useRef<(HTMLInputElement | null)[]>([]);
   const chars = Array.from({ length: ESCROW_CODE_LENGTH }, (_, index) => value[index] ?? "");
 
@@ -50,7 +53,7 @@ export function EscrowCodeInput({
   }
 
   return (
-    <div className="flex items-center justify-between gap-1" role="group" aria-label="Escrow code">
+    <div className="flex items-center justify-between gap-1" role="group" aria-label={w("Escrow code")}>
       {chars.map((char, index) => (
         <span key={index} className="contents">
           {index === ESCROW_CODE_LENGTH / 2 && (

@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import { Timeline, type TimelineStep } from "@/components/worker/Timeline";
 import { WorkerDialog } from "@/components/worker/WorkerDialog";
@@ -51,28 +52,29 @@ export function DisputeDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const { w } = useWorkerCopy(true);
+
   return (
-    <WorkerDialog open={open} onClose={onClose} label="Dispute">
+    <WorkerDialog open={open} onClose={onClose} label={w("Dispute")}>
       <div className="flex flex-col gap-5">
-        <h2 className="text-body-md font-semibold text-grey-900">Dispute</h2>
+        <h2 className="text-body-md font-semibold text-grey-900">{w("Dispute")}</h2>
 
         <dl className="flex flex-col rounded-lg border border-stroke">
           <div className="flex items-center justify-between gap-3 border-b border-stroke px-3 py-4">
-            <dt className="text-body-sm text-grey-600">Dispute raised</dt>
+            <dt className="text-body-sm text-grey-600">{w("Dispute raised")}</dt>
             <dd className="text-right text-body-sm text-grey-900">{dispute.reason}</dd>
           </div>
           <div className="flex items-center justify-between gap-3 px-3 py-4">
-            <dt className="text-body-sm text-grey-600">Record by</dt>
+            <dt className="text-body-sm text-grey-600">{w("Record by")}</dt>
             <dd className="text-body-sm text-grey-900">{RAISED_BY[dispute.raised_by] ?? dispute.raised_by}</dd>
           </div>
         </dl>
 
-        <h3 className="text-body-md font-semibold text-grey-900">Dispute Progress</h3>
+        <h3 className="text-body-md font-semibold text-grey-900">{w("Dispute Progress")}</h3>
         <Timeline steps={disputeSteps(dispute)} />
 
         <Button variant="outline" size="lg" className="w-[calc(50%-0.5rem)] rounded-xl px-0" onClick={onClose}>
-          Cancel
-        </Button>
+          {w("Cancel")}</Button>
       </div>
     </WorkerDialog>
   );

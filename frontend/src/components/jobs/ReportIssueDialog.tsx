@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import { useState } from "react";
 import { RadioGroup } from "@/components/worker/RadioGroup";
@@ -25,6 +26,8 @@ export function ReportIssueDialog<T extends string>({
   /** Resolves when the report is filed; rejects with a message to show. */
   onSubmit: (reason: T, complaint: string, evidence: File[]) => Promise<void>;
 }) {
+  const { w } = useWorkerCopy(true);
+
   const [reason, setReason] = useState<T | null>(null);
   const [complaint, setComplaint] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -57,16 +60,16 @@ export function ReportIssueDialog<T extends string>({
   }
 
   return (
-    <WorkerDialog open={open} onClose={close} label="Report an issue" className="max-h-[90dvh] overflow-y-auto">
+    <WorkerDialog open={open} onClose={close} label={w("Report an issue")} className="max-h-[90dvh] overflow-y-auto">
       <div className="flex flex-col gap-5">
-        <h2 className="text-body-md font-semibold text-grey-900">Report an issue</h2>
-        <p className="text-body-lg text-grey-900">What&rsquo;s the issue?</p>
+        <h2 className="text-body-md font-semibold text-grey-900">{w("Report an issue")}</h2>
+        <p className="text-body-lg text-grey-900">{w("What&rsquo;s the issue?")}</p>
 
         <RadioGroup legend="What's the issue?" options={reasons} value={reason} onChange={setReason} />
 
         <Textarea
-          label="Enter Your Complaint"
-          placeholder="Input text"
+          label={w("Enter Your Complaint")}
+          placeholder={w("Input text")}
           rows={5}
           maxLength={COMPLAINT_LIMIT}
           showCount
@@ -76,12 +79,12 @@ export function ReportIssueDialog<T extends string>({
 
         <div className="flex flex-col gap-2">
           <p className="text-body-sm text-grey-900">
-            Upload Evidence <span className="text-grey-600">(if any)</span>
+            {w("Upload Evidence")}<span className="text-grey-600">{w("(if any)")}</span>
           </p>
           <FileDropzone
-            title="Choose an image or video file"
-            hint="Or drag and drop it here"
-            buttonLabel="Upload File"
+            title={w("Choose an image or video file")}
+            hint={w("Or drag and drop it here")}
+            buttonLabel={w("Upload File")}
             accept="image/jpeg,image/png,video/mp4,video/quicktime"
             multiple
             onFiles={(added) => setFiles((current) => [...current, ...added].slice(0, MAX_FILES))}
@@ -106,8 +109,7 @@ export function ReportIssueDialog<T extends string>({
 
         <div className="flex gap-4">
           <Button variant="outline" size="lg" fullWidth className="min-w-0 rounded-xl px-0" onClick={close}>
-            Cancel
-          </Button>
+            {w("Cancel")}</Button>
           <Button
             size="lg"
             fullWidth
@@ -115,7 +117,7 @@ export function ReportIssueDialog<T extends string>({
             className={cn("min-w-0 rounded-xl px-0", !canSubmit && "opacity-50")}
             onClick={submit}
           >
-            {busy ? "Submitting…" : "Submit"}
+            {busy ? w("Submitting…") : w("Submit")}
           </Button>
         </div>
       </div>
