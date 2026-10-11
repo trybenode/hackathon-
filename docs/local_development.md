@@ -22,6 +22,23 @@ DATABASE_URL=postgresql+asyncpg://YOUR_USER@localhost:5432/trust_dev
 
 ## Day to day
 
+From the repository root, start Redis, the backend (port 8000), and the
+frontend (port 3000) together:
+
+```bash
+make dev
+```
+
+Docker Desktop must be running and dependencies must already be installed.
+Stop any separately running frontend/backend servers first. Ctrl+C stops both
+application processes; Redis remains available. Stop Redis separately with
+`docker compose stop redis` when finished.
+
+Use `make dev-voice` to also run the durable voice-processing worker after
+configuring its providers. The launcher uses your existing database settings;
+migrations, seeding, authentication, and the optional model gateway remain
+separate setup steps. It does not change or reset the database.
+
 ```bash
 cd backend
 .venv/bin/alembic upgrade head          # schema comes from migrations
@@ -84,3 +101,10 @@ Remove or edit `.env.local` so `DATABASE_URL` resolves to Neon, run
 - Every schema change ships as a migration. Never model-only.
 - Enum labels are the member **name** (upper-case), matching SQLAlchemy's default.
 - Additive changes where possible: Postgres cannot drop an enum label.
+
+
+## Customer history and language pilot
+
+See [history/language setup](history_and_language.md) for contact-provider configuration,
+the separate voice worker/private spool, optional official-model gateway, receipt recovery
+and release gates. This feature uses existing account sessions and never extends sign-in.

@@ -1,0 +1,7 @@
+# Stage 3 — private translated speech
+
+A participant requests audio only for a ready translation. Add a narrow configured HTTP speech adapter with explicit per-language validated capabilities, provider/model version and production HTTPS/authentication. No provider is enabled by default; no unrelated-language or device-voice fallback.
+
+Persist unique translation/fingerprint audio tasks: queued/processing/ready/failed/expired, bounded attempts and leased processing. Reuse the history worker's loop and private spool. Audio expires 24 hours after task creation; playback reauthorizes the live thread and verifies the exact translation fingerprint. Generate outside HTTP requests, deduplicate concurrent requests and fence stale processors. Sweep expired files even without ready tasks. New worker/recipient POST and GET status plus GET content routes use existing guards, ownership, contact/account access and no-store headers. Private paths never appear in responses.
+
+Append a merge migration joining existing heads and a table revision. Do not rewrite existing revisions. Add capability/configuration docs, OpenAPI and examples. Tests cover generation, duplicates, translation changes, privacy, unauthorized/revoked access, expiry, retries and provider failures. UI fetches authenticated blobs on demand with native controls, no autoplay and releases object URLs. Provider access, language voice validation, native comprehension, Figma and physical devices remain release gates. Disable speech configuration to roll back; original messages/translations remain available.

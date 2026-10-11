@@ -1,0 +1,172 @@
+# Use only development/test environments. Cookie/token placeholders are private.
+@base = http://localhost:8000/api/v1
+@workerSession = REPLACE_WITH_EXISTING_WORKER_COOKIE
+@customerSession = REPLACE_WITH_EXISTING_HIRING_CUSTOMER_COOKIE
+@claim = REPLACE_WITH_CLAIM_UUID
+@request = REPLACE_WITH_REQUEST_UUID
+@token = REPLACE_WITH_ONCE_RETURNED_CONFIRMATION_TOKEN
+@guest = REPLACE_WITH_COOKIE_FROM_CHALLENGE_CHECK
+@draft = REPLACE_WITH_DRAFT_UUID
+@message = REPLACE_WITH_MESSAGE_UUID
+
+### 201: explicit unscored informal declaration
+POST {{base}}/me/history-claims
+Cookie: guarantor_session={{workerSession}}
+Idempotency-Key: 10000000-0000-4000-8000-000000000001
+Content-Type: application/json
+
+{"details":{"work_type":"Plumbing","description":"Repaired a leaking pipe. Agreed fee ₦5000.","date_text":"around September 2026","general_area":"Ikeja","claimed_completed":true,"language":"en"}}
+
+### Retry unchanged POST above returns same claim. Changed body/key reuse -> 409.
+### Read receipt first after an interrupted submission; absent operation -> 404 OPERATION_NOT_FOUND.
+GET {{base}}/me/history-claims/operations/10000000-0000-4000-8000-000000000001
+Cookie: guarantor_session={{workerSession}}
+
+### Paginated declaration history
+GET {{base}}/me/history-claims?page=1&size=20
+Cookie: guarantor_session={{workerSession}}
+
+### 201: link once; subsequent replay returns token:null
+POST {{base}}/me/history-claims/{{claim}}/confirmation-requests
+Cookie: guarantor_session={{workerSession}}
+Idempotency-Key: 10000000-0000-4000-8000-000000000002
+Content-Type: application/json
+
+{"revision":1,"recipient_phone":"+2348012345678"}
+
+### Reconcile lost secret; revoke before replacing this completed request
+GET {{base}}/me/history-claims/{{claim}}/confirmation-requests/operations/10000000-0000-4000-8000-000000000002
+Cookie: guarantor_session={{workerSession}}
+
+### Bearer alone -> access:contact_required, details:null, masked phone only
+GET {{base}}/history-confirmations/{{token}}
+
+### Development: sandbox:true + debug_code; production uses SMS and returns no debug code
+POST {{base}}/history-confirmations/{{token}}/challenge
+
+### Incorrect code -> 400 CODE_INVALID (attempt commits); five checks exhaust challenge.
+# Replace this value with the actual SMS code or visible development stub code.
+POST {{base}}/history-confirmations/{{token}}/challenge/check
+Content-Type: application/json
+
+{"code":"123456"}
+
+### Successful challenge sets history_recipient; cookie alone cannot access another request
+GET {{base}}/history-confirmations/{{token}}
+Cookie: history_recipient={{guest}}
+
+### Explicit consent/customer declaration; duplicate new operation -> 409 RESPONSE_EXISTS
+POST {{base}}/history-confirmations/{{token}}/response
+Cookie: history_recipient={{guest}}
+Idempotency-Key: 10000000-0000-4000-8000-000000000003
+Content-Type: application/json
+
+{"decision":"confirmed","declares_customer":true,"consent":true}
+
+### Receipt recovery before retrying; current response is returned on authorized GET
+GET {{base}}/history-confirmations/{{token}}
+Cookie: history_recipient={{guest}}
+
+### Same original remains authoritative; message alone confirms nothing
+POST {{base}}/history-confirmations/{{token}}/messages
+Cookie: history_recipient={{guest}}
+Idempotency-Key: 10000000-0000-4000-8000-000000000004
+Content-Type: application/json
+
+{"text":"I did not agree to ₦5000. Was the date 2026-09-15?","language":"en"}
+
+### 200 receipt / 404 OPERATION_NOT_FOUND, never another participant's operation
+GET {{base}}/history-confirmations/{{token}}/messages/operations/10000000-0000-4000-8000-000000000004
+Cookie: history_recipient={{guest}}
+
+### Model/revision derivative; failed translation keeps original. Provider unconfigured -> failed metadata.
+POST {{base}}/history-confirmations/{{token}}/messages/{{message}}/translations
+Cookie: history_recipient={{guest}}
+Content-Type: application/json
+
+{"target":"yo"}
+
+### Private worker thread; page cap 100
+GET {{base}}/me/history-claims/{{claim}}/messages?page=1&size=20
+Cookie: guarantor_session={{workerSession}}
+
+### Withdraw removes active attestation, retains audit
+DELETE {{base}}/history-confirmations/{{token}}/response
+Cookie: history_recipient={{guest}}
+
+### New immutable revision; revokes previous tokens and invalidates previous confirmations
+PATCH {{base}}/me/history-claims/{{claim}}
+Cookie: guarantor_session={{workerSession}}
+Content-Type: application/json
+
+{"revision":1,"details":{"work_type":"Plumbing","description":"Corrected: fee ₦4000, not ₦5000","date_text":"around September 2026","general_area":"Ikeja","claimed_completed":true,"language":"en"}}
+
+### Old token after correction -> 410 LINK_UNAVAILABLE, even with earlier guest cookie
+GET {{base}}/history-confirmations/{{token}}
+Cookie: history_recipient={{guest}}
+
+### Explicit revocation is idempotent; metadata list contains no recoverable token/phone
+DELETE {{base}}/me/confirmation-requests/{{request}}
+Cookie: guarantor_session={{workerSession}}
+
+### Native job: creation uses job_id, request omits phone; existing customer session must match Job.client_id
+GET {{base}}/history-confirmations/{{token}}
+Cookie: guarantor_session={{customerSession}}
+
+### Wrong account cannot see private native job or submit a response (403 for response/message).
+### Forwarded informal link cannot submit until intended contact is verified.
+### Expired/revoked link -> 410; bad/unknown token -> 404; cross-origin mutation -> 403.
+### Rate limit -> 429 + Retry-After; Redis/provider outage -> 503 + preserved inputs.
+### Missing Idempotency-Key, invalid UUID/language/phone, consent:false -> 422.
+
+### Optional voice capabilities (do not treat configured as evaluated quality)
+GET {{base}}/me/history-capabilities
+Cookie: guarantor_session={{workerSession}}
+
+### Multipart upload example: edit local audio path; actual duration is validated asynchronously.
+# POST /me/history-drafts, Idempotency-Key UUID, fields audio(file), language=yo, consent=true.
+# curl --cookie "guarantor_session=$WORKER_COOKIE" \
+#   -H 'Idempotency-Key: 10000000-0000-4000-8000-000000000005' \
+#   -F 'language=yo' -F 'consent=true' -F 'audio=@/private/tmp/approved-recording.webm' \
+#   http://localhost:8000/api/v1/me/history-drafts
+
+### Recover upload ID before retrying; does not require provider currently online
+GET {{base}}/me/history-drafts/operations/10000000-0000-4000-8000-000000000005
+Cookie: guarantor_session={{workerSession}}
+
+### Poll queued/processing/ready/failed/expired; paths and audio never returned
+GET {{base}}/me/history-drafts/{{draft}}
+Cookie: guarantor_session={{workerSession}}
+
+### Retry same failed task, bounded attempts, original retained only until expiry
+POST {{base}}/me/history-drafts/{{draft}}/retry
+Cookie: guarantor_session={{workerSession}}
+
+### Approve corrected draft explicitly; repeat exact approval cannot duplicate claims
+POST {{base}}/me/history-drafts/{{draft}}/save
+Cookie: guarantor_session={{workerSession}}
+Content-Type: application/json
+
+{"approved":true,"details":{"work_type":"Plumbing","description":"Worker-reviewed description","date_text":"last month","general_area":"Ikeja","claimed_completed":true,"language":"yo"}}
+
+### Existing canonical record includes separate informal_history counts, unaffected assessment
+GET {{base}}/me/record
+Cookie: guarantor_session={{workerSession}}
+
+### Public sharing still uses existing standard-summary flows in feature_examples.http.
+### Claims/conversations/transcripts/phone numbers never appear in verified credential exports.
+
+### Speech capabilities (existing worker session cookie)
+GET {{base}}/me/history-speech-capabilities
+
+### Queue exact translated text as speech; response 202, no provider configured -> 503 SPEECH_UNAVAILABLE
+POST {{base}}/me/history-claims/{{claim_id}}/messages/{{message_id}}/audio
+Content-Type: application/json
+
+{"target":"yo"}
+
+### Reconcile queued/processing/ready/failed/expired without resending the original message
+GET {{base}}/me/history-claims/{{claim_id}}/messages/{{message_id}}/audio/{{audio_id}}
+
+### Private MP3: missing/revoked access fails; no-store on successful response
+GET {{base}}/me/history-claims/{{claim_id}}/messages/{{message_id}}/audio/{{audio_id}}/content

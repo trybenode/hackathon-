@@ -1,4 +1,3 @@
-
 # Revised plan: inclusive trust and portable work-history infrastructure
 
 ## 1. Product position and competitor lessons
@@ -168,8 +167,6 @@ The weekly demonstration must show external history entering with honest provena
 
 For the later pilot, measure accepted records in real hiring decisions, verification cost, worker completion on low-cost devices, repeat use by employers, correction requests, and cutout rates. These results determine whether the proposed selling proposition holds.
 
-
-
 # Implementation plan: your four weekly deliverables
 
 ## Core deliverables
@@ -265,3 +262,15 @@ Verify credential integrity and duplicate handling; platform isolation, consent 
 Run backend tests, PostgreSQL migration/schema checks, frontend type checking/linting, and browser checks against Figma. Test at 360 px and on a representative low-cost Android device before claiming device support.
 
 Completion means all four deliverables work together: history enters with honest provenance, a second platform accesses approved evidence, a worker shares and revokes a live summary, one eligible review succeeds, and another developer can reproduce the flows using your documentation.
+
+
+
+"""Purpose: Assemble a worker's own portable record from stored history.
+
+Dependencies: SQLAlchemy async sessions, app.models.domain, and the shared
+trust assessment service.
+Used by: the worker profile, portable record, outcomes and credentials screens.
+
+The trust band comes from `assess_worker()`, the one scoring path every caller
+shares; nothing here scores a worker itself.
+"""

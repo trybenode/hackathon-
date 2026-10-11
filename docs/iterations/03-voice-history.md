@@ -1,0 +1,12 @@
+# Iteration 3 — durable voice-assisted drafts
+
+## Acceptance and boundaries
+Authenticated workers record or upload 60-second/5-MB audio with temporary-processing consent, explicitly select en/yo/ha/ig, and receive transcript plus an editable draft. No claim exists until approval/save. System-job canonical facts are preserved. Neither audio nor extracted text changes scored outcomes, starting history, protection or review eligibility.
+
+## Data/API and execution
+Add HistoryDraft with worker operation key, payload hash, language/job context, queued/processing/ready/failed/saved/expired states, lease deadline, attempts, transient private audio path/transcript, expiry and resulting claim ID. POST multipart /me/history-drafts returns 202; owner GET polls; owner retry uses the same draft; approval POST atomically reuses the draft's UUID as the claim creation operation. Persist the queue in PostgreSQL and use a separately launched async worker with row leases/skip-locked acquisition. The API never launches untracked inference tasks.
+
+Use private runtime spool with restrictive permissions, random filenames and no public URLs. Bound reads to 5 MB; worker ffprobe validates actual format/duration and ffmpeg converts to mono 16-kHz audio. Delete files after processing and sweep expired drafts/audio after 24 hours, including crash leftovers. No external media URLs or browser persistence. Gateway adapter sends only transient audio/text and validates official model identity. Model hosting is isolated from application dependencies. Provide a runnable optional N-ATLAS gateway and documented environment configuration; no model downloads or real inference are claimed without access/compute. Missing providers fail visibly, preserving manual entry.
+
+## Dependencies and verification
+Software supplies gateway credentials/compute, ffmpeg/ffprobe and private storage; ML reviews actual recordings/model revisions; language reviewers supply approved prerecorded prompt assets; UX supplies recording/error/review frames. Test upload bounds, media failures, provider errors, ownership, leases, retry/idempotency, expired cleanup and duplicate saves. Frontend verifies microphone cancellation, stop/unmount cleanup, draft preservation and polling. Production endpoints require HTTPS model transport. Feature capabilities report configuration truthfully. Rollback disables voice and stops the worker without altering saved claims.
