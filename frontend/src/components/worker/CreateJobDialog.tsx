@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import { useState, type FormEvent } from "react";
 import { CopyLinkButton } from "@/components/worker/CopyLinkButton";
@@ -20,6 +21,8 @@ export function CreateJobDialog({
   onClose: () => void;
   onCreated?: (job: WorkerJob) => void;
 }) {
+  const { w } = useWorkerCopy();
+
   const [title, setTitle] = useState("");
   const [address, setAddress] = useState("");
   const [when, setWhen] = useState("");
@@ -64,40 +67,40 @@ export function CreateJobDialog({
   }
 
   return (
-    <WorkerDialog open={open} onClose={close} label={created ? "Job link created" : "Create a Job"}>
+    <WorkerDialog open={open} onClose={close} label={created ? w("Job link created") : w("Create a Job")}>
       {created ? (
         <div className="flex flex-col gap-5">
           <div className="flex flex-col items-center gap-4 text-center">
             <span className="flex h-14 w-14 items-center justify-center rounded-pill bg-primary-500">
               <CheckIcon className="text-white" width={28} height={28} />
             </span>
-            <p className="text-body-md text-grey-900">Your Job link has been successfully created!</p>
+            <p className="text-body-md text-grey-900">{w("Your Job link has been successfully created!")}</p>
           </div>
-          <p className="text-body-sm text-grey-600">Job Link</p>
+          <p className="text-body-sm text-grey-600">{w("Job Link")}</p>
           <CopyLinkButton link={created.link} onCancel={close} />
         </div>
       ) : (
         <form onSubmit={submit} className="flex flex-col gap-5">
-          <h2 className="text-body-md font-semibold text-grey-900">Create a Job</h2>
-          <Input label="Job Title" placeholder="Input text" value={title} onChange={(event) => setTitle(event.target.value)} />
-          <Input label="Address" placeholder="Input text" value={address} onChange={(event) => setAddress(event.target.value)} />
+          <h2 className="text-body-md font-semibold text-grey-900">{w("Create a Job")}</h2>
+          <Input label={w("Job Title")} placeholder={w("Input text")} value={title} onChange={(event) => setTitle(event.target.value)} />
+          <Input label={w("Address")} placeholder={w("Input text")} value={address} onChange={(event) => setAddress(event.target.value)} />
           <Input
-            label="Date & Time"
+            label={w("Date & Time")}
             type="datetime-local"
             value={when}
             onChange={(event) => setWhen(event.target.value)}
             trailingIcon={<CalendarIcon width={18} height={18} />}
           />
           <Input
-            label="Price"
-            placeholder="Input text"
+            label={w("Price")}
+            placeholder={w("Input text")}
             inputMode="decimal"
             value={price}
             onChange={(event) => setPrice(event.target.value)}
           />
           {error && (
             <p role="alert" className="text-body-sm text-error">
-              {error}
+              {w(error)}
             </p>
           )}
           <Button
@@ -106,7 +109,7 @@ export function CreateJobDialog({
             disabled={!ready || busy}
             className="w-46 self-center rounded-xl px-0 text-body-md font-semibold"
           >
-            {busy ? "Generating…" : "Generate link"}
+            {busy ? w("Generating…") : w("Generate link")}
           </Button>
         </form>
       )}

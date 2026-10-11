@@ -1,3 +1,5 @@
+"use client";
+import { useWorkerCopy } from "./useWorkerCopy";
 import { cn } from "@/lib/cn";
 
 export type TimelineStep = {
@@ -15,6 +17,7 @@ export type TimelineStep = {
  * step and grey after it.
  */
 export function Timeline({ steps }: { steps: TimelineStep[] }) {
+  const { w } = useWorkerCopy();
   return (
     <ol className="flex flex-col pl-6">
       {steps.map((step, index) => {
@@ -63,7 +66,7 @@ export function Timeline({ steps }: { steps: TimelineStep[] }) {
                   step.state === "pending" ? "text-grey-400" : "text-grey-900",
                 )}
               >
-                {step.label}
+                {w(step.label)}
               </span>
               <span
                 className={cn(

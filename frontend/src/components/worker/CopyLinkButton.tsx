@@ -1,10 +1,13 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import { useState } from "react";
 import { Button } from "@/components/ui";
 
 /** The job link in a grey box, with a Copy button that says when it worked. */
 export function CopyLinkButton({ link, onCancel }: { link: string; onCancel?: () => void }) {
+  const { w } = useWorkerCopy();
+
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -22,11 +25,10 @@ export function CopyLinkButton({ link, onCancel }: { link: string; onCancel?: ()
       <div className="flex gap-4">
         {onCancel && (
           <Button variant="outline" size="lg" fullWidth className="min-w-0 rounded-xl px-0" onClick={onCancel}>
-            Cancel
-          </Button>
+            {w("Cancel")}</Button>
         )}
         <Button size="lg" fullWidth className="min-w-0 rounded-xl px-0" onClick={copy}>
-          {copied ? "Copied" : "Copy"}
+          {copied ? w("Copied") : w("Copy")}
         </Button>
       </div>
     </div>

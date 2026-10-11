@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -12,11 +13,13 @@ const TABS = [
 ];
 
 export function WorkerNav() {
+  const { w } = useWorkerCopy();
+
   const pathname = usePathname();
 
   return (
     <nav
-      aria-label="Worker"
+      aria-label={w("Worker")}
       className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md justify-around border-t border-stroke bg-white px-2 pt-3 pb-5"
     >
       {TABS.map(({ label, href, Icon }) => {
@@ -31,12 +34,12 @@ export function WorkerNav() {
         return href ? (
           <Link key={label} href={href} aria-current={active ? "page" : undefined} className={classes}>
             <Icon />
-            {label}
+            {w(label)}
           </Link>
         ) : (
           <span key={label} aria-disabled="true" className={cn(classes, "cursor-default")}>
             <Icon />
-            {label}
+            {w(label)}
           </span>
         );
       })}

@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { useWorkerCopy } from "./useWorkerCopy";
 import { ApiError } from "@/lib/guarantor";
 
 /**
@@ -11,6 +12,7 @@ import { ApiError } from "@/lib/guarantor";
  * it only changes when what it fetches does.
  */
 export function useWorkerResource<T>(load: () => Promise<T>, notFound: string) {
+  const { w } = useWorkerCopy();
   const router = useRouter();
   const pathname = usePathname();
   const [data, setData] = useState<T | null>(null);
@@ -48,5 +50,5 @@ export function useWorkerResource<T>(load: () => Promise<T>, notFound: string) {
     };
   }, [load, version, pathname, router, notFound]);
 
-  return { data, error, loading, reload };
+  return { data, error: error ? w(error) : null, loading, reload };
 }

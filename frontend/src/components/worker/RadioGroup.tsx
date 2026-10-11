@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "./useWorkerCopy";
 
 import { useId } from "react";
 import { cn } from "@/lib/cn";
@@ -20,11 +21,12 @@ export function RadioGroup<T extends string>({
   onChange: (value: T) => void;
   legend: string;
 }) {
+  const { w } = useWorkerCopy(true);
   const name = useId();
 
   return (
     <fieldset className="flex flex-col gap-3">
-      <legend className="sr-only">{legend}</legend>
+      <legend className="sr-only">{w(legend)}</legend>
       {options.map((option) => {
         const id = `${name}-${option}`;
         const checked = value === option;
@@ -48,7 +50,7 @@ export function RadioGroup<T extends string>({
                 checked ? "border-[5px] border-primary-400" : "border-grey-400",
               )}
             />
-            <span className="text-body-md text-grey-900">{option}</span>
+            <span className="text-body-md text-grey-900">{w(option)}</span>
           </label>
         );
       })}

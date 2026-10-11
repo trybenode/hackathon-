@@ -1,3 +1,5 @@
+"use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 import type { ReactNode } from "react";
 
 /** Shows loading or the error until the worker's record has arrived. */
@@ -14,18 +16,19 @@ export function RecordGate({
   onRetry?: () => void;
   hasData?: boolean;
 }) {
+  const { w } = useWorkerCopy();
+
   if (loading && !hasData) {
     return (
       <p role="status" className="px-6 pt-8 text-body-sm text-grey-600">
-        Loading…
-      </p>
+        {w("Loading…")}</p>
     );
   }
   if (error && !hasData) {
     return (
       <div className="px-6 pt-8">
         <p role="alert" className="text-body-sm text-error">
-          {error}
+          {w(error)}
         </p>
         {onRetry && (
           <button
@@ -33,8 +36,7 @@ export function RecordGate({
             onClick={onRetry}
             className="mt-3 min-h-11 rounded-lg border border-stroke px-4"
           >
-            Retry record
-          </button>
+            {w("Retry record")}</button>
         )}
       </div>
     );
@@ -43,16 +45,14 @@ export function RecordGate({
     <>
       {loading && (
         <p role="status" className="px-6 pt-3 text-body-sm">
-          Refreshing current evidence…
-        </p>
+          {w("Refreshing current evidence…")}</p>
       )}
       {error && (
         <div role="alert" className="px-6 pt-3 text-body-sm text-error">
-          Current evidence could not be refreshed: {error}.{" "}
+          {w("Current evidence could not be refreshed:")}{w(error)}.{" "}
           {onRetry && (
             <button className="min-h-11 underline" onClick={onRetry}>
-              Retry
-            </button>
+              {w("Retry")}</button>
           )}
         </div>
       )}
