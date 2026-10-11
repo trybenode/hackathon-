@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     resend_api_key: str = Field("", alias="RESEND_API_KEY")
     #: Resend only accepts a verified domain, or its shared onboarding sender.
     resend_from: str = Field("Trust Infrastructure <onboarding@resend.dev>", alias="RESEND_FROM")
+    #: Where the screens live, for links in emails.
+    frontend_base_url: str = Field("http://localhost:3000", alias="FRONTEND_BASE_URL")
+    #: The platform's own address, told about requests it must review. Optional.
+    ops_email: str = Field("", alias="OPS_EMAIL")
     credential_signing_secret: str = Field("", alias="CREDENTIAL_SIGNING_SECRET")
     platform_api_key: str = Field("", alias="PLATFORM_API_KEY")
 
