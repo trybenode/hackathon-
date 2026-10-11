@@ -37,16 +37,42 @@ export type DeveloperDashboard = {
   recent_activity: ApiCall[];
   credentials: { key_id: string | null; environment: Environment; created_at: string }[];
   name_change: { new_name: string; status: ReviewStatus } | null;
-  sandbox_workers: { name: string; role: string; band: string; consent_token: string }[];
+  sandbox_workers: {
+    name: string;
+    role: string;
+    band: string;
+    /** "active", "pending", "expired", or null for none. */
+    guarantor: string | null;
+    consent_token: string;
+  }[];
 };
 
-export type GeneratedCredentials = {
-  key_id: string;
-  /** Shown once; send it as X-API-Key. */
-  secret: string;
+export type AccessGroup = "trust" | "history" | "guarantees" | "scoring";
+
+export type ApiKey = {
+  id: string;
+  name: string;
+  /** Public; safe to show and copy. */
+  key_id: string | null;
   environment: Environment;
+  /** null is full access, future features included. */
+  scopes: AccessGroup[] | null;
+  /** Operator-approved: imported records count as verified. */
+  can_attest: boolean;
   created_at: string;
+  last_used_at: string | null;
+  /** Calls over the last 14 days. */
+  recent_calls: number;
 };
+
+export type ApiKeyList = {
+  items: ApiKey[];
+  access_groups: { id: AccessGroup; label: string; description: string }[];
+  max_active_per_environment: number;
+};
+
+/** A key with its secret, returned only when the key is made or rotated. */
+export type ApiKeySecret = { key: ApiKey; secret: string };
 
 export const DOCUMENT_TYPES = [
   { value: "international_passport", label: "International passport" },
@@ -80,6 +106,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
     const detail = body && typeof body.detail === "string" ? body.detail : response.statusText;
     throw new ApiError(detail, response.status);
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -113,12 +140,32 @@ export function submitDeveloperBusiness(
   });
 }
 
-/** The secret comes back here only. */
-export function generateCredentials(environment: Environment) {
-  return call<GeneratedCredentials>("/me/developer/credentials", {
+export function listApiKeys() {
+  return call<ApiKeyList>("/me/developer/keys");
+}
+
+/** `scopes: null` is full access. The secret comes back here only. */
+export function createApiKey(name: string, environment: Environment, scopes: AccessGroup[] | null) {
+  return call<ApiKeySecret>("/me/developer/keys", {
     method: "POST",
-    body: JSON.stringify({ environment }),
+    body: JSON.stringify({ name, environment, scopes }),
   });
+}
+
+export function updateApiKey(id: string, name: string, scopes: AccessGroup[] | null) {
+  return call<ApiKey>(`/me/developer/keys/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name, scopes }),
+  });
+}
+
+/** A new secret for the same key; the old one stops working at once. */
+export function rotateApiKey(id: string) {
+  return call<ApiKeySecret>(`/me/developer/keys/${id}/rotate`, { method: "POST" });
+}
+
+export function revokeApiKey(id: string) {
+  return call<void>(`/me/developer/keys/${id}`, { method: "DELETE" });
 }
 
 export function requestNameChange(newName: string, reason: string, document: File | null) {

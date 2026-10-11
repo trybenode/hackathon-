@@ -1,7 +1,6 @@
-import { GenerateCredentials } from "./GenerateCredentials";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "Generate API credentials" };
-
+/** Credentials moved to API keys, where they are created and managed. */
 export default function DeveloperCredentialsPage() {
-  return <GenerateCredentials />;
+  redirect("/developer/keys");
 }
