@@ -3,7 +3,7 @@
   "services": {
     "backend": {
       "framework": "fastapi",
-      "installCommand": "uv pip install -r requirements-runtime.txt",
+      "installCommand": "uv pip install -r requirements.txt",
       "functions": {
         "app/main.py": {
           "maxDuration": 60,
@@ -15,7 +15,7 @@
     },
     "frontend": {
       "framework": "nextjs",
-      "buildCommand": "pnpm build",
+      "buildCommand": "npx --yes pnpm@11.5.0 run build",
       "root": "frontend",
       "bindings": [
         {
@@ -24,7 +24,8 @@
           "format": "url",
           "env": "BACKEND_URL"
         }
-      ]
+      ],
+      "installCommand": "npx --yes pnpm@11.5.0 install --frozen-lockfile"
     }
   },
   "rewrites": [
