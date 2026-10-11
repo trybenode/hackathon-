@@ -83,6 +83,20 @@ function Actions({ onEdit, onRotate, onRevoke }: { onEdit: () => void; onRotate:
   );
 }
 
+/** The key's access, with its attest status when it has one. */
+function KeyAccess({ apiKey, groups }: { apiKey: ApiKey; groups: ApiKeyList["access_groups"] }) {
+  return (
+    <span className="flex flex-col gap-1.5">
+      <AccessChips groups={groups} scopes={apiKey.scopes} />
+      {(apiKey.can_attest || apiKey.attest_requested) && (
+        <span className="w-fit rounded-md bg-warning-light px-2 py-0.5 text-xs text-grey-900">
+          {apiKey.can_attest ? "Attests" : "Attest requested"}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function lastUsed(key: ApiKey) {
   return key.last_used_at ? formatRelative(key.last_used_at) : "Never";
 }
@@ -198,7 +212,7 @@ export function ApiKeys() {
                       <KeyIdCopy keyId={key.key_id} />
                     </td>
                     <td className="px-4 py-4">
-                      <AccessChips groups={groups} scopes={key.scopes} />
+                      <KeyAccess apiKey={key} groups={groups} />
                     </td>
                     <td className="px-4 py-4 text-body-sm text-grey-900">{lastUsed(key)}</td>
                     <td className="px-4 py-4 text-body-sm text-grey-900">{key.recent_calls}</td>
@@ -224,7 +238,7 @@ export function ApiKeys() {
                   <EnvironmentBadge environment={key.environment} />
                 </div>
                 <KeyIdCopy keyId={key.key_id} />
-                <AccessChips groups={groups} scopes={key.scopes} />
+                <KeyAccess apiKey={key} groups={groups} />
                 <p className="text-xs text-grey-600">
                   Last used {lastUsed(key).toLowerCase()} · {key.recent_calls} calls in 14 days
                 </p>
@@ -264,6 +278,7 @@ export function ApiKeys() {
             setOpen(null);
             refresh();
           }}
+          onAttestRequested={load}
         />
       )}
       {open?.kind === "rotate" && (

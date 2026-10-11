@@ -59,6 +59,8 @@ export type ApiKey = {
   scopes: AccessGroup[] | null;
   /** Operator-approved: imported records count as verified. */
   can_attest: boolean;
+  /** Waiting on an operator's attest decision. */
+  attest_requested: boolean;
   created_at: string;
   last_used_at: string | null;
   /** Calls over the last 14 days. */
@@ -162,6 +164,26 @@ export function updateApiKey(id: string, name: string, scopes: AccessGroup[] | n
 /** A new secret for the same key; the old one stops working at once. */
 export function rotateApiKey(id: string) {
   return call<ApiKeySecret>(`/me/developer/keys/${id}/rotate`, { method: "POST" });
+}
+
+/** Production keys only: ask for imported records to count as verified. */
+export function requestAttest(id: string) {
+  return call<ApiKey>(`/me/developer/keys/${id}/attest-request`, { method: "POST" });
+}
+
+/** Email a code to the new address, the first step of changing it. */
+export function requestEmailChange(email: string) {
+  return call<{ sent: boolean; debug_code: string | null }>("/auth/email-change/code", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function confirmEmailChange(email: string, code: string) {
+  return call<{ email: string }>("/auth/email-change", {
+    method: "POST",
+    body: JSON.stringify({ email, code }),
+  });
 }
 
 export function revokeApiKey(id: string) {

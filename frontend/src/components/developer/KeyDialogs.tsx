@@ -7,6 +7,7 @@ import { Button, Input, Modal } from "@/components/ui";
 import {
   createApiKey,
   maskKeyId,
+  requestAttest,
   updateApiKey,
   type AccessGroup,
   type ApiKey,
@@ -89,16 +90,68 @@ export function CreateKeyDialog({
 }
 
 /** "Edit key": rename and change access. The environment never changes. */
+/**
+ * Whether records this key imports count as verified. Production keys can ask;
+ * an operator decides, and the developer is emailed.
+ */
+function AttestSection({ apiKey, onRequested }: { apiKey: ApiKey; onRequested?: () => void }) {
+  const [requested, setRequested] = useState(apiKey.attest_requested);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function ask() {
+    setBusy(true);
+    setError(null);
+    try {
+      await requestAttest(apiKey.id);
+      setRequested(true);
+      onRequested?.();
+    } catch (cause) {
+      setError(message(cause, "Could not send the request. Try again."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg bg-grey-50 p-3">
+      <span className="text-body-sm font-medium text-grey-900">Attest</span>
+      <p className="text-xs leading-4 text-grey-600">
+        {apiKey.can_attest
+          ? "Approved: records this key imports count as verified."
+          : apiKey.environment === "sandbox"
+            ? "Sandbox records never count as verified."
+            : requested
+              ? "Requested. We'll email you once it's reviewed."
+              : "Records this key imports count as unverified until we approve your platform to attest them."}
+      </p>
+      {apiKey.environment === "production" && !apiKey.can_attest && !requested && (
+        <Button type="button" variant="outline" className="self-start rounded-lg px-4" disabled={busy} onClick={ask}>
+          {busy ? "Requesting…" : "Request attest approval"}
+        </Button>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-error">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function EditKeyDialog({
   apiKey,
   groups,
   onClose,
   onSaved,
+  onAttestRequested,
 }: {
   apiKey: ApiKey;
   groups: ApiKeyList["access_groups"];
   onClose: () => void;
   onSaved: (saved: ApiKey) => void;
+  /** Refreshes the list after an attest request, leaving the dialog open. */
+  onAttestRequested?: () => void;
 }) {
   const [name, setName] = useState(apiKey.name);
   const [scopes, setScopes] = useState<AccessGroup[] | null>(apiKey.scopes);
@@ -131,11 +184,7 @@ export function EditKeyDialog({
           <span className="text-xs leading-4 text-grey-600">Fixed when the key was made.</span>
         </div>
         <AccessPicker groups={groups} value={scopes} onChange={setScopes} />
-        <p className="text-xs leading-4 text-grey-600">
-          {apiKey.can_attest
-            ? "Approved to attest: records this key imports count as verified."
-            : "Imported records count as verified only after we approve your platform to attest."}
-        </p>
+        <AttestSection apiKey={apiKey} onRequested={onAttestRequested} />
         {error && (
           <p role="alert" className="text-body-sm text-error">
             {error}
