@@ -12,6 +12,7 @@ import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import {
   listApiKeys,
+  maskKeyId,
   revokeApiKey,
   rotateApiKey,
   type ApiKey,
@@ -60,7 +61,7 @@ function KeyIdCopy({ keyId }: { keyId: string | null }) {
       className="flex max-w-full min-w-0 items-center gap-1.5 font-mono text-xs text-grey-900 hover:text-primary-500"
       aria-label={`Copy key ID ${keyId}`}
     >
-      <span className="truncate">{keyId}</span>
+      <span className="truncate">{maskKeyId(keyId)}</span>
       <CopyIcon className={cn("shrink-0", copied ? "text-success" : "text-grey-600")} />
     </button>
   );

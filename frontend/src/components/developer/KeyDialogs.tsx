@@ -6,6 +6,7 @@ import { ChoiceList } from "@/components/developer/ChoiceList";
 import { Button, Input, Modal } from "@/components/ui";
 import {
   createApiKey,
+  maskKeyId,
   updateApiKey,
   type AccessGroup,
   type ApiKey,
@@ -121,7 +122,7 @@ export function EditKeyDialog({
       <form onSubmit={submit} className="flex w-full flex-col gap-5 text-left">
         <div className="flex flex-col gap-1">
           <h2 className="text-h3 text-grey-900">Edit API key</h2>
-          <p className="font-mono text-body-sm break-all text-grey-600">{apiKey.key_id}</p>
+          <p className="font-mono text-body-sm break-all text-grey-600">{apiKey.key_id ? maskKeyId(apiKey.key_id) : ""}</p>
         </div>
         <Input label="Name" value={name} onChange={(event) => setName(event.target.value)} maxLength={80} required />
         <div className="flex flex-col gap-1">

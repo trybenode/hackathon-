@@ -174,3 +174,42 @@ export function requestNameChange(newName: string, reason: string, document: Fil
     body: form({ new_name: newName, reason }, document),
   });
 }
+
+/** "pk_sandbox_a989ea**********": the prefix and first characters, the rest hidden. */
+export function maskKeyId(keyId: string) {
+  const match = /^(pk_(?:sandbox|live)_)(.+)$/.exec(keyId);
+  if (!match) return keyId;
+  const [, prefix, rest] = match;
+  return `${prefix}${rest.slice(0, 6)}${"*".repeat(Math.max(rest.length - 6, 0))}`;
+}
+
+export type LogKey = { id: string; name: string; key_id: string | null; environment: Environment; revoked: boolean };
+
+export type LogEntry = {
+  at: string;
+  method: string;
+  /** The route template; worker ids never appear. */
+  path: string;
+  status_code: number;
+  duration_ms: number;
+  key: LogKey;
+};
+
+export type LogPage = {
+  items: LogEntry[];
+  total: number;
+  page: number;
+  size: number;
+  pages: number;
+  /** Every key, revoked ones too, for filtering. */
+  keys: LogKey[];
+};
+
+export type LogOutcome = "all" | "success" | "error";
+
+/** Calls made with the platform's keys, newest first. */
+export function getCallLog(options: { page?: number; key?: string | null; outcome?: LogOutcome } = {}) {
+  const params = new URLSearchParams({ page: String(options.page ?? 1), size: "25", outcome: options.outcome ?? "all" });
+  if (options.key) params.set("key", options.key);
+  return call<LogPage>(`/me/developer/logs?${params}`);
+}
