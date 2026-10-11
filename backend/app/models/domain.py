@@ -384,12 +384,33 @@ class Job(UUIDTimestampMixin, Base):
     agreed_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     auto_release_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Who hired the worker. Clients have no account yet; escrow needs these.
+    client_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    client_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    client_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    #: Label/value pairs shown on Job Details, e.g. {"label": "Bedrooms", "value": "2"}.
+    details: Mapped[list[dict[str, str]]] = mapped_column(
+        JSON, default=list, server_default="[]", nullable=False
+    )
+    #: When the worker said the work was done.
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: The secret in the job link the worker shares; it is the customer's
+    #: only key to the job, since customers have no account.
+    link_token: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    #: When the work is booked for.
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: The customer's 1-5 star rating, given when they release the payment.
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     worker: Mapped[Worker] = relationship(back_populates="jobs")
     confirmations: Mapped[list["JobConfirmation"]] = relationship(back_populates="job")
     disputes: Mapped[list["Dispute"]] = relationship(back_populates="job")
     escrow_transactions: Mapped[list["EscrowTransaction"]] = relationship(back_populates="job")
-    __table_args__ = (CheckConstraint("agreed_amount >= 0", name="agreed_amount_nonnegative"),)
+    __table_args__ = (
+        CheckConstraint("agreed_amount >= 0", name="agreed_amount_nonnegative"),
+        CheckConstraint("rating IS NULL OR (rating >= 1 AND rating <= 5)", name="rating_range"),
+    )
 
 
 class JobConfirmation(UUIDTimestampMixin, Base):
@@ -410,7 +431,12 @@ class Dispute(UUIDTimestampMixin, Base):
     __tablename__ = "disputes"
 
     job_id: Mapped[UUID] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
-    opened_by_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    #: Empty when the customer raised it: customers have no account.
+    opened_by_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
+    #: "customer", "worker", or "timeout" (no code within the confirmation window).
+    raised_by: Mapped[str] = mapped_column(String(20), default="worker", server_default="worker")
     reason: Mapped[str] = mapped_column(Text)
     status: Mapped[DisputeStatus] = mapped_column(Enum(DisputeStatus, name="dispute_status"), default=DisputeStatus.OPEN)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -430,6 +456,21 @@ class EscrowTransaction(UUIDTimestampMixin, Base):
     micro_premium: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     cover_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[EscrowStatus] = mapped_column(Enum(EscrowStatus, name="escrow_status"), default=EscrowStatus.PENDING)
+    #: Payscrow's GUID for the transaction; only the paid webhook carries it,
+    #: and releasing funds needs it.
+    provider_transaction_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Where the client pays.
+    payment_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    #: What the client pays: the job plus their share of the escrow charge.
+    total_payable: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    funded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    in_dispute: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+    #: Payscrow's dispute stage and, once ruled, how it was resolved.
+    dispute_stage: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    resolution_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     job: Mapped[Job] = relationship(back_populates="escrow_transactions")
     __table_args__ = (CheckConstraint("amount >= 0", name="amount_nonnegative"),)
