@@ -15,7 +15,6 @@ services:
     dockerContext: .
     autoDeployTrigger: "off"
     preDeployCommand: python -m scripts.migrate_production
-    maxShutdownDelaySeconds: 30
     disk:
       name: trust-private-history
       mountPath: /var/lib/trust

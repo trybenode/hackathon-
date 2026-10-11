@@ -21,6 +21,9 @@ Redis and that heartbeat. **Keep one backend instance**: filesystem-backed audio
 is not ready for independent replicas or separate remote worker services. A
 shared object-storage design is required before scaling those workloads.
 Disk-attached deploys can interrupt service; plan a short maintenance window.
+Render rejects an explicit `maxShutdownDelaySeconds` on disk-attached services;
+the blueprint omits it and uses Render's default shutdown behavior. Schema-only
+validation does not establish all provider service/disk compatibility rules.
 
 The container entrypoint initializes the disk directory, then drops to UID/GID
 10001 with no new privileges for API/worker/migration commands. Only
