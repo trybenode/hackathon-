@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.platform_auth import require_tenant
+from app.core.platform_auth import require_tenant_scope
 from app.db.session import get_db_session
 from app.models.portability import PlatformKey
 from app.schemas.api import ApiModel, PlatformType
@@ -66,7 +66,7 @@ def _view(settings: service.ScoringSettings) -> ScoringSettingsView:
 
 @router.get("", response_model=ScoringSettingsList, summary="Read your scoring settings")
 async def read_settings(
-    principal: PlatformKey = Depends(require_tenant),
+    principal: PlatformKey = Depends(require_tenant_scope("scoring")),
     session: AsyncSession = Depends(get_db_session),
 ) -> ScoringSettingsList:
     return ScoringSettingsList(
@@ -79,7 +79,7 @@ async def read_settings(
 async def save_settings(
     platform_type: PlatformType,
     payload: ScoringSettingsUpdate,
-    principal: PlatformKey = Depends(require_tenant),
+    principal: PlatformKey = Depends(require_tenant_scope("scoring")),
     session: AsyncSession = Depends(get_db_session),
 ) -> ScoringSettingsView:
     """Weights must add up to 1 and thresholds satisfy 0 < medium < high ≤ 1."""
@@ -99,7 +99,7 @@ async def save_settings(
 @router.delete("/{platform_type}", response_model=ScoringSettingsView, summary="Go back to the preset")
 async def reset_settings(
     platform_type: PlatformType,
-    principal: PlatformKey = Depends(require_tenant),
+    principal: PlatformKey = Depends(require_tenant_scope("scoring")),
     session: AsyncSession = Depends(get_db_session),
 ) -> ScoringSettingsView:
     restored = await service.reset(session, principal, platform_type.value)

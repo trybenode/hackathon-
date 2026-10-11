@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import current_user
-from app.core.platform_auth import require_platform_api_key, require_tenant
+from app.core.platform_auth import require_platform_api_key, require_tenant_scope
 from app.db.session import get_db_session
 from app.models.domain import AgreementStatus, GuarantorAgreement, Job, User, Worker
 from app.models.portability import PlatformKey
@@ -172,7 +172,7 @@ async def _as_guarantor(session: AsyncSession, user: User, instrument_id: UUID) 
 )
 async def create_instrument(
     payload: GuarantorInstrumentCreateRequest,
-    principal: PlatformKey = Depends(require_tenant),
+    principal: PlatformKey = Depends(require_tenant_scope("guarantees")),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentCreateResponse:
     """Ask a person to stand behind a worker who approved this platform to write."""
@@ -223,7 +223,7 @@ async def expire_due(
 async def list_instruments(
     worker_id: UUID | None = Query(default=None),
     instrument_status: AgreementStatus | None = Query(default=None, alias="status"),
-    principal: PlatformKey = Depends(require_tenant),
+    principal: PlatformKey = Depends(require_tenant_scope("guarantees")),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentListResponse:
     """A worker's guarantees, with their approval to read; without a worker,
@@ -267,7 +267,7 @@ async def get_instrument(
 )
 async def send_for_signature(
     instrument_id: UUID,
-    principal: PlatformKey = Depends(require_tenant),
+    principal: PlatformKey = Depends(require_tenant_scope("guarantees")),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentResponse:
     await _owned(session, principal, instrument_id)
@@ -414,7 +414,7 @@ async def complete_liveness(
 async def trigger_instrument(
     instrument_id: UUID,
     payload: GuarantorTriggerRequest,
-    principal: PlatformKey = Depends(require_tenant),
+    principal: PlatformKey = Depends(require_tenant_scope("guarantees")),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentResponse:
     await _owned(session, principal, instrument_id)
@@ -439,7 +439,7 @@ async def trigger_instrument(
 async def resolve_claim(
     instrument_id: UUID,
     payload: GuarantorResolveRequest,
-    principal: PlatformKey = Depends(require_tenant),
+    principal: PlatformKey = Depends(require_tenant_scope("guarantees")),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentResponse:
     await _owned(session, principal, instrument_id)
@@ -464,7 +464,7 @@ async def resolve_claim(
 async def revoke_instrument(
     instrument_id: UUID,
     payload: GuarantorRevokeRequest,
-    principal: PlatformKey = Depends(require_tenant),
+    principal: PlatformKey = Depends(require_tenant_scope("guarantees")),
     session: AsyncSession = Depends(get_db_session),
 ) -> GuarantorInstrumentResponse:
     await _owned(session, principal, instrument_id)

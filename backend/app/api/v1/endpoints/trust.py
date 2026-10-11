@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
-from app.core.platform_auth import require_platform_api_key
+from app.core.platform_auth import require_scope
 from app.models.portability import PlatformKey
 from app.services.platform_history import authorize_assessment
 from app.schemas.api import TrustQueryRequest, TrustQueryResponse, WorkerVerification
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/trust", tags=["trust"], responses={code: {"model": A
 )
 async def query_trust(
     payload: TrustQueryRequest,
-    principal: PlatformKey | None = Depends(require_platform_api_key),
+    principal: PlatformKey | None = Depends(require_scope("trust")),
     session: AsyncSession = Depends(get_db_session),
 ) -> TrustQueryResponse:
     """Score verified normalized history and persist/reuse its assessment."""

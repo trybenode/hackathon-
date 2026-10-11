@@ -7,7 +7,7 @@ from app.core.api_usage import mark_platform_call
 from app.core.config import get_settings
 from app.db.session import get_db_session
 from app.models.portability import PlatformKey
-from app.services.portability import digest
+from app.services.portability import FeatureError, digest
 
 
 async def require_platform_api_key(
@@ -35,3 +35,35 @@ async def require_tenant(principal: PlatformKey | None = Depends(require_platfor
     if principal is None:
         raise HTTPException(status_code=403, detail="A dedicated platform API key is required")
     return principal
+
+
+#: The access groups a key can be limited to, as the dashboard names them.
+SCOPES = {
+    "trust": "Trust & workers",
+    "history": "Work history",
+    "guarantees": "Guarantees",
+    "scoring": "Scoring settings",
+}
+
+
+def _check_scope(principal: PlatformKey | None, scope: str) -> None:
+    # No scopes means full access, including features added later.
+    if principal is not None and principal.scopes is not None and scope not in principal.scopes:
+        raise FeatureError(403, "SCOPE_REQUIRED",
+            f"This API key has no {SCOPES[scope]} access. Edit the key's access on the dashboard.")
+
+
+def require_scope(scope: str):
+    """A platform key (or the dev legacy key) allowed to use `scope`."""
+    async def dependency(principal: PlatformKey | None = Depends(require_platform_api_key)) -> PlatformKey | None:
+        _check_scope(principal, scope)
+        return principal
+    return dependency
+
+
+def require_tenant_scope(scope: str):
+    """A dedicated platform key allowed to use `scope`."""
+    async def dependency(principal: PlatformKey = Depends(require_tenant)) -> PlatformKey:
+        _check_scope(principal, scope)
+        return principal
+    return dependency
