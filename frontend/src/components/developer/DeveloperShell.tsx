@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import {
+  ActivityIcon,
   BookIcon,
   CloseIcon,
   GridIcon,
@@ -21,6 +22,7 @@ import { signOut } from "@/lib/guarantor";
 const NAV = [
   { href: "/developer", label: "Dashboard", icon: GridIcon },
   { href: "/developer/keys", label: "API keys", icon: KeyIcon },
+  { href: "/developer/activity", label: "Activity", icon: ActivityIcon },
   { href: "/developer/verify", label: "Verification", icon: ShieldCheckIcon },
   { href: "/developer/docs", label: "Docs", icon: BookIcon },
   { href: "/developer/profile", label: "Profile", icon: UserIcon },

@@ -154,3 +154,11 @@ export function CopyIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function ActivityIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" {...stroke} {...props}>
+      <path d="M3 12h4l3-7 4 14 3-7h4" />
+    </svg>
+  );
+}
