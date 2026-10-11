@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { TickIcon } from "@/components/developer/icons";
 import { useDeveloper } from "@/components/developer/DeveloperContext";
-import { ArrowLeftIcon } from "@/components/worker/icons";
+import { PageHeader } from "@/components/developer/PageHeader";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { ReviewStatus } from "@/lib/developer";
@@ -37,27 +36,21 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 /** The developer's verified details; the name changes only through review. */
 export function DeveloperProfile() {
-  const router = useRouter();
   const { data, error } = useDeveloper();
   const canRequest = data?.kyc_status === "approved" && !data.name_change;
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
-      <header className="flex items-center gap-3 border-b border-stroke px-6 pt-8 pb-5">
-        <button type="button" aria-label="Back" onClick={() => router.back()} className="text-grey-900">
-          <ArrowLeftIcon />
-        </button>
-        <h1 className="text-body-lg font-semibold text-grey-900">Profile</h1>
-      </header>
+    <div className="flex max-w-3xl flex-col">
+      <PageHeader title="Profile" description="Your verified details and business" />
 
       {error && (
-        <p role="alert" className="px-6 pt-6 text-body-sm text-error">
+        <p role="alert" className="text-body-sm text-error">
           {error}
         </p>
       )}
 
       {data && (
-        <div className="flex flex-1 flex-col">
+        <div className="flex flex-col overflow-hidden rounded-xl border border-stroke">
           <section className="flex items-center justify-between gap-3 border-b border-stroke px-6 py-6">
             <div className="flex min-w-0 items-center gap-3">
               <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-pill bg-primary-500 text-white">
@@ -102,7 +95,7 @@ export function DeveloperProfile() {
             </Row>
           </section>
 
-          <div className="mt-auto flex justify-center px-6 pt-12 pb-10">
+          <div className="flex justify-center px-6 pt-12 pb-10">
             <Button
               size="lg"
               disabled
@@ -114,6 +107,6 @@ export function DeveloperProfile() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

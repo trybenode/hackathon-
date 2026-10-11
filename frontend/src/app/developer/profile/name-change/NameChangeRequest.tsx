@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { ChoiceList } from "@/components/developer/ChoiceList";
+import { PageHeader } from "@/components/developer/PageHeader";
 import { DocumentUpload } from "@/components/developer/DocumentUpload";
 import { useDeveloper } from "@/components/developer/DeveloperContext";
 import { Button, Input } from "@/components/ui";
@@ -14,7 +16,7 @@ type Reason = (typeof NAME_CHANGE_REASONS)[number]["value"];
 /** "Request name change": the verified name changes only after review. */
 export function NameChangeRequest() {
   const router = useRouter();
-  const { data, error: loadError } = useDeveloper();
+  const { data, error: loadError, reload } = useDeveloper();
   const [newName, setNewName] = useState("");
   const [reason, setReason] = useState<Reason>("correction");
   const [document, setDocument] = useState<File | null>(null);
@@ -27,6 +29,7 @@ export function NameChangeRequest() {
     setError(null);
     try {
       await requestNameChange(newName.trim(), reason, document);
+      reload();
       router.push("/developer/profile");
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "Could not send your request. Try again.");
@@ -37,14 +40,19 @@ export function NameChangeRequest() {
   const failure = error ?? loadError;
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-col px-6 pt-8 pb-10">
+    <div className="flex max-w-2xl flex-col">
+      <PageHeader
+        title="Request name change"
+        description="Your name is linked to your identity verification. Submit your updated details for review"
+        actions={
+          <Link href="/developer/profile">
+            <Button variant="outline" className="rounded-lg px-6">
+              Cancel
+            </Button>
+          </Link>
+        }
+      />
       <form onSubmit={submit} className="flex flex-col gap-6">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-body-lg font-semibold text-grey-900">Request name change</h1>
-          <p className="text-xs leading-4 text-grey-900">
-            Your name is linked to your identity verification. Submit your updated details for review
-          </p>
-        </div>
 
         <div className="flex flex-col gap-2">
           <span className="text-body-sm font-medium text-grey-600">Current Verified Name</span>
@@ -82,6 +90,6 @@ export function NameChangeRequest() {
           {busy ? "Submitting…" : "Submit request"}
         </Button>
       </form>
-    </main>
+    </div>
   );
 }
