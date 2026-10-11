@@ -27,6 +27,8 @@ class PlatformKey(UUIDTimestampMixin, Base):
     #: Access groups the key may use; None is full access, future features included.
     scopes: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: When the developer asked for attest approval; cleared once decided.
+    attest_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ShareGrant(UUIDTimestampMixin, Base):
