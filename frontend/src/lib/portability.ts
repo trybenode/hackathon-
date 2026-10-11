@@ -1,5 +1,6 @@
 /** Typed, session-scoped API access. Platform keys never enter the browser. */
 import { apiBaseUrl } from "./api";
+import type { HistoryCounts } from "./history";
 export type TrustBand = "High" | "Medium" | "Low" | "Building History";
 export type Assessment = {
   decision: boolean;
@@ -12,6 +13,7 @@ export type Assessment = {
   assessed_at: string;
 };
 export type VerificationSummary = {
+  informal_history?: HistoryCounts;
   display_name: string;
   role: string | null;
   location: string | null;
@@ -26,6 +28,7 @@ export type VerificationSummary = {
   updated_at: string;
 };
 export type HistoryItem = {
+  completion_status: string;
   outcome_id: string;
   source_record_id: string;
   source_platform: string;
@@ -104,9 +107,14 @@ export class ApiFailure extends Error {
 export async function featureRequest<T>(
   path: string,
   init: RequestInit = {},
+  timeoutMs = 12000,
 ): Promise<T> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12000);
+  const externalSignal = init.signal;
+  const abort = () => controller.abort();
+  if (externalSignal?.aborted) controller.abort();
+  externalSignal?.addEventListener("abort", abort, { once: true });
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${apiBaseUrl}${path}`, {
       ...init,
@@ -114,7 +122,7 @@ export async function featureRequest<T>(
       cache: "no-store",
       signal: controller.signal,
       headers: {
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...(init.body && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
         ...init.headers,
       },
     });
@@ -144,6 +152,7 @@ export async function featureRequest<T>(
     );
   } finally {
     clearTimeout(timer);
+    externalSignal?.removeEventListener("abort", abort);
   }
 }
 export function errorMessage(error: unknown) {
