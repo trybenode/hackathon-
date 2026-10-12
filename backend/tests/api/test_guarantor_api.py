@@ -455,3 +455,19 @@ async def test_sandbox_guarantees_are_answered_but_not_kept(session: AsyncSessio
     # Ada's demo guarantee is there to read.
     assert [item["status"] for item in listed.json()["items"]] == ["Active"]
     app.dependency_overrides.clear()
+
+
+async def test_a_missing_key_is_refused_without_the_legacy_key(
+    session: AsyncSession, worker: Worker, monkeypatch
+) -> None:
+    """CI runs without PLATFORM_API_KEY; a missing key is still the caller's 401."""
+
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "platform_api_key", "")
+    async with client_for(session, headers={}) as client:
+        missing = await client.get("/api/v1/guarantor-instruments")
+        wrong = await client.get("/api/v1/guarantor-instruments", headers={"X-API-Key": "sk_wrong"})
+
+    assert (missing.status_code, wrong.status_code) == (401, 401)
+    app.dependency_overrides.clear()

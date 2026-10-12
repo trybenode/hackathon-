@@ -25,8 +25,8 @@ async def require_platform_api_key(
             return principal
         if settings.environment == "development" and settings.platform_api_key and hmac.compare_digest(x_api_key, settings.platform_api_key):
             return None
-    if not settings.platform_api_key and not x_api_key:
-        raise HTTPException(status_code=503, detail="Platform API authentication is not configured")
+    # Platforms have their own keys now, so a missing or wrong key is always
+    # the caller's to fix, whether or not the dev legacy key is configured.
     raise HTTPException(status_code=401, detail="A valid platform API key is required", headers={"WWW-Authenticate": "ApiKey"})
 
 
