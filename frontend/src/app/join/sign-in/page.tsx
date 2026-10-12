@@ -1,3 +1,4 @@
+import { SkipIfSignedIn } from "@/components/auth/SkipIfSignedIn";
 import { SignInFlow } from "@/components/guarantor/SignInFlow";
 
 export const metadata = { title: "Welcome" };
@@ -7,5 +8,9 @@ export const metadata = { title: "Welcome" };
  * lands wherever their verification left off (see `landingPathFor`).
  */
 export default function JoinSignInPage() {
-  return <SignInFlow signUp="worker" />;
+  return (
+    <SkipIfSignedIn to="worker">
+      <SignInFlow signUp="worker" />
+    </SkipIfSignedIn>
+  );
 }
