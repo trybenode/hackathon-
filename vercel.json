@@ -1,0 +1,39 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "backend": {
+      "framework": "fastapi",
+      "installCommand": "uv pip install -r requirements.txt",
+      "functions": {
+        "app/main.py": {
+          "maxDuration": 60,
+          "excludeFiles": "{tests/**,scripts/**,alembic/**,.venv/**,.venv-history-models/**,__pycache__/**,**/*.pyc,.env,.env.*}"
+        }
+      },
+      "root": "backend",
+      "entrypoint": "app.main:app"
+    },
+    "frontend": {
+      "framework": "nextjs",
+      "buildCommand": "npx --yes pnpm@11.5.0 run build",
+      "root": "frontend",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "backend",
+          "format": "url",
+          "env": "BACKEND_URL"
+        }
+      ],
+      "installCommand": "npx --yes pnpm@11.5.0 install --frozen-lockfile"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "frontend"
+      }
+    }
+  ]
+}
