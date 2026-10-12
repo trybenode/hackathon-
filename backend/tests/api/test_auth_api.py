@@ -1,4 +1,4 @@
-"""Purpose: Verify the guarantor email + one-time code sign-in.
+"""Purpose: Verify email + one-time code sign-in, worker sign-up and invite claims.
 
 Dependencies: pytest, httpx ASGI transport, and the in-memory session fixture.
 Used by: the backend test suite and CI.
@@ -223,5 +223,111 @@ async def test_sign_in_reports_which_sides_the_account_has(
     assert await roles("grace@example.com") == (False, True)
     # A draft has not been sent, so it does not make anyone a guarantor yet.
     assert await roles("draft@example.com") == (False, False)
+
+    app.dependency_overrides.clear()
+
+
+async def sign_in(client: AsyncClient, email: str, **extra) -> dict:
+    requested = await client.post("/api/v1/auth/code", json={"email": email})
+    verified = await client.post(
+        "/api/v1/auth/verify",
+        json={"email": email, "code": requested.json()["debug_code"], **extra},
+    )
+    assert verified.status_code == 200, verified.text
+    return verified.json()
+
+
+async def test_a_new_worker_signs_up_with_a_code(session: AsyncSession) -> None:
+    async with client_for(session) as client:
+        body = await sign_in(client, "Newbie@Example.com", sign_up="worker")
+
+    assert body["email"] == "newbie@example.com"
+    assert body["is_worker"] is True
+    # Straight on to the identity details.
+    assert body["onboarding_step"] == "identity"
+    app.dependency_overrides.clear()
+
+
+async def test_sign_up_without_a_role_is_still_refused(session: AsyncSession) -> None:
+    async with client_for(session) as client:
+        requested = await client.post("/api/v1/auth/code", json={"email": "nobody@example.com"})
+        verified = await client.post(
+            "/api/v1/auth/verify",
+            json={"email": "nobody@example.com", "code": requested.json()["debug_code"]},
+        )
+
+    assert verified.status_code == 404
+    app.dependency_overrides.clear()
+
+
+async def test_an_existing_account_can_become_a_worker(session: AsyncSession) -> None:
+    session.add(User(email="grace@example.com", display_name="Grace"))
+    await session.flush()
+
+    async with client_for(session) as client:
+        body = await sign_in(client, "grace@example.com", sign_up="worker")
+
+    assert body["is_worker"] is True
+    assert body["display_name"] == "Grace"
+    app.dependency_overrides.clear()
+
+
+async def test_claiming_an_invite_opens_a_guarantor_account(
+    session: AsyncSession, worker: Worker
+) -> None:
+    from app.services import guarantor as guarantor_service
+
+    agreement = await guarantor_service.invite_guarantor(
+        session, worker, first_name="Hannah", last_name="Lazarus", relationship="employer"
+    )
+    await session.flush()
+
+    async with client_for(session) as client:
+        body = await sign_in(client, "hannah@example.com", sign_up="guarantor")
+        assert body["is_worker"] is False
+
+        claimed = await client.post(f"/api/v1/guarantor-instruments/{agreement.id}/claim")
+        assert claimed.status_code == 200, claimed.text
+        assert claimed.json()["claimed"] is True
+        assert claimed.json()["guarantor"]["full_name"] == "Hannah Lazarus"
+
+        me = (await client.get("/api/v1/auth/me")).json()
+        assert me["is_guarantor"] is True
+        assert me["display_name"] == "Hannah Lazarus"
+
+        # The invite carries no phone; signing goes ahead without one.
+        signed = await client.post(
+            f"/api/v1/guarantor-instruments/{agreement.id}/sign",
+            json={
+                "signer_name": "Hannah Lazarus",
+                "accepted": True,
+                "signature_metadata": {
+                    "ip": "102.89.1.7",
+                    "user_agent": "Mozilla/5.0",
+                    "timestamp": datetime.now(tz=UTC).isoformat(),
+                },
+            },
+        )
+        assert signed.status_code == 200, signed.text
+        assert signed.json()["status"] == "Pending Verification"
+
+    app.dependency_overrides.clear()
+
+
+async def test_an_invite_cannot_be_claimed_signed_out(session: AsyncSession, worker: Worker) -> None:
+    from app.services import guarantor as guarantor_service
+
+    agreement = await guarantor_service.invite_guarantor(
+        session, worker, first_name="Hannah", last_name="Lazarus", relationship="employer"
+    )
+    await session.flush()
+
+    async with client_for(session) as client:
+        unclaimed = await client.get(f"/api/v1/guarantor-instruments/{agreement.id}")
+        assert unclaimed.json()["claimed"] is False
+        assert unclaimed.json()["guarantor"]["full_name"] == "Hannah Lazarus"
+
+        refused = await client.post(f"/api/v1/guarantor-instruments/{agreement.id}/claim")
+        assert refused.status_code == 401
 
     app.dependency_overrides.clear()

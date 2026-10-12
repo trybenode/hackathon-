@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button, CloseIcon } from "@/components/ui";
 import { getInstrument, type Instrument } from "@/lib/guarantor";
+import { OnboardingHero } from "@/components/verification/OnboardingHero";
 
 /**
  * Shown after a guarantor declines a request.
@@ -36,17 +36,7 @@ export function DeclinedNotice({ instrumentId }: { instrumentId: string }) {
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-col">
-      <div className="relative mt-6 aspect-[400/235] w-full overflow-hidden">
-        <Image
-          src="/guarantor-hero.webp"
-          alt=""
-          fill
-          priority
-          sizes="(max-width: 448px) 100vw, 448px"
-          className="object-cover"
-          style={{ objectPosition: "50% 37%" }}
-        />
-      </div>
+      <OnboardingHero />
 
       <div className="flex flex-col items-center gap-4 px-6 pt-10 pb-10 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-pill bg-error-light">

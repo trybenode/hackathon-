@@ -9,6 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.endpoints.auth import current_user
 from app.db.session import get_db_session
 from app.models.domain import AgreementStatus, GuarantorAgreement, Job, User, Worker
 from app.schemas.api import (
@@ -40,7 +41,9 @@ from app.services.guarantor import (
     LivenessCheckFailedError,
     InstrumentNotFoundError,
     InvalidTransitionError,
+    InviteClaimedError,
     SelfGuaranteeError,
+    UnclaimedInviteError,
     WorkerNotFoundError,
 )
 
@@ -71,13 +74,17 @@ async def _worker_summary(
 async def _to_response(
     session: AsyncSession, agreement: GuarantorAgreement
 ) -> GuarantorInstrumentResponse:
-    person = await session.get(User, agreement.guarantor_user_id)
+    person = (
+        await session.get(User, agreement.guarantor_user_id)
+        if agreement.guarantor_user_id
+        else None
+    )
     return GuarantorInstrumentResponse(
         instrument_id=agreement.id,
         worker_id=agreement.worker_id,
         worker=await _worker_summary(session, agreement),
         guarantor=GuarantorSummary(
-            full_name=person.display_name if person else "",
+            full_name=(person.display_name if person else "") or agreement.guarantor_name or "",
             relationship=agreement.relationship_type,
             phone=agreement.guarantor_phone or None,
             email=person.email if person else None,
@@ -93,6 +100,7 @@ async def _to_response(
         resolved_at=agreement.resolved_at,
         status_reason=agreement.status_reason,
         created_at=agreement.created_at,
+        claimed=agreement.guarantor_user_id is not None,
     )
 
 
@@ -103,7 +111,7 @@ def _http_error(error: GuarantorError) -> HTTPException:
         return HTTPException(status_code=404, detail=str(error))
     if isinstance(error, WorkerNotFoundError):
         return HTTPException(status_code=404, detail=str(error))
-    if isinstance(error, InvalidTransitionError):
+    if isinstance(error, (InvalidTransitionError, UnclaimedInviteError, InviteClaimedError)):
         return HTTPException(status_code=409, detail=str(error))
     if isinstance(error, (SelfGuaranteeError, UnknownOutcomeError)):
         return HTTPException(status_code=422, detail=str(error))
@@ -206,6 +214,27 @@ async def send_for_signature(
 ) -> GuarantorInstrumentResponse:
     try:
         agreement = await guarantor_service.send_for_signature(session, instrument_id)
+    except GuarantorError as error:
+        raise _http_error(error) from error
+
+    await session.commit()
+    return await _to_response(session, agreement)
+
+
+@router.post(
+    "/{instrument_id}/claim",
+    response_model=GuarantorInstrumentResponse,
+    summary="Become the guarantor on an invite link",
+)
+async def claim_invite(
+    instrument_id: UUID,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> GuarantorInstrumentResponse:
+    """The signed-in person takes the invite a worker sent them."""
+
+    try:
+        agreement = await guarantor_service.claim_invite(session, instrument_id, user)
     except GuarantorError as error:
         raise _http_error(error) from error
 

@@ -23,6 +23,7 @@ from app.models.domain import (
     Worker,
 )
 from app.services import worker_record as service
+from tests.conftest import give_guarantor
 
 NOW = datetime.now(UTC)
 
@@ -175,6 +176,7 @@ async def test_released_job_shows_its_rating_on_the_record(session: AsyncSession
     from app.services import escrow
 
     user = await session.get(User, worker.user_id)
+    await give_guarantor(session, worker)
     job = await escrow.create_job_link(
         session, user, title="Home cleaning", address="Lekki, Lagos",
         scheduled_at=NOW + _td(days=1), price=Decimal("25000.00"),
@@ -198,6 +200,8 @@ async def test_released_job_shows_its_rating_on_the_record(session: AsyncSession
     assert outcome.client_name == "Peter James"
     assert outcome.rating == 5.0
     assert outcome.dispute == "none"
+    # Escrow knows there was no dispute, so the record can say 0, not unknown.
+    assert record.disputes == 0
 
 
 async def test_latest_failed_identity_supersedes_pass(session, worker):

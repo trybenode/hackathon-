@@ -1,10 +1,13 @@
-"""Purpose: Expose the guarantor's email + one-time code sign-in.
+"""Purpose: Expose email + one-time code sign-in and sign-up.
 
 Dependencies: FastAPI, SQLAlchemy async sessions, app.services.auth.
-Used by: the guarantor sign-in screen and any endpoint needing the signed-in user.
+Used by: the sign-in screens, worker sign-up, guarantor invite links, and any
+endpoint needing the signed-in user.
 
 The session is carried by an HTTP-only cookie, so page scripts cannot read it.
 """
+
+from typing import Literal
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from pydantic import EmailStr, Field
@@ -16,6 +19,7 @@ from app.db.session import get_db_session
 from app.models.domain import AgreementStatus, GuarantorAgreement, User, Worker
 from app.schemas.api import ApiModel
 from app.services import auth as auth_service
+from app.services import worker_onboarding as onboarding
 from app.services.auth import (
     SESSION_COOKIE,
     AuthError,
@@ -44,6 +48,9 @@ class RequestCodeResponse(ApiModel):
 class VerifyCodeRequest(ApiModel):
     email: EmailStr
     code: str = Field(min_length=4, max_length=8)
+    #: "worker" signs up a new worker; "guarantor" opens an account for someone
+    #: claiming an invite link. Without it, only existing accounts sign in.
+    sign_up: Literal["worker", "guarantor"] | None = None
 
 
 class SignedInUser(ApiModel):
@@ -55,6 +62,8 @@ class SignedInUser(ApiModel):
     #: Has been asked to stand behind a worker. Drafts the platform has not
     #: sent yet do not count.
     is_guarantor: bool = False
+    #: A worker's unfinished verification step: "identity" or "liveness".
+    onboarding_step: str | None = None
 
 
 async def _signed_in(session: AsyncSession, user: User) -> SignedInUser:
@@ -72,12 +81,15 @@ async def _signed_in(session: AsyncSession, user: User) -> SignedInUser:
             )
         )
     )
+    step = (await onboarding.status(session, user)).next_step if is_worker else None
     return SignedInUser(
         user_id=str(user.id),
         email=user.email,
         display_name=user.display_name,
         is_worker=bool(is_worker),
         is_guarantor=bool(is_guarantor),
+        # Adding a guarantor can be skipped, so it never blocks sign-in.
+        onboarding_step=step if step in ("identity", "liveness") else None,
     )
 
 
@@ -138,12 +150,16 @@ async def verify_code(
     session: AsyncSession = Depends(get_db_session),
 ) -> SignedInUser:
     try:
-        user, token = await auth_service.verify_login_code(session, payload.email, payload.code)
+        user, token = await auth_service.verify_login_code(
+            session, payload.email, payload.code, create_account=payload.sign_up is not None
+        )
     except AuthError as error:
         # Attempt counters and consumed codes must survive a rejection.
         await session.commit()
         raise _http_error(error) from error
 
+    if payload.sign_up == "worker":
+        await onboarding.ensure_worker(session, user)
     await session.commit()
     response.set_cookie(
         SESSION_COOKIE,
