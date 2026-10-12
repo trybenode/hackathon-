@@ -257,3 +257,18 @@ async def test_active_guarantor_requires_both_checks_for_public_support(session,
     await session.flush()
     summary = summary_from_record(await service.load_record(session, user))
     assert summary.active_guarantor and summary.guarantor_sandbox
+
+
+async def test_every_completed_outcome_can_be_paged(session, worker, source):
+    for index in range(23):
+        await add_outcome(session, worker, source, days_ago=index)
+    user = await session.get(User, worker.user_id)
+
+    first, total = await service.completed_outcomes(session, user, page=1, size=20)
+    second, _ = await service.completed_outcomes(session, user, page=2, size=20)
+
+    assert total == 23
+    assert (len(first), len(second)) == (20, 3)
+    # Newest first, with no repeats across pages.
+    assert len({item.id for item in first + second}) == 23
+    assert first[0].occurred_at > second[-1].occurred_at

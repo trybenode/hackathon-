@@ -107,6 +107,14 @@ export function getWorkerRecord(signal?: AbortSignal) {
   return featureRequest<WorkerRecord>("/me/record", { signal });
 }
 
+/** Every completed verified outcome, a page at a time; the record holds only the latest 20. */
+export function getRecordOutcomes(page = 1, signal?: AbortSignal) {
+  return featureRequest<{ items: RecordOutcome[]; total: number; page: number; size: number; pages: number }>(
+    `/me/record/outcomes?page=${page}&size=20`,
+    { signal },
+  );
+}
+
 export function getWorkerHistory(page = 1, signal?: AbortSignal) {
   return featureRequest<Page<HistoryItem>>(`/me/record/history?page=${page}&size=20`, { signal });
 }

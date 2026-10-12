@@ -1,27 +1,123 @@
 "use client";
+/** Combines localized evidence history with detailed verified outcomes for the record page. */
 import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { ArrowLeftIcon } from "@/components/worker/icons";
-import {
-  errorMessage,
-  type HistoryItem,
-  type Page,
-} from "@/lib/portability";
+import { OutcomeList } from "@/components/worker/OutcomeList";
+import { RecordGate } from "@/components/worker/RecordGate";
+import { ApiFailure, errorMessage, type HistoryItem, type Page } from "@/lib/portability";
 import { historyDate } from "@/lib/history";
-import { getWorkerHistory } from "@/lib/workerRecord";
+import { getWorkerHistory, getRecordOutcomes, type RecordOutcome } from "@/lib/workerRecord";
 
 export function OutcomeHistory() {
+  const { w } = useWorkerCopy();
+  const router = useRouter();
+  const [view, setView] = useState<"verified" | "history">("verified");
+  return <main className="flex flex-col">
+    <header className="flex items-center gap-3 border-b border-stroke px-6 pt-8 pb-5">
+      <button type="button" aria-label={w("Back")} onClick={() => router.back()}><ArrowLeftIcon /></button>
+      <h1 className="text-body-lg font-semibold">{w("Work history")}</h1>
+    </header>
+    <nav aria-label={w("Work history")} className="flex flex-wrap gap-2 px-6 pt-4">
+      <Button variant="outline" aria-pressed={view === "verified"} onClick={() => setView("verified")}>{w("Verified outcomes")}</Button>
+      <Button variant="outline" aria-pressed={view === "history"} onClick={() => setView("history")}>{w("Work history")}</Button>
+    </nav>
+    {view === "verified" ? <VerifiedOutcomeHistory /> : <WorkHistory />}
+  </main>;
+}
+
+/** Every verified outcome on the worker's record, newest first, 20 at a time. */
+function VerifiedOutcomeHistory() {
+  const { w } = useWorkerCopy();
+  const router = useRouter();
+  const pathname = usePathname();
+  const [outcomes, setOutcomes] = useState<RecordOutcome[] | null>(null);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const apply = useCallback((result: Awaited<ReturnType<typeof getRecordOutcomes>>) => {
+    setOutcomes((current) => (result.page === 1 || !current ? result.items : [...current, ...result.items]));
+    setPage(result.page);
+    setPages(result.pages);
+    setTotal(result.total);
+    setError(null);
+  }, []);
+
+  const fail = useCallback(
+    (cause: unknown) => {
+      if (cause instanceof ApiFailure && cause.status === 401) {
+        router.replace(`/sign-in?next=${encodeURIComponent(pathname)}`);
+        return;
+      }
+      setError(errorMessage(cause));
+    },
+    [pathname, router],
+  );
+
+  const load = useCallback((next: number) => getRecordOutcomes(next).then(apply).catch(fail), [apply, fail]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getRecordOutcomes(1, controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted) apply(result);
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted) fail(cause);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [apply, fail]);
+
+  async function more() {
+    setLoadingMore(true);
+    await load(page + 1);
+    setLoadingMore(false);
+  }
+
+  return (
+    <section className="flex flex-col">
+
+      <RecordGate loading={loading} error={error} hasData={outcomes !== null} onRetry={() => load(outcomes === null ? 1 : page + 1)}>
+        {outcomes && (
+          <div className="flex flex-col gap-4 px-6 pt-4 pb-4">
+            <OutcomeList outcomes={outcomes} />
+            {page < pages && (
+              <Button variant="outline" className="self-center rounded-xl px-8" disabled={loadingMore} onClick={more}>
+                {loadingMore ? w("Loading…") : `${w("Show more")} (${total - outcomes.length})`}
+              </Button>
+            )}
+          </div>
+        )}
+      </RecordGate>
+    </section>
+  );
+}
+
+function WorkHistory() {
   const { w, language } = useWorkerCopy();
 
   const router = useRouter();
+  const pathname = usePathname();
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const [data, setData] = useState<Page<HistoryItem> | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const retry = useCallback(() => setRevision((value) => value + 1), []);
+  const retry = useCallback(() => {
+    setLoading(true);
+    setRevision((value) => value + 1);
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     getWorkerHistory(page, controller.signal)
@@ -32,26 +128,26 @@ export function OutcomeHistory() {
         }
       })
       .catch((e) => {
-        if (!controller.signal.aborted) setError(errorMessage(e));
+        if (!controller.signal.aborted) {
+          if (e instanceof ApiFailure && e.status === 401) {
+            router.replace(`/sign-in?next=${encodeURIComponent(pathname)}`);
+            return;
+          }
+          setError(errorMessage(e));
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [page, revision]);
+  }, [page, revision, pathname, router]);
   function changePage(next: number) {
     setLoading(true);
     setError("");
     setPage(next);
   }
   return (
-    <main className="flex flex-col gap-5 p-6">
-      <header className="flex items-center gap-3">
-        <button aria-label={w("Back")} onClick={() => router.back()}>
-          <ArrowLeftIcon />
-        </button>
-        <h1 className="text-body-lg font-semibold">{w("Work history")}</h1>
-      </header>
+    <section className="flex flex-col gap-5 p-6">
       <p className="text-body-sm text-grey-600">
         {w("Verified evidence and self-declared history are labelled separately. Recording work does not establish customer confirmation.")}</p>
       {loading && <p role="status">{w("Loading history…")}</p>}
@@ -123,6 +219,6 @@ export function OutcomeHistory() {
           )}
         </>
       )}
-    </main>
+    </section>
   );
 }
