@@ -77,7 +77,8 @@ class Settings(BaseSettings):
     escrow_confirmation_window_hours: int = Field(48, alias="ESCROW_CONFIRMATION_WINDOW_HOURS")
     #: Where the screens live, for links in emails (job pages, job details).
     frontend_base_url: str = Field("http://localhost:3000", alias="FRONTEND_BASE_URL")
-    #: The platform's own address, told when a dispute opens. Optional.
+    #: The platform's own address, told when a dispute opens or a platform asks
+    #: to attest. Optional.
     ops_email: str = Field("", alias="OPS_EMAIL")
 
     @property

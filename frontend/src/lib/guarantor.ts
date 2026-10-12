@@ -277,6 +277,8 @@ export type SignedInUser = {
   is_worker: boolean;
   /** Has been asked to stand behind a worker. */
   is_guarantor: boolean;
+  /** Has a developer profile. */
+  is_developer: boolean;
   /** A worker's unfinished verification step. */
   onboarding_step: "identity" | "liveness" | null;
 };
@@ -290,6 +292,7 @@ export type SignedInUser = {
  * they belong.
  */
 export function landingPathFor(user: SignedInUser) {
+  if (user.is_developer) return "/developer";
   // A worker who has not finished verifying picks up where they left off.
   if (user.is_worker && user.onboarding_step) return `/join/${user.onboarding_step}`;
   if (user.is_worker) return "/worker";
@@ -311,9 +314,10 @@ export function requestLoginCode(email: string) {
 
 /**
  * Checks a login code. `signUp` opens an account for a new address: "worker"
- * from the worker sign-up, "guarantor" from an invite link.
+ * from the worker sign-up, "guarantor" from an invite link, "developer" from
+ * the developer sign-up.
  */
-export function verifyLoginCode(email: string, code: string, signUp?: "worker" | "guarantor") {
+export function verifyLoginCode(email: string, code: string, signUp?: "worker" | "guarantor" | "developer") {
   return request<SignedInUser>("/auth/verify", {
     method: "POST",
     body: JSON.stringify({ email, code, sign_up: signUp ?? null }),

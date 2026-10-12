@@ -16,15 +16,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.session import get_db_session
+from app.models.developer import DeveloperAccount
 from app.models.domain import AgreementStatus, GuarantorAgreement, User, Worker
 from app.schemas.api import ApiModel
 from app.services import auth as auth_service
+from app.services import developers
 from app.services import worker_onboarding as onboarding
 from app.services.auth import (
     SESSION_COOKIE,
     AuthError,
     InvalidCodeError,
     ResendTooSoonError,
+    EmailTakenError,
     UnknownAccountError,
 )
 from app.services.email_sender import EmailDeliveryError
@@ -49,8 +52,9 @@ class VerifyCodeRequest(ApiModel):
     email: EmailStr
     code: str = Field(min_length=4, max_length=8)
     #: "worker" signs up a new worker; "guarantor" opens an account for someone
-    #: claiming an invite link. Without it, only existing accounts sign in.
-    sign_up: Literal["worker", "guarantor"] | None = None
+    #: claiming an invite link; "developer" opens a developer profile. Without
+    #: it, only existing accounts sign in.
+    sign_up: Literal["worker", "guarantor", "developer"] | None = None
 
 
 class SignedInUser(ApiModel):
@@ -62,6 +66,8 @@ class SignedInUser(ApiModel):
     #: Has been asked to stand behind a worker. Drafts the platform has not
     #: sent yet do not count.
     is_guarantor: bool = False
+    #: Has a developer profile.
+    is_developer: bool = False
     #: A worker's unfinished verification step: "identity" or "liveness".
     onboarding_step: str | None = None
 
@@ -81,6 +87,7 @@ async def _signed_in(session: AsyncSession, user: User) -> SignedInUser:
             )
         )
     )
+    is_developer = await session.scalar(select(exists().where(DeveloperAccount.user_id == user.id)))
     step = (await onboarding.status(session, user)).next_step if is_worker else None
     return SignedInUser(
         user_id=str(user.id),
@@ -88,6 +95,7 @@ async def _signed_in(session: AsyncSession, user: User) -> SignedInUser:
         display_name=user.display_name,
         is_worker=bool(is_worker),
         is_guarantor=bool(is_guarantor),
+        is_developer=bool(is_developer),
         # Adding a guarantor can be skipped, so it never blocks sign-in.
         onboarding_step=step if step in ("identity", "liveness") else None,
     )
@@ -100,6 +108,8 @@ def _http_error(error: AuthError) -> HTTPException:
         return HTTPException(status_code=400, detail=str(error))
     if isinstance(error, UnknownAccountError):
         return HTTPException(status_code=404, detail=str(error))
+    if isinstance(error, EmailTakenError):
+        return HTTPException(status_code=409, detail=str(error))
     return HTTPException(status_code=400, detail=str(error))
 
 
@@ -158,6 +168,8 @@ async def verify_code(
         await session.commit()
         raise _http_error(error) from error
 
+    if payload.sign_up == "developer":
+        await developers.ensure_developer(session, user)
     if payload.sign_up == "worker":
         await onboarding.ensure_worker(session, user)
     await session.commit()
@@ -170,6 +182,53 @@ async def verify_code(
         max_age=int(auth_service.SESSION_TTL.total_seconds()),
         path="/",
     )
+    return await _signed_in(session, user)
+
+
+class EmailChangeRequest(ApiModel):
+    email: EmailStr
+
+
+class EmailChangeConfirm(ApiModel):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=8)
+
+
+@router.post("/email-change/code", response_model=RequestCodeResponse, summary="Email a code to a new address")
+async def request_email_change(
+    payload: EmailChangeRequest,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> RequestCodeResponse:
+    """The first step of changing the account's email: prove the new one is yours."""
+
+    try:
+        code = await auth_service.request_email_change(session, user, payload.email)
+    except AuthError as error:
+        raise _http_error(error) from error
+    except EmailDeliveryError as error:
+        raise HTTPException(
+            status_code=502, detail="We could not send the code. Try again in a moment."
+        ) from error
+
+    await session.commit()
+    return RequestCodeResponse(debug_code=code if _is_development() else None)
+
+
+@router.post("/email-change", response_model=SignedInUser, summary="Confirm a new email address")
+async def confirm_email_change(
+    payload: EmailChangeConfirm,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> SignedInUser:
+    try:
+        await auth_service.confirm_email_change(session, user, payload.email, payload.code)
+    except AuthError as error:
+        # Attempt counters must survive a wrong code.
+        await session.commit()
+        raise _http_error(error) from error
+
+    await session.commit()
     return await _signed_in(session, user)
 
 

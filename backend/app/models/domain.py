@@ -178,6 +178,8 @@ class Worker(UUIDTimestampMixin, Base):
     #: Where the worker operates, e.g. "Lekki, Lagos".
     location: Mapped[str | None] = mapped_column(String(160), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    #: A demo worker that only sandbox platform keys can see.
+    is_sandbox: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     user: Mapped[User] = relationship(back_populates="worker")
     outcomes: Mapped[list["NormalizedOutcome"]] = relationship(back_populates="worker")
@@ -486,6 +488,11 @@ class GuarantorAgreement(UUIDTimestampMixin, Base):
     )
     #: The name the worker gave when inviting, shown until the guarantor signs in.
     guarantor_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    #: The platform that asked for this guarantee through the API; only it may
+    #: send, trigger, resolve or revoke it.
+    organization_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True
+    )
     job_id: Mapped[UUID | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     scope: Mapped[str] = mapped_column(Text)
     conditions: Mapped[str] = mapped_column(Text)

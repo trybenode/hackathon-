@@ -227,6 +227,49 @@ async def test_sign_in_reports_which_sides_the_account_has(
     app.dependency_overrides.clear()
 
 
+async def test_a_new_developer_signs_up_with_a_code(session: AsyncSession) -> None:
+    async with client_for(session) as client:
+        requested = await client.post("/api/v1/auth/code", json={"email": "Alex@Company.com"})
+        verified = await client.post(
+            "/api/v1/auth/verify",
+            json={"email": "alex@company.com", "code": requested.json()["debug_code"], "sign_up": "developer"},
+        )
+        assert verified.status_code == 200, verified.text
+        body = verified.json()
+        me = (await client.get("/api/v1/auth/me")).json()
+
+    assert body["is_developer"] is True and me["is_developer"] is True
+    assert body["is_worker"] is False
+    app.dependency_overrides.clear()
+
+
+async def test_changing_the_account_email(session: AsyncSession) -> None:
+    session.add_all([User(email="alex@company.com", display_name="Alex"), User(email="taken@company.com", display_name="T")])
+    await session.flush()
+
+    async with client_for(session) as client:
+        signed_out = await client.post("/api/v1/auth/email-change/code", json={"email": "alex@newco.io"})
+        assert signed_out.status_code == 401
+
+        code = (await client.post("/api/v1/auth/code", json={"email": "alex@company.com"})).json()["debug_code"]
+        await client.post("/api/v1/auth/verify", json={"email": "alex@company.com", "code": code})
+
+        taken = await client.post("/api/v1/auth/email-change/code", json={"email": "taken@company.com"})
+        assert taken.status_code == 409
+
+        sent = await client.post("/api/v1/auth/email-change/code", json={"email": "alex@newco.io"})
+        wrong = await client.post("/api/v1/auth/email-change", json={"email": "alex@newco.io", "code": "000000"})
+        assert wrong.status_code == 400
+        changed = await client.post(
+            "/api/v1/auth/email-change", json={"email": "alex@newco.io", "code": sent.json()["debug_code"]}
+        )
+        assert changed.status_code == 200, changed.text
+        assert changed.json()["email"] == "alex@newco.io"
+        assert (await client.get("/api/v1/auth/me")).json()["email"] == "alex@newco.io"
+
+    app.dependency_overrides.clear()
+
+
 async def sign_in(client: AsyncClient, email: str, **extra) -> dict:
     requested = await client.post("/api/v1/auth/code", json={"email": email})
     verified = await client.post(

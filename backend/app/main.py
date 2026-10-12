@@ -13,6 +13,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from app.api.v1.endpoints.auth import router as auth_router
+from app.api.v1.endpoints.developers import router as developers_router
+from app.api.v1.endpoints.scoring import router as scoring_router
+from app.core.api_usage import ApiUsageMiddleware
 from app.api.v1.endpoints.guarantor import router as guarantor_router
 from app.api.v1.endpoints.me import router as me_router
 from app.api.v1.endpoints.health import router as health_router
@@ -78,11 +81,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(GZipMiddleware, minimum_size=500)
+app.add_middleware(ApiUsageMiddleware)
 install_feature_http(app)
 
 app.include_router(health_router, prefix=settings.api_v1_prefix)
 app.include_router(guarantor_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
+app.include_router(developers_router, prefix=settings.api_v1_prefix)
+app.include_router(scoring_router, prefix=settings.api_v1_prefix)
 app.include_router(me_router, prefix=settings.api_v1_prefix)
 app.include_router(trust_router, prefix=settings.api_v1_prefix)
 app.include_router(credentials_router, prefix=settings.api_v1_prefix)
