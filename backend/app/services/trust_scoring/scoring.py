@@ -23,9 +23,10 @@ class PlatformConfig:
 PRESETS = {
     "generic": PlatformConfig(),
     "domestic": PlatformConfig(
-        weights={"safety_incident_rate": 0.25, "completion_rate": 0.20,
-                 "dispute_rate": 0.20, "repeat_hire_rate": 0.15,
-                 "no_show_rate": 0.10, "cancellation_rate": 0.10},
+        weights={"safety_incident_rate": 0.25, "completion_rate": 0.15,
+                 "dispute_rate": 0.15, "average_rating": 0.15,
+                 "repeat_hire_rate": 0.10, "no_show_rate": 0.10,
+                 "cancellation_rate": 0.10},
         required_signals=("completion_rate", "safety_incident_rate"),
         min_jobs=8, medium_t=0.70),
     "ride_hailing": PlatformConfig(
