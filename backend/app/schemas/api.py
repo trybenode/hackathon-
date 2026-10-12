@@ -43,6 +43,7 @@ class GuarantorRelationship(StrEnum):
     PARENT = "parent"
     SPOUSE = "spouse"
     COLLEAGUE = "colleague"
+    EMPLOYER = "employer"
     OTHER = "other"
 
 
@@ -200,7 +201,8 @@ class SignatureMetadata(ApiModel):
 
 class GuarantorSignRequest(ApiModel):
     signer_name: str = Field(min_length=1, max_length=160)
-    signer_phone: str = Field(min_length=5, max_length=40)
+    #: Empty for a guarantor invited by link: their phone comes with their identity details.
+    signer_phone: str = Field(default="", max_length=40)
     accepted: bool
     signature_metadata: SignatureMetadata
 
@@ -277,6 +279,8 @@ class GuarantorInstrumentResponse(ApiModel):
     triggered_at: datetime | None = None
     status_reason: str | None = None
     created_at: datetime | None = None
+    #: False while an invite link waits for its guarantor to sign in.
+    claimed: bool = True
 
 
 class GuarantorInstrumentListResponse(ApiModel):

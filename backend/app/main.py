@@ -24,6 +24,14 @@ from app.api.v1.endpoints.credentials import router as credentials_router
 from app.api.v1.endpoints.portability import router as portability_router, platform_router
 from app.core.feature_http import install_feature_http
 from app.api.v1.endpoints.worker_record import router as worker_record_router
+from app.api.v1.endpoints.onboarding import router as onboarding_router
+from app.api.v1.endpoints.jobs import (
+    payscrow_webhook,
+    public_router as public_jobs_router,
+    webhook_router,
+    worker_feed_router,
+    worker_router as my_jobs_router,
+)
 from app.core.config import get_settings
 from app.db.session import async_session_factory
 from app.services.expiry import sweep_forever
@@ -87,3 +95,12 @@ app.include_router(credentials_router, prefix=settings.api_v1_prefix)
 app.include_router(portability_router, prefix=settings.api_v1_prefix)
 app.include_router(platform_router, prefix=settings.api_v1_prefix)
 app.include_router(worker_record_router, prefix=settings.api_v1_prefix)
+app.include_router(onboarding_router, prefix=settings.api_v1_prefix)
+app.include_router(public_jobs_router, prefix=settings.api_v1_prefix)
+app.include_router(my_jobs_router, prefix=settings.api_v1_prefix)
+app.include_router(worker_feed_router, prefix=settings.api_v1_prefix)
+app.include_router(webhook_router, prefix=settings.api_v1_prefix)
+# Payscrow retries a webhook at the address the transaction was opened with.
+# Transactions opened while PAYSCROW_WEBHOOK_URL was a bare host point at "/",
+# so the same signed handler answers there too.
+app.add_api_route("/", payscrow_webhook, methods=["POST"], include_in_schema=False)

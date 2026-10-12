@@ -1,7 +1,8 @@
 """Purpose: Define the identity-verification provider seam and a local stub.
 
 Dependencies: dataclasses and hashlib.
-Used by: app.services.guarantor when a guarantor submits identity details.
+Used by: app.services.guarantor and app.services.worker_onboarding when a
+guarantor or a worker submits identity details.
 
 Identity numbers (NIN, BVN) and documents are passed to a provider and then
 dropped. Nothing in this module returns them, and nothing persists them: only
@@ -13,12 +14,13 @@ from __future__ import annotations
 import hashlib
 import uuid
 from dataclasses import dataclass
+from datetime import date
 from typing import Protocol
 
 
 @dataclass(frozen=True)
 class IdentitySubmission:
-    """Identity details as entered by a guarantor.
+    """Identity details as entered by a guarantor or a worker.
 
     Treat every field here as sensitive. It exists to be handed to a provider,
     never to be written to the database or a log.
@@ -30,6 +32,8 @@ class IdentitySubmission:
     address: str
     nin: str
     bvn: str
+    #: Workers give it; the guarantor form does not ask.
+    date_of_birth: date | None = None
     document_filename: str | None = None
     document_size: int | None = None
 

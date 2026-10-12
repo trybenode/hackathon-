@@ -30,6 +30,14 @@ export type RecordOutcome = {
   occurred_at: string;
   amount: string | null;
   status: string;
+  location: string | null;
+  client_name: string | null;
+  /** The customer's 1-5 stars; null for outcomes imported from elsewhere. */
+  rating: number | null;
+  /** "none", or how a dispute on the job ended. */
+  dispute: "none" | "dismissed" | "upheld";
+  /** "native" here, else the platform it was imported from. */
+  source: string;
 };
 
 export type IdentityCredential = {
@@ -47,6 +55,8 @@ export type GuarantorCredential = {
   activated_at: string;
   /** A guarantee runs for one year from activation. */
   valid_until: string;
+  /** How the guarantor knows the worker, e.g. "employer". */
+  relationship: string;
 };
 
 export type ImportedRecordCredential = {
@@ -94,6 +104,14 @@ export type WorkerRecord = {
 
 export function getWorkerRecord(signal?: AbortSignal) {
   return featureRequest<WorkerRecord>("/me/record", { signal });
+}
+
+/** Every completed verified outcome, a page at a time; the record holds only the latest 20. */
+export function getRecordOutcomes(page = 1, signal?: AbortSignal) {
+  return featureRequest<{ items: RecordOutcome[]; total: number; page: number; size: number; pages: number }>(
+    `/me/record/outcomes?page=${page}&size=20`,
+    { signal },
+  );
 }
 
 export function getWorkerHistory(page = 1, signal?: AbortSignal) {

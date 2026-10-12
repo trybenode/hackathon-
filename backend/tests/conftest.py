@@ -23,8 +23,10 @@ from app.db.base import Base
 from app.models.domain import User, Worker
 from app.services import document_store as document_store_module
 from app.services import email_sender as email_sender_module
+from app.services import escrow_provider as escrow_provider_module
 from app.services.document_store import NullDocumentStore
 from app.services.email_sender import LoggingEmailSender
+from app.services.escrow_provider import StubEscrowProvider
 
 
 @pytest.fixture(autouse=True)
@@ -42,6 +44,15 @@ def never_upload_to_a_real_bucket(monkeypatch: pytest.MonkeyPatch) -> NullDocume
 
     stub = NullDocumentStore()
     monkeypatch.setattr(document_store_module, "default_document_store", stub)
+    return stub
+
+
+@pytest.fixture(autouse=True)
+def never_move_real_money(monkeypatch: pytest.MonkeyPatch) -> StubEscrowProvider:
+    """Keep the suite offline even when PAYSCROW_API_KEY is set in .env."""
+
+    stub = StubEscrowProvider()
+    monkeypatch.setattr(escrow_provider_module, "default_escrow_provider", stub)
     return stub
 
 
@@ -80,7 +91,7 @@ async def session() -> AsyncGenerator[AsyncSession, None]:
 async def worker(session: AsyncSession) -> Worker:
     """Create a worker with its owning user."""
 
-    user = User(email="worker@example.com", display_name="Jane A.")
+    user = User(email="worker@example.com", display_name="Jane A.", phone="08087654321")
     session.add(user)
     await session.flush()
 
@@ -93,3 +104,38 @@ async def worker(session: AsyncSession) -> Worker:
     session.add(record)
     await session.flush()
     return record
+
+
+async def give_guarantor(session: AsyncSession, worker: Worker) -> None:
+    """Stand an active guarantee behind the worker, as creating job links needs."""
+
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from app.models.domain import AgreementStatus, GuarantorAgreement
+
+    existing = await session.scalar(
+        select(GuarantorAgreement).where(
+            GuarantorAgreement.worker_id == worker.id,
+            GuarantorAgreement.status == AgreementStatus.ACTIVE,
+        )
+    )
+    if existing is not None:
+        return
+    person = User(email=f"guarantor-{worker.id.hex[:8]}@example.com", display_name="Grace Guarantor")
+    session.add(person)
+    await session.flush()
+    session.add(
+        GuarantorAgreement(
+            worker_id=worker.id,
+            guarantor_user_id=person.id,
+            scope="Cleaning jobs",
+            conditions="Covers no-show.",
+            relationship_type="employer",
+            status=AgreementStatus.ACTIVE,
+            verified_at=datetime.now(UTC),
+            valid_until=datetime.now(UTC) + timedelta(days=365),
+        )
+    )
+    await session.flush()

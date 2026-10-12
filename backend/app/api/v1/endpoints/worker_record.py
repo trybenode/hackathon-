@@ -48,6 +48,35 @@ class RecordOutcomeItem(ApiModel):
     occurred_at: datetime
     amount: Decimal | None = None
     status: str
+    location: str | None = None
+    client_name: str | None = None
+    rating: float | None = None
+    #: "none", "dismissed" or "upheld".
+    dispute: str = "none"
+    source: str = "native"
+
+
+class RecordOutcomePage(ApiModel):
+    items: list[RecordOutcomeItem]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
+def _outcome_item(item: record_service.RecordOutcome) -> RecordOutcomeItem:
+    return RecordOutcomeItem(
+        id=item.id,
+        title=item.title,
+        occurred_at=item.occurred_at,
+        amount=item.amount,
+        status=item.status,
+        location=item.location,
+        client_name=item.client_name,
+        rating=item.rating,
+        dispute=item.dispute,
+        source=item.source,
+    )
 
 
 class IdentityCredentialItem(ApiModel):
@@ -64,6 +93,7 @@ class GuarantorCredentialItem(ApiModel):
     status: str
     activated_at: datetime
     valid_until: datetime
+    relationship: str = ""
 
 
 class ImportedRecordItem(ApiModel):
@@ -137,16 +167,7 @@ async def worker_record(
             repeat_hires=record.repeat_hires,
             disputes=record.disputes,
         ),
-        outcomes=[
-            RecordOutcomeItem(
-                id=item.id,
-                title=item.title,
-                occurred_at=item.occurred_at,
-                amount=item.amount,
-                status=item.status,
-            )
-            for item in record.outcomes
-        ],
+        outcomes=[_outcome_item(item) for item in record.outcomes],
         credentials=RecordCredentials(
             identity=IdentityCredentialItem(
                 status=record.identity.status,
@@ -163,6 +184,7 @@ async def worker_record(
                 status=record.guarantor.status,
                 activated_at=record.guarantor.activated_at,
                 valid_until=record.guarantor.valid_until,
+                relationship=record.guarantor.relationship,
             )
             if record.guarantor
             else None,
@@ -173,6 +195,23 @@ async def worker_record(
             if record.imported_record
             else None,
         ),
+    )
+
+
+@router.get("/record/outcomes", response_model=RecordOutcomePage, summary="Every completed verified outcome")
+async def record_outcomes(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> RecordOutcomePage:
+    """The record lists only the latest few; this pages through them all."""
+    try:
+        items, total = await record_service.completed_outcomes(session, user, page=page, size=size)
+    except record_service.NotAWorkerError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return RecordOutcomePage(
+        items=[_outcome_item(item) for item in items], total=total, page=page, size=size, pages=max(1, -(-total // size))
     )
 
 

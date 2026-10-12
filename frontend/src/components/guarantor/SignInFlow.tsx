@@ -4,7 +4,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { OtpInput } from "@/components/guarantor/OtpInput";
 import { Button, Input } from "@/components/ui";
-import { ApiError, landingPathFor, requestLoginCode, verifyLoginCode } from "@/lib/guarantor";
+import {
+  ApiError,
+  landingPathFor,
+  requestLoginCode,
+  verifyLoginCode,
+  type SignedInUser,
+} from "@/lib/guarantor";
 import { OnboardingHero } from "@/components/verification/OnboardingHero";
 
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -14,9 +20,15 @@ export function SignInFlow({
   redirectTo,
   /** Pre-fills the address the instrument was sent to. */
   defaultEmail = "",
+  /** Opens an account for a new address: a worker signing up, or an invited guarantor. */
+  signUp,
+  /** Runs once signed in, before moving on; a failure stays on this screen. */
+  onSignedIn,
 }: {
   redirectTo?: string;
   defaultEmail?: string;
+  signUp?: "worker" | "guarantor";
+  onSignedIn?: (user: SignedInUser) => Promise<void>;
 }) {
   const router = useRouter();
   const [email, setEmail] = useState(defaultEmail);
@@ -57,7 +69,8 @@ export function SignInFlow({
     setError(null);
 
     try {
-      const user = await verifyLoginCode(email.trim(), value);
+      const user = await verifyLoginCode(email.trim(), value, signUp);
+      await onSignedIn?.(user);
       router.push(redirectTo ?? landingPathFor(user));
     } catch (cause) {
       setCode("");

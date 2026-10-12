@@ -23,6 +23,7 @@ from app.models.domain import (
     Worker,
 )
 from app.services import worker_record as service
+from tests.conftest import give_guarantor
 
 NOW = datetime.now(UTC)
 
@@ -156,6 +157,7 @@ async def test_credentials_come_from_checks_and_guarantees(
     assert record.guarantor is not None
     assert record.guarantor.name == "John Parker"
     assert record.guarantor.status == "Expired"
+    assert record.guarantor.relationship == "employer"
     assert record.imported_record is None
 
 
@@ -166,6 +168,40 @@ async def test_a_user_without_a_worker_profile(session: AsyncSession) -> None:
 
     with pytest.raises(service.NotAWorkerError):
         await service.load_record(session, user)
+
+
+async def test_released_job_shows_its_rating_on_the_record(session: AsyncSession, worker: Worker) -> None:
+    from datetime import timedelta as _td
+
+    from app.services import escrow
+
+    user = await session.get(User, worker.user_id)
+    await give_guarantor(session, worker)
+    job = await escrow.create_job_link(
+        session, user, title="Home cleaning", address="Lekki, Lagos",
+        scheduled_at=NOW + _td(days=1), price=Decimal("25000.00"),
+    )
+    pending = await escrow.start_payment(
+        session, job.link_token, name="Peter James", email="peter@example.com", phone="08012345678"
+    )
+    await escrow.handle_webhook(
+        session,
+        {"transactionId": "g", "transactionNumber": pending.provider_reference, "paymentStatus": "Paid"},
+        delivery_id="d-record",
+    )
+    await escrow.mark_complete(session, user, job.id)
+    await escrow.release_by_customer(session, job.link_token, code="5Z093S", rating=5)
+
+    record = await service.load_record(session, user)
+    outcome = record.outcomes[0]
+
+    assert outcome.title == "Home cleaning"
+    assert outcome.location == "Lekki, Lagos"
+    assert outcome.client_name == "Peter James"
+    assert outcome.rating == 5.0
+    assert outcome.dispute == "none"
+    # Escrow knows there was no dispute, so the record can say 0, not unknown.
+    assert record.disputes == 0
 
 
 async def test_latest_failed_identity_supersedes_pass(session, worker):
@@ -225,3 +261,18 @@ async def test_active_guarantor_requires_both_checks_for_public_support(session,
     await session.flush()
     summary = summary_from_record(await service.load_record(session, user))
     assert summary.active_guarantor and summary.guarantor_sandbox
+
+
+async def test_every_completed_outcome_can_be_paged(session, worker, source):
+    for index in range(23):
+        await add_outcome(session, worker, source, days_ago=index)
+    user = await session.get(User, worker.user_id)
+
+    first, total = await service.completed_outcomes(session, user, page=1, size=20)
+    second, _ = await service.completed_outcomes(session, user, page=2, size=20)
+
+    assert total == 23
+    assert (len(first), len(second)) == (20, 3)
+    # Newest first, with no repeats across pages.
+    assert len({item.id for item in first + second}) == 23
+    assert first[0].occurred_at > second[-1].occurred_at

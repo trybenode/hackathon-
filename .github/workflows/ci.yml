@@ -89,9 +89,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Takes the version from "packageManager" in frontend/package.json, so
+      # the root package.json (which Vercel and Neon tooling use) can't break it.
       - uses: pnpm/action-setup@v4
         with:
-          version: 11
+          package_json_file: frontend/package.json
 
       - uses: actions/setup-node@v4
         with:

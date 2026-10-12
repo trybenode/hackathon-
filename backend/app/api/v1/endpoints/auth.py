@@ -1,7 +1,8 @@
-"""Purpose: Expose the guarantor's email + one-time code sign-in.
+"""Purpose: Expose email + one-time code sign-in and sign-up.
 
 Dependencies: FastAPI, SQLAlchemy async sessions, app.services.auth.
-Used by: the guarantor sign-in screen and any endpoint needing the signed-in user.
+Used by: the sign-in screens, worker sign-up, guarantor invite links, and any
+endpoint needing the signed-in user.
 
 The session is carried by an HTTP-only cookie, so page scripts cannot read it.
 """
@@ -20,6 +21,7 @@ from app.models.domain import AgreementStatus, GuarantorAgreement, User, Worker
 from app.schemas.api import ApiModel
 from app.services import auth as auth_service
 from app.services import developers
+from app.services import worker_onboarding as onboarding
 from app.services.auth import (
     SESSION_COOKIE,
     AuthError,
@@ -49,9 +51,10 @@ class RequestCodeResponse(ApiModel):
 class VerifyCodeRequest(ApiModel):
     email: EmailStr
     code: str = Field(min_length=4, max_length=8)
-    #: "developer" opens an account and a developer profile for a new address.
-    #: Without it, only existing accounts sign in.
-    sign_up: Literal["developer"] | None = None
+    #: "worker" signs up a new worker; "guarantor" opens an account for someone
+    #: claiming an invite link; "developer" opens a developer profile. Without
+    #: it, only existing accounts sign in.
+    sign_up: Literal["worker", "guarantor", "developer"] | None = None
 
 
 class SignedInUser(ApiModel):
@@ -65,6 +68,8 @@ class SignedInUser(ApiModel):
     is_guarantor: bool = False
     #: Has a developer profile.
     is_developer: bool = False
+    #: A worker's unfinished verification step: "identity" or "liveness".
+    onboarding_step: str | None = None
 
 
 async def _signed_in(session: AsyncSession, user: User) -> SignedInUser:
@@ -83,6 +88,7 @@ async def _signed_in(session: AsyncSession, user: User) -> SignedInUser:
         )
     )
     is_developer = await session.scalar(select(exists().where(DeveloperAccount.user_id == user.id)))
+    step = (await onboarding.status(session, user)).next_step if is_worker else None
     return SignedInUser(
         user_id=str(user.id),
         email=user.email,
@@ -90,6 +96,8 @@ async def _signed_in(session: AsyncSession, user: User) -> SignedInUser:
         is_worker=bool(is_worker),
         is_guarantor=bool(is_guarantor),
         is_developer=bool(is_developer),
+        # Adding a guarantor can be skipped, so it never blocks sign-in.
+        onboarding_step=step if step in ("identity", "liveness") else None,
     )
 
 
@@ -162,6 +170,8 @@ async def verify_code(
 
     if payload.sign_up == "developer":
         await developers.ensure_developer(session, user)
+    if payload.sign_up == "worker":
+        await onboarding.ensure_worker(session, user)
     await session.commit()
     response.set_cookie(
         SESSION_COOKIE,

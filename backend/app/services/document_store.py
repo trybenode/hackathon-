@@ -22,7 +22,18 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 #: Extensions the identity screen accepts.
-ALLOWED_SUFFIXES = {".pdf", ".jpg", ".jpeg", ".png"}
+#: Dispute evidence may also be a short video.
+ALLOWED_SUFFIXES = {".pdf", ".jpg", ".jpeg", ".png", ".mp4", ".mov"}
+CONTENT_TYPES = {
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+}
+VIDEO_SUFFIXES = {".mp4", ".mov"}
+MAX_VIDEO_BYTES = 25 * 1024 * 1024
 #: Refuse anything larger, before it reaches the bucket.
 MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 
@@ -62,9 +73,10 @@ def _validate(filename: str, content: bytes) -> str:
         raise UnsupportedDocumentError(
             f"Only {', '.join(sorted(ALLOWED_SUFFIXES))} files are accepted."
         )
-    if len(content) > MAX_DOCUMENT_BYTES:
+    limit = MAX_VIDEO_BYTES if suffix in VIDEO_SUFFIXES else MAX_DOCUMENT_BYTES
+    if len(content) > limit:
         raise DocumentTooLargeError(
-            f"Documents must be under {MAX_DOCUMENT_BYTES // (1024 * 1024)}MB."
+            f"Files of this kind must be under {limit // (1024 * 1024)}MB."
         )
     return suffix
 
@@ -128,12 +140,7 @@ class S3DocumentStore:
                 Bucket=self.bucket,
                 Key=key,
                 Body=content,
-                ContentType={
-                    ".pdf": "application/pdf",
-                    ".png": "image/png",
-                    ".jpg": "image/jpeg",
-                    ".jpeg": "image/jpeg",
-                }[suffix],
+                ContentType=CONTENT_TYPES[suffix],
             )
 
         from botocore.exceptions import BotoCoreError, ClientError
