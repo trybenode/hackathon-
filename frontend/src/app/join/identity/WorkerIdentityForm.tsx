@@ -1,4 +1,6 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
+import { LanguageSelector } from "@/components/history/LanguageProvider";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
@@ -25,6 +27,7 @@ function parseBirthDate(value: string) {
 
 /** "Identity Information": the worker's details, sent to the identity provider. */
 export function WorkerIdentityForm() {
+  const { w } = useWorkerCopy();
   const router = useRouter();
   const { error: loadError } = useOnboarding("identity");
   const [email, setEmail] = useState("");
@@ -82,21 +85,22 @@ export function WorkerIdentityForm() {
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-col">
+      <div className="px-6 pt-4"><LanguageSelector /></div>
       <OnboardingHero />
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5 px-6 pt-8 pb-10">
         <div className="flex flex-col gap-1">
-          <h1 className="text-body-lg font-semibold text-grey-900">Identity Information</h1>
-          <p className="text-body-sm text-grey-900">We need to verify your identity</p>
+          <h1 className="text-body-lg font-semibold text-grey-900">{w("Identity Information")}</h1>
+          <p className="text-body-sm text-grey-900">{w("We need to verify your identity")}</p>
         </div>
 
-        <h2 className="text-body-sm text-grey-900">Personal Information</h2>
-        <Input name="first_name" label="First Name" placeholder="Input text" autoComplete="given-name" required />
-        <Input name="last_name" label="Last Name" placeholder="Input text" autoComplete="family-name" required />
-        <Input name="email" type="email" label="Email" placeholder="Input text" value={email} readOnly />
+        <h2 className="text-body-sm text-grey-900">{w("Personal Information")}</h2>
+        <Input name="first_name" label={w("First Name")} placeholder={w("Input text")} autoComplete="given-name" required />
+        <Input name="last_name" label={w("Last Name")} placeholder={w("Input text")} autoComplete="family-name" required />
+        <Input name="email" type="email" label={w("Email")} placeholder={w("Input text")} value={email} readOnly />
         <Input
           name="date_of_birth"
-          label="Date of birth"
+          label={w("Date of birth")}
           placeholder="DD/MM/YYYY"
           inputMode="numeric"
           autoComplete="bday"
@@ -107,21 +111,21 @@ export function WorkerIdentityForm() {
           name="phone"
           type="tel"
           inputMode="tel"
-          label="Phone Number"
-          placeholder="Input your phone"
+          label={w("Phone Number")}
+          placeholder={w("Input your phone")}
           lead="+234"
           trailingIcon={<NigeriaFlagIcon />}
           required
         />
-        <Input name="address" label="Address" placeholder="Input text" autoComplete="street-address" required />
+        <Input name="address" label={w("Address")} placeholder={w("Input text")} autoComplete="street-address" required />
 
         <UtilityBillInput file={file} onChange={setFile} />
 
-        <h2 className="pt-2 text-body-sm text-grey-900">Government Information</h2>
+        <h2 className="pt-2 text-body-sm text-grey-900">{w("Government Information")}</h2>
         <Input
           name="nin"
           label="NIN"
-          placeholder="Enter your NIN"
+          placeholder={w("Enter your NIN")}
           inputMode="numeric"
           maxLength={ID_LENGTH}
           required
@@ -129,21 +133,21 @@ export function WorkerIdentityForm() {
         <Input
           name="bvn"
           label="BVN"
-          placeholder="Enter your Bvn"
+          placeholder={w("Enter your Bvn")}
           inputMode="numeric"
           maxLength={ID_LENGTH}
           required
         />
-        <p className="text-body-sm text-grey-600">Your information is used only to verify your identity</p>
+        <p className="text-body-sm text-grey-600">{w("Your information is used only to verify your identity")}</p>
 
         {(error ?? loadError) && (
           <p role="alert" className="text-body-sm text-error">
-            {error ?? loadError}
+            {w(error ?? loadError ?? "")}
           </p>
         )}
 
         <Button type="submit" size="lg" disabled={submitting} className="self-end rounded-xl px-12">
-          {submitting ? "Submitting…" : "Submit"}
+          {submitting ? w("Submitting…") : w("Submit")}
         </Button>
       </form>
     </main>

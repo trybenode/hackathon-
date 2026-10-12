@@ -9,7 +9,9 @@ export function OnboardingHero() {
         alt=""
         fill
         priority
-        sizes="(max-width: 448px) 100vw, 448px"
+        // Served as-is: Vercel Services doesn't route /_next/image, and the
+        // file is already a small webp.
+        unoptimized
         className="object-cover"
         style={{ objectPosition: "50% 37%" }}
       />

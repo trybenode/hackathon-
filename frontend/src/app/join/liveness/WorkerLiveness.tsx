@@ -1,5 +1,6 @@
 "use client";
 
+import { LanguageSelector } from "@/components/history/LanguageProvider";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { LivenessCapture } from "@/components/verification/LivenessCapture";
@@ -15,5 +16,5 @@ export function WorkerLiveness() {
     await submitWorkerLiveness(frame);
   }, []);
 
-  return <LivenessCapture submit={submit} blocked={error} onDone={() => router.push("/join/guarantor")} />;
+  return <><div className="mx-auto w-full max-w-md px-6 pt-4"><LanguageSelector /></div><LivenessCapture submit={submit} blocked={error} onDone={() => router.push("/join/guarantor")} /></>;
 }

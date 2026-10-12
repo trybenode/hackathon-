@@ -10,7 +10,7 @@ require.extensions['.ts'] = function load(module, filename) {
 const { workerCopy } = require('../src/lib/workerLanguage.ts');
 const { formatNaira, formatFullDate } = require('../src/lib/workerFormat.ts');
 for (const language of ['yo', 'ha', 'ig']) {
-  for (const phrase of ['Home', 'Jobs', 'Profile', 'Create Job', 'Import Record', 'Listen', 'Confirm Completion', 'Job status', 'Payment status', 'Sandbox check · demo']) {
+  for (const phrase of ['Home', 'Jobs', 'Profile', 'Create Job', 'Import Record', 'Listen', 'Confirm Completion', 'Job status', 'Payment status', 'Sandbox check · demo', 'Verify your identity', 'Identity Information', 'Upload utility bill', 'Liveness check', 'Hold still', 'Review guarantor details', 'Choose how your guarantor knows you.']) {
     assert.notEqual(workerCopy(language, phrase), phrase, `${language}: ${phrase}`);
   }
   assert.equal(workerCopy(language, 'Customer-provided job name'), 'Customer-provided job name');
@@ -39,4 +39,13 @@ function inspect(directory) {
 }
 inspect(path.join(__dirname, '../src/app/worker'));
 inspect(path.join(__dirname, '../src/components/worker'));
+inspect(path.join(__dirname, '../src/app/join'));
+inspect(path.join(__dirname, '../src/components/verification'));
+const { onboardingCopy } = require('../src/lib/onboardingLanguage.ts');
+for (const row of onboardingCopy) {
+  assert.equal(row.length, 4);
+  for (const value of row) assert.ok(value.trim());
+  assert.equal(workerCopy('en', row[0]), row[0]);
+}
+
 console.log('Worker language, formatting and presentation-boundary checks passed.');

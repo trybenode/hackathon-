@@ -1,3 +1,6 @@
+"use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
+import { LanguageSelector } from "@/components/history/LanguageProvider";
 import Link from "next/link";
 import { OnboardingHero } from "@/components/verification/OnboardingHero";
 import { Button } from "@/components/ui";
@@ -10,16 +13,17 @@ const STEPS = [
 
 /** "Verify your identity": where a new worker starts, before signing up. */
 export function JoinIntro() {
+  const { w } = useWorkerCopy();
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
+      <div className="px-6 pt-4"><LanguageSelector /></div>
       <OnboardingHero />
 
       <div className="flex flex-1 flex-col gap-8 px-6 pt-10 pb-10">
         <div className="flex flex-col gap-2">
-          <h1 className="text-body-lg font-semibold text-grey-900">Verify your identity</h1>
+          <h1 className="text-body-lg font-semibold text-grey-900">{w("Verify your identity")}</h1>
           <p className="text-body-md text-grey-900">
-            Complete your verification to build your trusted worker profile
-          </p>
+            {w("Complete your verification to build your trusted worker profile")}</p>
         </div>
 
         <ol className="flex flex-col">
@@ -33,7 +37,7 @@ export function JoinIntro() {
               </div>
               <div className="flex flex-col gap-1 pb-7">
                 <span className="text-body-md text-grey-900">{step.title}</span>
-                <span className="text-xs leading-4 text-grey-600">{step.note}</span>
+                <span className="text-xs leading-4 text-grey-600">{w(step.note)}</span>
               </div>
             </li>
           ))}
@@ -41,8 +45,7 @@ export function JoinIntro() {
 
         <Link href="/join/sign-in" className="mt-auto self-center">
           <Button size="lg" className="rounded-xl px-10 text-body-lg font-semibold">
-            Continue
-          </Button>
+            {w("Continue")}</Button>
         </Link>
       </div>
     </main>

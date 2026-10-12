@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, CheckIcon, Modal } from "@/components/ui";
@@ -38,6 +39,7 @@ export function LivenessCapture({
   /** "Get started" on the verified dialog. */
   onDone: () => void;
 }) {
+  const { w } = useWorkerCopy(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [rawStage, setStage] = useState<Stage>("idle");
@@ -222,15 +224,14 @@ export function LivenessCapture({
       <div className="h-28 w-full rounded-b-xl bg-info-light" />
 
       <div className="flex flex-col gap-2 px-6 pt-8">
-        <h1 className="text-body-lg font-semibold text-grey-900">Liveness check</h1>
+        <h1 className="text-body-lg font-semibold text-grey-900">{w("Liveness check")}</h1>
         <p className="text-body-sm text-grey-600">
-          Position your face inside the frame, Follow the instructions on the screen
-        </p>
+          {w("Position your face inside the frame, Follow the instructions on the screen")}</p>
       </div>
 
       <div className="flex flex-col items-center gap-8 px-6 pt-10 pb-12">
         <p className="text-body-md text-grey-900">
-          {stage === "capturing" ? GUIDANCE_COPY[guidance] : "Move closer"}
+          {w(stage === "capturing" ? GUIDANCE_COPY[guidance] : "Move closer")}
         </p>
 
         <div
@@ -247,38 +248,34 @@ export function LivenessCapture({
             className={cn("h-full w-full object-cover", stage !== "capturing" && "hidden")}
           />
           {stage !== "capturing" && (
-            <span className="text-body-sm text-grey-600">Camera off</span>
+            <span className="text-body-sm text-grey-600">{w("Camera off")}</span>
           )}
         </div>
 
         {error && (
           <p role="alert" className="text-center text-body-sm text-error">
-            {error}
+            {w(error)}
           </p>
         )}
 
         {stage === "capturing" ? (
           autoCapture ? (
             <p className="text-body-sm text-grey-600">
-              Capturing automatically once your face is steady
-            </p>
+              {w("Capturing automatically once your face is steady")}</p>
           ) : (
             <Button size="lg" className="rounded-pill px-12" onClick={capture}>
-              Capture
-            </Button>
+              {w("Capture")}</Button>
           )
         ) : stage === "error" && hasCapture ? (
           <div className="flex flex-col items-center gap-3">
             <Button size="lg" className="rounded-pill px-12" onClick={retryUpload}>
-              Retry
-            </Button>
+              {w("Retry")}</Button>
             <button
               type="button"
               onClick={begin}
               className="text-body-sm text-grey-600 underline"
             >
-              Take a new photo
-            </button>
+              {w("Take a new photo")}</button>
           </div>
         ) : (
           <Button
@@ -287,34 +284,31 @@ export function LivenessCapture({
             disabled={stage === "checking" || stage === "verified"}
             onClick={begin}
           >
-            {stage === "error" ? "Try again" : "Begin"}
+            {stage === "error" ? w("Try again") : w("Begin")}
           </Button>
         )}
       </div>
 
-      <Modal open={stage === "checking"} title="Verifying your identity…" hideTitle>
+      <Modal open={stage === "checking"} title={w("Verifying your identity…")} hideTitle>
         <span className="h-12 w-12 animate-spin rounded-pill border-4 border-primary-100 border-t-primary-400" />
-        <h2 className="text-h3 text-grey-900">Verifying your identity...</h2>
+        <h2 className="text-h3 text-grey-900">{w("Verifying your identity...")}</h2>
         <p className="text-body-md text-grey-600">
-          We&rsquo;re securely checking your details. This should only take a moment
-        </p>
+          {w("We’re securely checking your details. This should only take a moment")}</p>
       </Modal>
 
-      <Modal open={stage === "verified"} title="Verified" hideTitle>
+      <Modal open={stage === "verified"} title={w("Verified")} hideTitle>
         <span className="flex h-14 w-14 items-center justify-center rounded-pill bg-primary-400">
           <CheckIcon className="text-white" width={28} height={28} />
         </span>
-        <h2 className="text-h3 text-grey-900">Verified</h2>
+        <h2 className="text-h3 text-grey-900">{w("Verified")}</h2>
         <p className="text-body-md text-grey-600">
-          Your identity has been verified successfully!
-        </p>
+          {w("Your identity has been verified successfully!")}</p>
         <Button
           size="lg"
           className="mt-2 rounded-pill px-10"
           onClick={onDone}
         >
-          Get started
-        </Button>
+          {w("Get started")}</Button>
       </Modal>
     </main>
   );

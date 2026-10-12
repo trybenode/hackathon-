@@ -7,6 +7,6 @@ import { workerCopy } from "@/lib/workerLanguage";
 export function useWorkerCopy(onlyWorker = false) {
   const pathname = usePathname();
   const { language } = useLanguage();
-  const w = useCallback((text: string) => onlyWorker && !pathname.startsWith("/worker") ? text : workerCopy(language, text), [language, onlyWorker, pathname]);
+  const w = useCallback((text: string) => onlyWorker && !(pathname.startsWith("/worker") || pathname === "/join" || pathname.startsWith("/join/")) ? text : workerCopy(language, text), [language, onlyWorker, pathname]);
   return { w, language };
 }

@@ -1,7 +1,9 @@
 /** Worker presentation copy; candidate translations require native review. No domain values are translated. */
+import { onboardingCopy } from "./onboardingLanguage";
 import { dictionaries } from "./historyLanguage";
 import type { Language } from "./history";
 const rows = [
+...onboardingCopy,
 ["Home","Ilé","Gida","Ụlọ"], ["Jobs","Àwọn iṣẹ́","Ayyuka","Ọrụ"], ["Profile","Àkọsílẹ̀ ẹni","Bayanan mutum","Profaịlụ"],
 ["Worker","Òṣìṣẹ́","Ma’aikaci","Onye ọrụ"], ["Notifications","Ìfitónilétí","Sanarwa","Ọkwa"],
 ["Good morning","Ẹ káàárọ̀","Ina kwana","Ụtụtụ ọma"], ["Good afternoon","Ẹ káàsán","Ina wuni","Ehihie ọma"], ["Good evening","Ẹ káalẹ́","Barka da yamma","Mgbede ọma"],

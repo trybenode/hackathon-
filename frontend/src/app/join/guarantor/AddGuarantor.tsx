@@ -1,4 +1,6 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
+import { LanguageSelector } from "@/components/history/LanguageProvider";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
@@ -20,6 +22,7 @@ function splitName(name: string) {
  * guarantor is active.
  */
 export function AddGuarantor() {
+  const { w } = useWorkerCopy();
   const router = useRouter();
   const { data, error: loadError } = useOnboarding("guarantor");
   const [relationship, setRelationship] = useState<string | null>(null);
@@ -75,30 +78,30 @@ export function AddGuarantor() {
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
+      <div className="px-6 pt-4"><LanguageSelector /></div>
       <OnboardingHero />
 
       <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-5 px-6 pt-8 pb-10">
         <div className="flex flex-col gap-1">
-          <h1 className="text-body-lg font-semibold text-grey-900">Add your guarantor</h1>
+          <h1 className="text-body-lg font-semibold text-grey-900">{w("Add your guarantor")}</h1>
           <p className="text-body-sm text-grey-900">
-            Your guarantor will confirm their identity and agree to vouch for you
-          </p>
+            {w("Your guarantor will confirm their identity and agree to vouch for you")}</p>
         </div>
 
-        <h2 className="text-body-sm text-grey-900">Personal Information</h2>
-        <Input name="first_name" label="First Name" placeholder="Input text" required />
-        <Input name="last_name" label="Last Name" placeholder="Input text" required />
+        <h2 className="text-body-sm text-grey-900">{w("Personal Information")}</h2>
+        <Input name="first_name" label={w("First Name")} placeholder={w("Input text")} required />
+        <Input name="last_name" label={w("Last Name")} placeholder={w("Input text")} required />
         <Select
-          label="Relationship with  guarantee"
-          placeholder="Select"
-          options={RELATIONSHIPS}
+          label={w("Relationship with  guarantee")}
+          placeholder={w("Select")}
+          options={RELATIONSHIPS.map(option => ({ ...option, label: w(option.label) }))}
           value={relationship}
           onChange={setRelationship}
         />
 
         {(formError ?? loadError) && (
           <p role="alert" className="text-body-sm text-error">
-            {formError ?? loadError}
+            {w(formError ?? loadError ?? "")}
           </p>
         )}
 
@@ -110,11 +113,9 @@ export function AddGuarantor() {
             className="rounded-xl px-10"
             onClick={() => router.push("/worker")}
           >
-            Skip
-          </Button>
+            {w("Skip")}</Button>
           <Button type="submit" size="lg" className="rounded-xl px-12" disabled={!data}>
-            Submit
-          </Button>
+            {w("Submit")}</Button>
         </div>
       </form>
 

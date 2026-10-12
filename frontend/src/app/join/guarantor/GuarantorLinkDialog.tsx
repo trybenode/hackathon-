@@ -1,4 +1,5 @@
 "use client";
+import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 
 import { useState } from "react";
 import { WorkerDialog } from "@/components/worker/WorkerDialog";
@@ -51,6 +52,7 @@ export function GuarantorLinkDialog({
   onGenerate: () => void;
   onDone: () => void;
 }) {
+  const { w } = useWorkerCopy();
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -64,13 +66,13 @@ export function GuarantorLinkDialog({
   }
 
   return (
-    <WorkerDialog open={open} onClose={invite ? onDismiss : onCancel} label="Review guarantor details">
+    <WorkerDialog open={open} onClose={invite ? onDismiss : onCancel} label={w("Review guarantor details")}>
       <div className="flex flex-col gap-5">
-        <h2 className="text-body-lg font-semibold text-grey-900">Review guarantor details</h2>
+        <h2 className="text-body-lg font-semibold text-grey-900">{w("Review guarantor details")}</h2>
 
-        <Input label="First Name" value={draft.firstName} readOnly />
-        <Input label="Last Name" value={draft.lastName} readOnly />
-        <Select label="Relationship with  guarantee" options={RELATIONSHIPS} value={draft.relationship} />
+        <Input label={w("First Name")} value={draft.firstName} readOnly />
+        <Input label={w("Last Name")} value={draft.lastName} readOnly />
+        <Select label={w("Relationship with  guarantee")} options={RELATIONSHIPS.map(option => ({ ...option, label: w(option.label) }))} value={draft.relationship} />
 
         {invite ? (
           <>
@@ -78,7 +80,7 @@ export function GuarantorLinkDialog({
               <button
                 type="button"
                 onClick={copy}
-                aria-label={copied ? "Link copied" : "Copy link"}
+                aria-label={copied ? w("Link copied") : w("Copy link")}
                 className={cn("self-end", copied ? "text-success" : "text-grey-900")}
               >
                 <CopyIcon />
@@ -88,33 +90,31 @@ export function GuarantorLinkDialog({
               </p>
             </div>
             <p className="text-body-sm text-grey-900">
-              Link expires in {daysLeft(invite.expires_at)} {daysLeft(invite.expires_at) === 1 ? "day" : "days"}
+              {w("Link expires in")}{" "}{daysLeft(invite.expires_at)} {daysLeft(invite.expires_at) === 1 ? w("day") : w("days")}
             </p>
             <div className="flex items-center justify-between gap-3 rounded-lg border border-stroke px-4 py-4">
-              <span className="text-body-sm text-grey-900">Guarantor&rsquo;s Verification</span>
+              <span className="text-body-sm text-grey-900">{w("Guarantor’s Verification")}</span>
               <span className="flex items-center gap-1.5 text-body-sm text-grey-900">
                 <DotIcon className={invite.status === "Active" ? "text-success" : "text-warning"} />
-                {invite.status === "Active" ? "Verified" : "Pending"}
+                {invite.status === "Active" ? w("Verified") : w("Pending")}
               </span>
             </div>
             <Button size="lg" className="self-end rounded-xl px-8" onClick={onDone}>
-              Go to dashboard
-            </Button>
+              {w("Go to dashboard")}</Button>
           </>
         ) : (
           <>
-            <p className="text-body-md text-grey-900">Make sure these details are correct before continuing.</p>
+            <p className="text-body-md text-grey-900">{w("Make sure these details are correct before continuing.")}</p>
             {error && (
               <p role="alert" className="text-body-sm text-error">
-                {error}
+                {w(error)}
               </p>
             )}
             <div className="flex gap-4">
               <Button variant="outline" size="lg" fullWidth className="min-w-0 rounded-xl px-0" onClick={onCancel}>
-                Cancel
-              </Button>
+                {w("Cancel")}</Button>
               <Button size="lg" fullWidth className="min-w-0 rounded-xl px-0" disabled={busy} onClick={onGenerate}>
-                {busy ? "Generating…" : "Generate link"}
+                {busy ? w("Generating…") : w("Generate link")}
               </Button>
             </div>
           </>
