@@ -1,3 +1,4 @@
+import { SkipIfSignedIn } from "@/components/auth/SkipIfSignedIn";
 import { SignInFlow } from "@/components/guarantor/SignInFlow";
 
 export const metadata = { title: "Welcome" };
@@ -13,5 +14,10 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
   const target =
     typeof next === "string" && next.startsWith("/") && !next.startsWith("//") ? next : undefined;
 
-  return <SignInFlow redirectTo={target} />;
+  // Someone already signed in goes straight on, to `next` if a screen sent them.
+  return (
+    <SkipIfSignedIn to="landing" next={target}>
+      <SignInFlow redirectTo={target} />
+    </SkipIfSignedIn>
+  );
 }
