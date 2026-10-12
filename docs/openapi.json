@@ -37,7 +37,26 @@
           "guarantor"
         ],
         "summary": "Create a guarantor instrument",
+        "description": "Ask a person to stand behind a worker who approved this platform to write.",
         "operationId": "create_instrument_api_v1_guarantor_instruments_post",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -76,6 +95,7 @@
           "guarantor"
         ],
         "summary": "List guarantor instruments",
+        "description": "A worker's guarantees, with their approval to read; without a worker,\nthe guarantees this platform asked for.",
         "operationId": "list_instruments_api_v1_guarantor_instruments_get",
         "parameters": [
           {
@@ -109,6 +129,22 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
             }
           }
         ],
@@ -144,17 +180,45 @@
         "summary": "Expire instruments whose validity period has ended",
         "description": "Run the expiry sweep on demand.\n\nThe app also sweeps on a timer; this exists so an external scheduler can\nown it instead, and so the sweep can be triggered in a demo.",
         "operationId": "expire_due_api_v1_guarantor_instruments_expire_due_post",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "object",
                   "additionalProperties": {
                     "type": "integer"
                   },
-                  "type": "object",
                   "title": "Response Expire Due Api V1 Guarantor Instruments Expire Due Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -221,6 +285,22 @@
               "type": "string",
               "format": "uuid",
               "title": "Instrument Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
             }
           }
         ],
@@ -379,6 +459,22 @@
               "format": "uuid",
               "title": "Instrument Id"
             }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
           }
         ],
         "requestBody": {
@@ -433,6 +529,22 @@
               "format": "uuid",
               "title": "Instrument Id"
             }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
           }
         ],
         "requestBody": {
@@ -485,6 +597,22 @@
               "type": "string",
               "format": "uuid",
               "title": "Instrument Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
             }
           }
         ],
@@ -539,6 +667,22 @@
               "format": "uuid",
               "title": "Instrument Id"
             }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
           }
         ],
         "requestBody": {
@@ -591,6 +735,22 @@
               "type": "string",
               "format": "uuid",
               "title": "Instrument Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
             }
           }
         ],
@@ -710,6 +870,125 @@
         }
       }
     },
+    "/api/v1/auth/email-change/code": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Email a code to a new address",
+        "description": "The first step of changing the account's email: prove the new one is yours.",
+        "operationId": "request_email_change_api_v1_auth_email_change_code_post",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestCodeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/email-change": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Confirm a new email address",
+        "operationId": "confirm_email_change_api_v1_auth_email_change_post",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailChangeConfirm"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedInUser"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/me": {
       "get": {
         "tags": [
@@ -799,6 +1078,928 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/me/developer": {
+      "get": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "The developer's dashboard",
+        "operationId": "dashboard_api_v1_me_developer_get",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeveloperDashboard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/developer/identity": {
+      "post": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Step 1: the developer's identity",
+        "operationId": "submit_identity_api_v1_me_developer_identity_post",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_submit_identity_api_v1_me_developer_identity_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeveloperDashboard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/developer/business": {
+      "post": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Step 2: the registered business",
+        "description": "Sends both steps for an operator's review.",
+        "operationId": "submit_business_api_v1_me_developer_business_post",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_submit_business_api_v1_me_developer_business_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeveloperDashboard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/developer/logs": {
+      "get": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Calls made with your API keys",
+        "description": "Newest first. Method, route, status and duration only: no bodies or headers.",
+        "operationId": "call_log_api_v1_me_developer_logs_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Size"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Key"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "all",
+                "success",
+                "error"
+              ],
+              "type": "string",
+              "default": "all",
+              "title": "Outcome"
+            }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogPageView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/developer/keys": {
+      "get": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Your active API keys",
+        "description": "Revoked keys are hidden; secrets are never returned here.",
+        "operationId": "list_keys_api_v1_me_developer_keys_get",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Create an API key",
+        "description": "The secret is in this response only; store it before leaving the screen.",
+        "operationId": "create_key_api_v1_me_developer_keys_post",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiKeyCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeySecret"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/developer/keys/{key_id}": {
+      "patch": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Rename a key or change its access",
+        "operationId": "update_key_api_v1_me_developer_keys__key_id__patch",
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Key Id"
+            }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiKeyUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Revoke a key",
+        "description": "The key stops working at once and leaves the list. This cannot be undone.",
+        "operationId": "revoke_key_api_v1_me_developer_keys__key_id__delete",
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Key Id"
+            }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/developer/keys/{key_id}/rotate": {
+      "post": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Replace a key's secret",
+        "description": "The old secret stops working at once; the new one is shown only here.",
+        "operationId": "rotate_key_api_v1_me_developer_keys__key_id__rotate_post",
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Key Id"
+            }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeySecret"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/developer/keys/{key_id}/attest-request": {
+      "post": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Ask for attest approval",
+        "description": "For production keys: records this key imports would count as verified once approved.",
+        "operationId": "request_attest_api_v1_me_developer_keys__key_id__attest_request_post",
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Key Id"
+            }
+          },
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/developer/name-change": {
+      "post": {
+        "tags": [
+          "developers"
+        ],
+        "summary": "Ask to change the verified name",
+        "operationId": "request_name_change_api_v1_me_developer_name_change_post",
+        "parameters": [
+          {
+            "name": "guarantor_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guarantor Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_request_name_change_api_v1_me_developer_name_change_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeveloperDashboard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "UserSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/platform/scoring-config": {
+      "get": {
+        "tags": [
+          "platform scoring"
+        ],
+        "summary": "Read your scoring settings",
+        "operationId": "read_settings_api_v1_platform_scoring_config_get",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoringSettingsList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "PlatformKey": []
+          }
+        ]
+      }
+    },
+    "/api/v1/platform/scoring-config/{platform_type}": {
+      "put": {
+        "tags": [
+          "platform scoring"
+        ],
+        "summary": "Set your scoring settings",
+        "description": "Weights must add up to 1 and thresholds satisfy 0 < medium < high \u2264 1.",
+        "operationId": "save_settings_api_v1_platform_scoring_config__platform_type__put",
+        "parameters": [
+          {
+            "name": "platform_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/PlatformType"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScoringSettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoringSettingsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "PlatformKey": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "platform scoring"
+        ],
+        "summary": "Go back to the preset",
+        "operationId": "reset_settings_api_v1_platform_scoring_config__platform_type__delete",
+        "parameters": [
+          {
+            "name": "platform_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/PlatformType"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoringSettingsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "PlatformKey": []
+          }
+        ]
       }
     },
     "/api/v1/me/dashboard": {
@@ -5135,6 +6336,30 @@
   },
   "components": {
     "schemas": {
+      "AccessGroupView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "description"
+        ],
+        "title": "AccessGroupView"
+      },
       "ActivityItem": {
         "properties": {
           "id": {
@@ -5186,6 +6411,41 @@
         "title": "AgreementStatus",
         "description": "Guarantor instrument lifecycle.\n\nDraft -> Pending Signature -> Pending Verification -> Active ->\nTriggered -> (Disputed) -> Paid / Dismissed, or Expired / Revoked.\n\nA triggered claim is still live work for the guarantor; it ends only when\nit is paid or dismissed.\nDeclined covers a guarantor refusing to sign; suspended is reserved for\nadministrative holds on an active instrument."
       },
+      "ApiCallView": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "method",
+          "path",
+          "status_code",
+          "duration_ms",
+          "at"
+        ],
+        "title": "ApiCallView"
+      },
       "ApiError": {
         "properties": {
           "detail": {
@@ -5210,6 +6470,206 @@
             "detail": "Worker approval has expired or been revoked."
           }
         ]
+      },
+      "ApiKeyCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scopes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "environment"
+        ],
+        "title": "ApiKeyCreate"
+      },
+      "ApiKeyList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiKeyView"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "access_groups": {
+            "items": {
+              "$ref": "#/components/schemas/AccessGroupView"
+            },
+            "type": "array",
+            "title": "Access Groups"
+          },
+          "max_active_per_environment": {
+            "type": "integer",
+            "title": "Max Active Per Environment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "access_groups",
+          "max_active_per_environment"
+        ],
+        "title": "ApiKeyList"
+      },
+      "ApiKeySecret": {
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/ApiKeyView"
+          },
+          "secret": {
+            "type": "string",
+            "title": "Secret"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "secret"
+        ],
+        "title": "ApiKeySecret"
+      },
+      "ApiKeyUpdate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scopes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "title": "ApiKeyUpdate"
+      },
+      "ApiKeyView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Id"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scopes"
+          },
+          "can_attest": {
+            "type": "boolean",
+            "title": "Can Attest"
+          },
+          "attest_requested": {
+            "type": "boolean",
+            "title": "Attest Requested"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "recent_calls": {
+            "type": "integer",
+            "title": "Recent Calls"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "key_id",
+          "environment",
+          "scopes",
+          "can_attest",
+          "attest_requested",
+          "created_at",
+          "last_used_at",
+          "recent_calls"
+        ],
+        "title": "ApiKeyView"
       },
       "Body_complete_liveness_api_v1_guarantor_instruments__instrument_id__liveness_post": {
         "properties": {
@@ -5297,6 +6757,83 @@
         ],
         "title": "Body_report_my_issue_api_v1_me_jobs__job_id__issue_post"
       },
+      "Body_request_name_change_api_v1_me_developer_name_change_post": {
+        "properties": {
+          "new_name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 2,
+            "title": "New Name"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "document": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "binary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document"
+          }
+        },
+        "type": "object",
+        "required": [
+          "new_name",
+          "reason"
+        ],
+        "title": "Body_request_name_change_api_v1_me_developer_name_change_post"
+      },
+      "Body_submit_business_api_v1_me_developer_business_post": {
+        "properties": {
+          "business_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Business Name"
+          },
+          "business_type": {
+            "type": "string",
+            "title": "Business Type"
+          },
+          "registration_number": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 2,
+            "title": "Registration Number"
+          },
+          "tax_id": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 2,
+            "title": "Tax Id"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed"
+          },
+          "document": {
+            "type": "string",
+            "format": "binary",
+            "title": "Document"
+          }
+        },
+        "type": "object",
+        "required": [
+          "business_name",
+          "business_type",
+          "registration_number",
+          "tax_id",
+          "confirmed",
+          "document"
+        ],
+        "title": "Body_submit_business_api_v1_me_developer_business_post"
+      },
       "Body_submit_identity_api_v1_guarantor_instruments__instrument_id__identity_post": {
         "properties": {
           "first_name": {
@@ -5352,6 +6889,32 @@
           "bvn"
         ],
         "title": "Body_submit_identity_api_v1_guarantor_instruments__instrument_id__identity_post"
+      },
+      "Body_submit_identity_api_v1_me_developer_identity_post": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 2,
+            "title": "Full Name"
+          },
+          "document_type": {
+            "type": "string",
+            "title": "Document Type"
+          },
+          "document": {
+            "type": "string",
+            "format": "binary",
+            "title": "Document"
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name",
+          "document_type",
+          "document"
+        ],
+        "title": "Body_submit_identity_api_v1_me_developer_identity_post"
       },
       "Body_submit_identity_api_v1_me_worker_identity_post": {
         "properties": {
@@ -5418,6 +6981,38 @@
           "bvn"
         ],
         "title": "Body_submit_identity_api_v1_me_worker_identity_post"
+      },
+      "CredentialView": {
+        "properties": {
+          "key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Id"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key_id",
+          "environment",
+          "created_at"
+        ],
+        "title": "CredentialView"
       },
       "CredentialsExportResponse": {
         "properties": {
@@ -5578,6 +7173,31 @@
         ],
         "title": "CustomerJobPage"
       },
+      "DailyUsageView": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "successful": {
+            "type": "integer",
+            "title": "Successful"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "day",
+          "total",
+          "successful"
+        ],
+        "title": "DailyUsageView"
+      },
       "DashboardResponse": {
         "properties": {
           "greeting_name": {
@@ -5632,6 +7252,110 @@
           "recent_activity"
         ],
         "title": "DashboardResponse"
+      },
+      "DeveloperDashboard": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "business_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Name"
+          },
+          "kyc_status": {
+            "type": "string",
+            "title": "Kyc Status"
+          },
+          "kyb_status": {
+            "type": "string",
+            "title": "Kyb Status"
+          },
+          "review_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Note"
+          },
+          "identity_submitted": {
+            "type": "boolean",
+            "title": "Identity Submitted"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/UsageView"
+          },
+          "recent_activity": {
+            "items": {
+              "$ref": "#/components/schemas/ApiCallView"
+            },
+            "type": "array",
+            "title": "Recent Activity"
+          },
+          "credentials": {
+            "items": {
+              "$ref": "#/components/schemas/CredentialView"
+            },
+            "type": "array",
+            "title": "Credentials"
+          },
+          "name_change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NameChangeView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sandbox_workers": {
+            "items": {
+              "$ref": "#/components/schemas/SandboxWorkerView"
+            },
+            "type": "array",
+            "title": "Sandbox Workers"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email",
+          "full_name",
+          "business_name",
+          "kyc_status",
+          "kyb_status",
+          "review_note",
+          "identity_submitted",
+          "usage",
+          "recent_activity",
+          "credentials",
+          "name_change",
+          "sandbox_workers"
+        ],
+        "title": "DeveloperDashboard"
       },
       "DisputeStep": {
         "properties": {
@@ -5711,6 +7435,43 @@
           "submitted_at"
         ],
         "title": "DisputeView"
+      },
+      "EmailChangeConfirm": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 4,
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email",
+          "code"
+        ],
+        "title": "EmailChangeConfirm"
+      },
+      "EmailChangeRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "EmailChangeRequest"
       },
       "EvidenceAssessment": {
         "properties": {
@@ -7401,6 +9162,151 @@
         "title": "JobView",
         "description": "What the worker sees."
       },
+      "LogEntryView": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
+          },
+          "key": {
+            "$ref": "#/components/schemas/LogKeyView"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "at",
+          "method",
+          "path",
+          "status_code",
+          "duration_ms",
+          "key"
+        ],
+        "title": "LogEntryView"
+      },
+      "LogKeyView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Id"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "revoked": {
+            "type": "boolean",
+            "title": "Revoked"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "key_id",
+          "environment",
+          "revoked"
+        ],
+        "title": "LogKeyView"
+      },
+      "LogPageView": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LogEntryView"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "pages": {
+            "type": "integer",
+            "title": "Pages"
+          },
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/LogKeyView"
+            },
+            "type": "array",
+            "title": "Keys"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size",
+          "pages",
+          "keys"
+        ],
+        "title": "LogPageView"
+      },
+      "NameChangeView": {
+        "properties": {
+          "new_name": {
+            "type": "string",
+            "title": "New Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "new_name",
+          "status"
+        ],
+        "title": "NameChangeView"
+      },
       "NotificationItem": {
         "properties": {
           "id": {
@@ -8338,6 +10244,175 @@
         ],
         "title": "ReviewResponse"
       },
+      "SandboxWorkerView": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "band": {
+            "type": "string",
+            "title": "Band"
+          },
+          "guarantor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guarantor"
+          },
+          "consent_token": {
+            "type": "string",
+            "title": "Consent Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "role",
+          "band",
+          "guarantor",
+          "consent_token"
+        ],
+        "title": "SandboxWorkerView"
+      },
+      "ScoringSettingsList": {
+        "properties": {
+          "signals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Signals"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScoringSettingsView"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "signals",
+          "items"
+        ],
+        "title": "ScoringSettingsList"
+      },
+      "ScoringSettingsUpdate": {
+        "properties": {
+          "weights": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Weights"
+          },
+          "required_signals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Signals"
+          },
+          "hard_fail": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Hard Fail"
+          },
+          "min_jobs": {
+            "type": "integer",
+            "title": "Min Jobs"
+          },
+          "high_threshold": {
+            "type": "number",
+            "title": "High Threshold"
+          },
+          "medium_threshold": {
+            "type": "number",
+            "title": "Medium Threshold"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "weights",
+          "min_jobs",
+          "high_threshold",
+          "medium_threshold"
+        ],
+        "title": "ScoringSettingsUpdate"
+      },
+      "ScoringSettingsView": {
+        "properties": {
+          "platform_type": {
+            "$ref": "#/components/schemas/PlatformType"
+          },
+          "custom": {
+            "type": "boolean",
+            "title": "Custom"
+          },
+          "weights": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Weights"
+          },
+          "required_signals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Signals"
+          },
+          "hard_fail": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Hard Fail"
+          },
+          "min_jobs": {
+            "type": "integer",
+            "title": "Min Jobs"
+          },
+          "high_threshold": {
+            "type": "number",
+            "title": "High Threshold"
+          },
+          "medium_threshold": {
+            "type": "number",
+            "title": "Medium Threshold"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "platform_type",
+          "custom",
+          "weights",
+          "required_signals",
+          "hard_fail",
+          "min_jobs",
+          "high_threshold",
+          "medium_threshold"
+        ],
+        "title": "ScoringSettingsView"
+      },
       "SignatureMetadata": {
         "properties": {
           "ip": {
@@ -8387,6 +10462,11 @@
           "is_guarantor": {
             "type": "boolean",
             "title": "Is Guarantor",
+            "default": false
+          },
+          "is_developer": {
+            "type": "boolean",
+            "title": "Is Developer",
             "default": false
           },
           "onboarding_step": {
@@ -8470,6 +10550,9 @@
           },
           "platform_type_applied": {
             "$ref": "#/components/schemas/PlatformType"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/WorkerVerification"
           }
         },
         "additionalProperties": false,
@@ -8482,7 +10565,8 @@
           "status",
           "signals_used",
           "explanation_summary",
-          "platform_type_applied"
+          "platform_type_applied",
+          "verification"
         ],
         "title": "TrustQueryResponse"
       },
@@ -8533,6 +10617,33 @@
           "total_jobs"
         ],
         "title": "TrustSummary"
+      },
+      "UsageView": {
+        "properties": {
+          "total_calls": {
+            "type": "integer",
+            "title": "Total Calls"
+          },
+          "successful_calls": {
+            "type": "integer",
+            "title": "Successful Calls"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/DailyUsageView"
+            },
+            "type": "array",
+            "title": "Daily"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total_calls",
+          "successful_calls",
+          "daily"
+        ],
+        "title": "UsageView"
       },
       "ValidationError": {
         "properties": {
@@ -8739,7 +10850,8 @@
                 "type": "string",
                 "enum": [
                   "worker",
-                  "guarantor"
+                  "guarantor",
+                  "developer"
                 ]
               },
               {
@@ -9176,6 +11288,43 @@
           "credentials"
         ],
         "title": "WorkerRecordResponse"
+      },
+      "WorkerVerification": {
+        "properties": {
+          "identity": {
+            "type": "string",
+            "title": "Identity"
+          },
+          "liveness": {
+            "type": "string",
+            "title": "Liveness"
+          },
+          "guarantor": {
+            "type": "string",
+            "title": "Guarantor"
+          },
+          "guarantor_valid_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guarantor Valid Until"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "identity",
+          "liveness",
+          "guarantor"
+        ],
+        "title": "WorkerVerification",
+        "description": "What has been checked about the worker; never the identity data itself."
       }
     },
     "securitySchemes": {
