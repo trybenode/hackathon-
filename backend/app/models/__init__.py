@@ -32,10 +32,15 @@ from app.models.domain import (
 	Worker,
 )
 
+from app.models.developer import ApiRequestLog, DeveloperAccount, NameChangeRequest, ScoringConfig
 from app.models.portability import (HistoryIdentity, ImportReceipt, PlatformGrant, PlatformKey, Review, ShareGrant, WorkerLink)
 from app.models.history import HistoryClaim, ConfirmationRequest, CustomerResponse, HistoryDraft, HistoryMessage, MessageTranslation, MessageAudio
 
 __all__ = [
+    "ScoringConfig",
+    "ApiRequestLog",
+    "DeveloperAccount",
+    "NameChangeRequest",
     "HistoryIdentity",
     "ImportReceipt",
     "PlatformGrant",

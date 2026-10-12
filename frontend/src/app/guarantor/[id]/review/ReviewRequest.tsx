@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button, CheckIcon, LocationPinIcon, Modal, Switch } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { ApiError, getInstrument, signInstrument, type Instrument } from "@/lib/guarantor";
+import { ApiError, getInstrument, getSignedInUser, signInstrument, type Instrument } from "@/lib/guarantor";
+import { OnboardingHero } from "@/components/verification/OnboardingHero";
 
 const AGREEMENT_POINTS = [
   "Provide accurate information.",
@@ -59,6 +60,13 @@ export function ReviewRequest({ instrumentId }: { instrumentId: string }) {
           return;
         }
 
+        // A worker's invite link names nobody yet: whoever opened it signs in
+        // first, which makes them the guarantor, and then reviews.
+        if (loaded.status === "Pending Signature" && !loaded.claimed) {
+          router.replace(`/guarantor/${instrumentId}/sign-in?claim=1`);
+          return;
+        }
+
         setInstrument(loaded);
       } catch (cause) {
         if (!cancelled) {
@@ -89,10 +97,16 @@ export function ReviewRequest({ instrumentId }: { instrumentId: string }) {
           timestamp: new Date().toISOString(),
         },
       });
+      // Someone who signed in to claim an invite is already signed in as
+      // this guarantor; anyone else still signs in.
+      const session = accepted ? await getSignedInUser().catch(() => null) : null;
+      const signedIn = session !== null && session.email === instrument.guarantor.email;
       router.push(
-        accepted
-          ? `/guarantor/${instrumentId}/sign-in?email=${encodeURIComponent(instrument.guarantor.email ?? "")}`
-          : `/guarantor/${instrumentId}/declined`,
+        !accepted
+          ? `/guarantor/${instrumentId}/declined`
+          : signedIn
+            ? `/guarantor/${instrumentId}/identity`
+            : `/guarantor/${instrumentId}/sign-in?email=${encodeURIComponent(instrument.guarantor.email ?? "")}`,
       );
     } catch (cause) {
       // A 409 means the request moved on since this page loaded, most often
@@ -120,17 +134,7 @@ export function ReviewRequest({ instrumentId }: { instrumentId: string }) {
         so it is cropped to the design's band: object-position keeps the top of
         the illustration in frame while the transparent margins are cut away.
       */}
-      <div className="relative mt-6 aspect-[400/235] w-full overflow-hidden">
-        <Image
-          src="/guarantor-hero.webp"
-          alt=""
-          fill
-          priority
-          sizes="(max-width: 448px) 100vw, 448px"
-          className="object-cover"
-          style={{ objectPosition: "50% 37%" }}
-        />
-      </div>
+      <OnboardingHero />
 
       <div className="flex flex-col gap-6 px-6 pt-8 pb-10">
         <header className="flex items-start justify-between gap-4">

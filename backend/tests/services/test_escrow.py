@@ -24,6 +24,7 @@ from app.models.domain import (
 from app.services import escrow as service
 from app.services.email_sender import LoggingEmailSender
 from app.services.escrow_provider import StubEscrowProvider
+from tests.conftest import give_guarantor
 
 NOW = datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
 CODE = "XYZ789ABC1"
@@ -34,6 +35,7 @@ async def worker_user(session: AsyncSession, worker: Worker) -> User:
 
 
 async def job_link(session: AsyncSession, worker: Worker):
+    await give_guarantor(session, worker)
     return await service.create_job_link(
         session,
         await worker_user(session, worker),
@@ -366,3 +368,15 @@ async def test_resend_connection_drop_is_a_delivery_error(monkeypatch: pytest.Mo
             EmailMessage(to="a@example.com", subject="s", body="b")
         )
     assert calls == 2
+
+
+async def test_job_links_need_an_active_guarantor(session: AsyncSession, worker: Worker) -> None:
+    with pytest.raises(service.EscrowStateError, match="guarantor is active"):
+        await service.create_job_link(
+            session,
+            await worker_user(session, worker),
+            title="Home cleaning",
+            address="Lagos Island, Lagos",
+            scheduled_at=NOW + timedelta(days=3),
+            price=Decimal("25000.00"),
+        )

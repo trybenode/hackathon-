@@ -1,13 +1,20 @@
 "use client";
 
-import Image from "next/image";
 import { LanguageSelector, useLanguage } from "@/components/history/LanguageProvider";
 import { workerCopy } from "@/lib/workerLanguage";
+
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { OtpInput } from "@/components/guarantor/OtpInput";
 import { Button, Input } from "@/components/ui";
-import { ApiError, landingPathFor, requestLoginCode, verifyLoginCode } from "@/lib/guarantor";
+import {
+  ApiError,
+  landingPathFor,
+  requestLoginCode,
+  verifyLoginCode,
+  type SignedInUser,
+} from "@/lib/guarantor";
+import { OnboardingHero } from "@/components/verification/OnboardingHero";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -16,13 +23,19 @@ export function SignInFlow({
   redirectTo,
   /** Pre-fills the address the instrument was sent to. */
   defaultEmail = "",
+  /** Opens an account for a new address: a worker signing up, or an invited guarantor. */
+  signUp,
+  /** Runs once signed in, before moving on; a failure stays on this screen. */
+  onSignedIn,
 }: {
   redirectTo?: string;
   defaultEmail?: string;
+  signUp?: "worker" | "guarantor";
+  onSignedIn?: (user: SignedInUser) => Promise<void>;
 }) {
   const router = useRouter();
   const { language } = useLanguage();
-  const workerMode = redirectTo === "/worker" || !!redirectTo?.startsWith("/worker/");
+  const workerMode = signUp === "worker" || redirectTo === "/worker" || !!redirectTo?.startsWith("/worker/");
   const w = (text: string) => workerMode ? workerCopy(language, text) : text;
   const [email, setEmail] = useState(defaultEmail);
   const [codeSent, setCodeSent] = useState(false);
@@ -62,7 +75,8 @@ export function SignInFlow({
     setError(null);
 
     try {
-      const user = await verifyLoginCode(email.trim(), value);
+      const user = await verifyLoginCode(email.trim(), value, signUp);
+      await onSignedIn?.(user);
       router.push(redirectTo ?? landingPathFor(user));
     } catch (cause) {
       setCode("");
@@ -80,17 +94,7 @@ export function SignInFlow({
   return (
     <main className="mx-auto flex w-full max-w-md flex-col">
       {workerMode && <div className="px-6 pt-4"><LanguageSelector /></div>}
-      <div className="relative mt-6 aspect-[400/235] w-full overflow-hidden">
-        <Image
-          src="/guarantor-hero.webp"
-          alt=""
-          fill
-          priority
-          sizes="(max-width: 448px) 100vw, 448px"
-          className="object-cover"
-          style={{ objectPosition: "50% 37%" }}
-        />
-      </div>
+      <OnboardingHero />
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-6 px-6 pt-10 pb-10">
         <div className="flex flex-col gap-1 text-center">
@@ -155,7 +159,7 @@ export function SignInFlow({
           className="mt-4 self-center rounded-lg px-16"
           disabled={busy || (codeSent ? code.length !== 6 : email.trim().length === 0)}
         >
-          {busy ? "Please wait…" : w("Continue")}
+          {busy ? w("Please wait…") : w("Continue")}
         </Button>
       </form>
     </main>

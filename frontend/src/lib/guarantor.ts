@@ -20,7 +20,17 @@ export type InstrumentStatus =
   | "Revoked"
   | "Declined";
 
-export type GuarantorRelationship = "sibling" | "parent" | "spouse" | "colleague" | "other";
+export type GuarantorRelationship = "sibling" | "parent" | "spouse" | "colleague" | "employer" | "other";
+
+/** The relationships a guarantor can have with the worker, as the selects list them. */
+export const RELATIONSHIPS: { value: GuarantorRelationship; label: string }[] = [
+  { value: "employer", label: "Employer" },
+  { value: "colleague", label: "Colleague" },
+  { value: "sibling", label: "Sibling" },
+  { value: "parent", label: "Parent" },
+  { value: "spouse", label: "Spouse" },
+  { value: "other", label: "Other" },
+];
 
 export type GuarantorDetails = {
   full_name: string;
@@ -77,6 +87,8 @@ export type Instrument = {
   triggered_at: string | null;
   status_reason: string | null;
   created_at: string | null;
+  /** False while a worker's invite link waits for its guarantor to sign in. */
+  claimed: boolean;
 };
 
 export type SignInstrumentRequest = {
@@ -228,6 +240,11 @@ export async function submitLiveness(instrumentId: string, frame: Blob) {
   return response.json() as Promise<Instrument>;
 }
 
+/** Makes the signed-in person the guarantor on a worker's invite link. */
+export function claimInvite(instrumentId: string) {
+  return request<Instrument>(`/guarantor-instruments/${instrumentId}/claim`, { method: "POST" });
+}
+
 export type ClaimOutcome = "disputed" | "paid" | "dismissed";
 
 /** Records how a triggered claim ended. */
@@ -260,6 +277,10 @@ export type SignedInUser = {
   is_worker: boolean;
   /** Has been asked to stand behind a worker. */
   is_guarantor: boolean;
+  /** Has a developer profile. */
+  is_developer: boolean;
+  /** A worker's unfinished verification step. */
+  onboarding_step: "identity" | "liveness" | null;
 };
 
 /**
@@ -271,6 +292,9 @@ export type SignedInUser = {
  * they belong.
  */
 export function landingPathFor(user: SignedInUser) {
+  if (user.is_developer) return "/developer";
+  // A worker who has not finished verifying picks up where they left off.
+  if (user.is_worker && user.onboarding_step) return `/join/${user.onboarding_step}`;
   if (user.is_worker) return "/worker";
   return "/dashboard";
 }
@@ -288,10 +312,15 @@ export function requestLoginCode(email: string) {
   });
 }
 
-export function verifyLoginCode(email: string, code: string) {
+/**
+ * Checks a login code. `signUp` opens an account for a new address: "worker"
+ * from the worker sign-up, "guarantor" from an invite link, "developer" from
+ * the developer sign-up.
+ */
+export function verifyLoginCode(email: string, code: string, signUp?: "worker" | "guarantor" | "developer") {
   return request<SignedInUser>("/auth/verify", {
     method: "POST",
-    body: JSON.stringify({ email, code }),
+    body: JSON.stringify({ email, code, sign_up: signUp ?? null }),
   });
 }
 

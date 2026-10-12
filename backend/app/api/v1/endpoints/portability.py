@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.endpoints.auth import current_user
-from app.core.platform_auth import require_tenant
+from app.core.platform_auth import require_tenant_scope
 from app.db.session import get_db_session
 from app.models.domain import Organization, User
 from app.models.portability import PlatformGrant, PlatformKey, ShareGrant
@@ -78,19 +78,19 @@ async def revoke_platform_grant(grant_id: UUID, user: User = Depends(current_use
 
 
 @platform_router.post("/worker-links", response_model=WorkerLinkResponse, status_code=201, summary="Bind your worker ID using worker consent")
-async def worker_link(payload: WorkerLinkRequest, principal: PlatformKey = Depends(require_tenant), session: AsyncSession = Depends(get_db_session)):
+async def worker_link(payload: WorkerLinkRequest, principal: PlatformKey = Depends(require_tenant_scope("trust")), session: AsyncSession = Depends(get_db_session)):
     result = await platform_history.link_worker(session, principal, payload.external_worker_id, payload.consent_token)
     await session.commit()
     return result
 
 
 @platform_router.get("/workers/{external_id}/history", response_model=HistoryPage, summary="Read approved history and provenance")
-async def history(external_id: str, page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100), principal: PlatformKey = Depends(require_tenant), session: AsyncSession = Depends(get_db_session)):
+async def history(external_id: str, page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100), principal: PlatformKey = Depends(require_tenant_scope("history")), session: AsyncSession = Depends(get_db_session)):
     return await platform_history.read_history(session, principal, external_id, page, size)
 
 
 @platform_router.post("/workers/{external_id}/history/import", response_model=HistoryImportResponse, summary="Import historical evidence", description="100 records maximum per batch. Idempotency-Key is required. attest requires a reviewed platform credential; API submission alone does not establish verification.")
-async def ingest(external_id: str, payload: HistoryImportRequest, idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128), principal: PlatformKey = Depends(require_tenant), session: AsyncSession = Depends(get_db_session)):
+async def ingest(external_id: str, payload: HistoryImportRequest, idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128), principal: PlatformKey = Depends(require_tenant_scope("history")), session: AsyncSession = Depends(get_db_session)):
     result = await platform_history.import_history(session, principal, external_id, payload, idempotency_key)
     await session.commit()
     return result

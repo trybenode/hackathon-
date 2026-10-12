@@ -4,18 +4,29 @@ import { useWorkerCopy } from "@/components/worker/useWorkerCopy";
 import Link from "next/link";
 import { useCallback, useState } from "react";
 import { CreateJobDialog } from "@/components/worker/CreateJobDialog";
-import { BriefcaseIcon } from "@/components/worker/icons";
+import { BriefcaseIcon, LockIcon } from "@/components/worker/icons";
 import { RecordGate } from "@/components/worker/RecordGate";
 import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
 import { useWorkerResource } from "@/components/worker/useWorkerResource";
 import { BellIcon, Button, CheckCircleIcon, CheckIcon, DotIcon } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import { getOnboarding } from "@/lib/onboarding";
 import { getMyJobs, jobTab, type WorkerJob } from "@/lib/workerJobs";
 import { formatNaira, formatShortDate, initialsOf } from "@/lib/workerFormat";
 
 function greeting() {
   const hour = new Date().getHours();
   return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+}
+
+function GuarantorMissingIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+      <circle cx="10" cy="8" r="3.5" />
+      <path d="M3.5 20a6.5 6.5 0 0 1 10.6-5" />
+      <path d="M17 15.5a2 2 0 1 1 2.6 1.9c-.4.1-.6.4-.6.8v.3M19 20.5h.01" />
+    </svg>
+  );
 }
 
 function LinkIcon() {
@@ -124,6 +135,10 @@ export function WorkerHome() {
 
   const loadJobs = useCallback(() => getMyJobs(), []);
   const { data: jobs, error, loading, reload } = useWorkerResource(loadJobs, "This account has no worker profile.");
+  const loadOnboarding = useCallback(() => getOnboarding(), []);
+  const { data: onboarding } = useWorkerResource(loadOnboarding, "This account has no worker profile.");
+  // Job links need an active guarantor; until we know, keep the button shut.
+  const locked = onboarding?.guarantor !== "active";
   const { data: record } = useWorkerRecord();
   const [creating, setCreating] = useState(false);
   const [hello] = useState(greeting);
@@ -160,8 +175,15 @@ export function WorkerHome() {
                 <p className="text-xs leading-4 text-grey-900">{w("Create a job agreement and send it your customer")}</p>
               </div>
             </div>
-            <Button fullWidth className="rounded-lg font-semibold" onClick={() => setCreating(true)}>
-              {w("Create Job")}</Button>
+            <Button
+              fullWidth
+              variant={locked ? "ghost" : "fill"}
+              className={cn("rounded-lg font-semibold", locked && "bg-grey-600/70 text-white/85 disabled:opacity-100")}
+              disabled={locked}
+              onClick={() => setCreating(true)}
+            >
+              Create Job
+            </Button>
           </section>
 
           <section className="grid grid-cols-2 gap-3">
@@ -180,19 +202,33 @@ export function WorkerHome() {
               <div key={stat.label} className="flex flex-col gap-3 rounded-xl border border-stroke bg-white p-4">
                 <span className="flex h-10 w-10 items-center justify-center rounded-pill bg-primary-50">{stat.icon}</span>
                 <span className="flex flex-col gap-1">
-                  <span className="text-body-lg text-grey-900">{stat.value}</span>
+                  {/* A worker with no jobs yet sees a dash rather than a zero. */}
+                  <span className="text-body-lg text-grey-900">{jobs?.length ? stat.value : "—"}</span>
                   <span className="text-body-sm text-grey-600">{w(stat.label)}</span>
                 </span>
               </div>
             ))}
           </section>
 
-          {current && (
-            <section className="flex flex-col gap-3">
-              <h2 className="text-body-md font-semibold text-grey-900">{w("Current job")}</h2>
+          <section className="flex flex-col gap-3">
+            <h2 className="text-body-md font-semibold text-grey-900">{w("Current job")}</h2>
+            {current ? (
               <CurrentJobCard job={current} />
-            </section>
-          )}
+            ) : (
+              <article className="flex flex-col gap-4 rounded-xl border border-stroke bg-white p-4 text-center">
+                <div className="flex flex-col gap-2 py-2">
+                  <p className="text-body-md font-semibold text-grey-900">No current job</p>
+                  <p className="text-xs leading-4 text-grey-900">Your current Job will appear here once you have one</p>
+                </div>
+                {locked && (
+                  <p className="flex items-center justify-center gap-2 border-t border-stroke pt-4 text-xs leading-4 text-grey-900">
+                    <LockIcon className="shrink-0" />
+                    Job creation opens once your guarantor is active.
+                  </p>
+                )}
+              </article>
+            )}
+          </section>
 
           <section className="flex flex-col gap-3">
             <h2 className="text-body-md font-semibold text-grey-900">{w("My Guarantee")}</h2>
@@ -217,7 +253,23 @@ export function WorkerHome() {
                   <p className="text-body-sm text-grey-900">{w("Valid until -")}{formatShortDate(guarantor.valid_until, language)}</p>
                 </>
               ) : (
-                <p className="text-body-sm text-grey-600">{w("You have no guarantor yet.")}</p>
+                <>
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-pill bg-grey-200 text-grey-800">
+                      <GuarantorMissingIcon />
+                    </span>
+                    <span className="flex flex-col">
+                      <span className="text-body-md text-grey-900">No active guarantor</span>
+                      <span className="text-xs leading-4 text-grey-600">Add someone who can vouch for you</span>
+                    </span>
+                  </div>
+                  <Link href="/join/guarantor" className="self-end">
+                    <Button variant="outline" size="md" className="rounded-lg px-10 font-semibold">
+                      Add guarantor
+                    </Button>
+                  </Link>
+                  <p className="text-body-sm text-grey-600">{w("You have no guarantor yet.")}</p>
+                </>
               )}
             </article>
           </section>

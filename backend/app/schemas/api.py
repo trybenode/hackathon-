@@ -43,6 +43,7 @@ class GuarantorRelationship(StrEnum):
     PARENT = "parent"
     SPOUSE = "spouse"
     COLLEAGUE = "colleague"
+    EMPLOYER = "employer"
     OTHER = "other"
 
 
@@ -77,6 +78,17 @@ class TrustQueryRequest(ApiModel):
     job_context: JobContext
 
 
+class WorkerVerification(ApiModel):
+    """What has been checked about the worker; never the identity data itself."""
+
+    #: "verified", "sandbox" (passed with a stand-in provider) or "not_verified".
+    identity: str
+    liveness: str
+    #: "active", "pending" (asked, not live yet) or "none".
+    guarantor: str
+    guarantor_valid_until: datetime | None = None
+
+
 class TrustQueryResponse(ApiModel):
     worker_id: UUID
     decision: bool
@@ -86,6 +98,8 @@ class TrustQueryResponse(ApiModel):
     signals_used: list[str]
     explanation_summary: str
     platform_type_applied: PlatformType
+    #: Identity, liveness and guarantor status, alongside the score.
+    verification: WorkerVerification
 
 
 class TrustBaselines(ApiModel):
@@ -187,7 +201,8 @@ class SignatureMetadata(ApiModel):
 
 class GuarantorSignRequest(ApiModel):
     signer_name: str = Field(min_length=1, max_length=160)
-    signer_phone: str = Field(min_length=5, max_length=40)
+    #: Empty for a guarantor invited by link: their phone comes with their identity details.
+    signer_phone: str = Field(default="", max_length=40)
     accepted: bool
     signature_metadata: SignatureMetadata
 
@@ -264,6 +279,8 @@ class GuarantorInstrumentResponse(ApiModel):
     triggered_at: datetime | None = None
     status_reason: str | None = None
     created_at: datetime | None = None
+    #: False while an invite link waits for its guarantor to sign in.
+    claimed: bool = True
 
 
 class GuarantorInstrumentListResponse(ApiModel):
