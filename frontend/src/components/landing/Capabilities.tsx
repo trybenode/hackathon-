@@ -43,7 +43,7 @@ export function Capabilities() {
         {CAPABILITIES.map(({ icon: Icon, title, body }) => (
           <li
             key={title}
-            className="flex w-full flex-col gap-4 rounded-lg border border-primary-100 bg-white p-6 shadow-1 sm:w-[calc(50%-12px)] lg:w-[calc((100%-48px)/3)] lg:max-w-[368px]"
+            className="flex w-full flex-col gap-4 rounded-lg border border-primary-100 bg-white p-6 transition-shadow hover:shadow-[0_8px_20px_rgb(6_182_233/0.18)] sm:w-[calc(50%-12px)] lg:w-[calc((100%-48px)/3)] lg:max-w-[368px]"
           >
             <span className="flex h-10 w-10 items-center justify-center rounded-pill bg-primary-50 text-primary-500">
               <Icon width={20} height={20} />
