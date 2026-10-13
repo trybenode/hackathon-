@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.domain import (
     DisputeStatus,
     EscrowStatus,
+    Job,
     JobStatus,
     NormalizedOutcome,
     OutcomeStatus,
@@ -380,3 +381,8 @@ async def test_job_links_need_an_active_guarantor(session: AsyncSession, worker:
             scheduled_at=NOW + timedelta(days=3),
             price=Decimal("25000.00"),
         )
+
+
+def test_a_released_job_without_escrow_is_finished() -> None:
+    job = Job(title="Home cleaning", status=JobStatus.RELEASED)
+    assert service.job_stage(job, None) == "released"
