@@ -15,6 +15,7 @@ import {
   UserIcon,
 } from "@/components/developer/icons";
 import { DeveloperProvider, useDeveloper } from "@/components/developer/DeveloperContext";
+import { BRAND_NAME } from "@/lib/brand";
 import { cn } from "@/lib/cn";
 import type { ReviewStatus } from "@/lib/developer";
 import { signOut } from "@/lib/guarantor";
@@ -43,10 +44,10 @@ function Brand() {
   return (
     <Link href="/developer" className="flex items-center gap-2">
       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500 text-body-md font-semibold text-white">
-        C
+        {BRAND_NAME[0]}
       </span>
       <span className="flex flex-col leading-tight">
-        <span className="text-body-md font-semibold text-grey-900">Credly</span>
+        <span className="text-body-md font-semibold text-grey-900">{BRAND_NAME}</span>
         <span className="text-xs text-grey-600">Developers</span>
       </span>
     </Link>

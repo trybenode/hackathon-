@@ -7,6 +7,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
+import { BRAND_NAME } from "@/lib/brand";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -19,7 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Trust Infrastructure",
+  title: BRAND_NAME,
   description: "Portable trust for independent work.",
 };
 
