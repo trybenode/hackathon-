@@ -1,11 +1,10 @@
 import { ShieldCheckIcon } from "@/components/developer/icons";
-import { CredentialIcon } from "@/components/worker/recordIcons";
 import { CONTAINER, Eyebrow, SectionHeading } from "./Section";
-import { CodeIcon, UserCircleIcon } from "./icons";
+import { CodeIcon, HandshakeIcon, UserCircleIcon } from "./icons";
 
 const CAPABILITIES = [
   {
-    icon: CredentialIcon,
+    icon: HandshakeIcon,
     title: "Trust-Band Scoring",
     body: "Turns verified identity, work history, and performance into a clear trust assessment to support more informed hiring decisions.",
   },
