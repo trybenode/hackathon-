@@ -1,3 +1,4 @@
+import { Comparison } from "@/components/landing/Comparison";
 import { Hero } from "@/components/landing/Hero";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { Problem } from "@/components/landing/Problem";
@@ -9,6 +10,7 @@ export default function Home() {
       <main className="flex flex-col">
         <Hero />
         <Problem />
+        <Comparison />
       </main>
     </div>
   );
