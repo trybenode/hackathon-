@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { AssessmentConfidence } from "@/components/worker/AssessmentConfidence";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { SignOutIcon } from "@/components/developer/icons";
+import { LogoutDialog } from "@/components/worker/LogoutDialog";
 import { ArrowLeftIcon } from "@/components/worker/icons";
 import { ChevronRightIcon, RecordIcon, VerifiedIcon } from "@/components/worker/recordIcons";
 import { ScoreRing } from "@/components/worker/ScoreRing";
@@ -14,6 +17,7 @@ import { initialsOf } from "@/lib/workerFormat";
 export function Profile() {
   const router = useRouter();
   const { data: record, error, loading, refresh } = useWorkerRecord();
+  const [loggingOut, setLoggingOut] = useState(false);
 
   return (
     <main className="flex flex-col">
@@ -58,20 +62,31 @@ export function Profile() {
           <AssessmentConfidence assessment={record.assessment} />
         </section>
 
-        <Link
-          href="/worker/profile/record"
-          className="flex items-center gap-4 rounded-lg border-b border-stroke bg-white px-4 py-4 shadow-1"
-        >
-          <RecordIcon className="shrink-0 text-grey-800" />
-          <span className="flex flex-1 flex-col gap-0.5">
-            <span className="text-body-md font-medium text-grey-900">Portable Record</span>
-            <span className="text-body-sm text-grey-600">Your verified work history</span>
-          </span>
-          <ChevronRightIcon className="shrink-0 text-grey-900" />
-        </Link>
+        <div className="flex flex-col">
+          <Link
+            href="/worker/profile/record"
+            className="flex items-center gap-4 rounded-lg border-b border-stroke bg-white px-4 py-4 shadow-1"
+          >
+            <RecordIcon className="shrink-0 text-grey-800" />
+            <span className="flex flex-1 flex-col gap-0.5">
+              <span className="text-body-md font-medium text-grey-900">Portable Record</span>
+              <span className="text-body-sm text-grey-600">Your verified work history</span>
+            </span>
+            <ChevronRightIcon className="shrink-0 text-grey-900" />
+          </Link>
+          <button
+            type="button"
+            onClick={() => setLoggingOut(true)}
+            className="flex items-center gap-4 rounded-lg border-b border-stroke bg-white px-4 py-5 text-left shadow-1"
+          >
+            <SignOutIcon width={24} height={24} className="shrink-0 text-error-mid" />
+            <span className="text-body-md text-error-mid">Log out</span>
+          </button>
+        </div>
       </div>
       )}
       </RecordGate>
+      <LogoutDialog open={loggingOut} onClose={() => setLoggingOut(false)} />
     </main>
   );
 }
