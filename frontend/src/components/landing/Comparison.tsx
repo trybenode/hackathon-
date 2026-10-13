@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, type ReactNode } from "react";
 import { CalendarIcon, ChevronDownIcon, ClockIcon, LocationPinIcon, ProgressBar } from "@/components/ui";
 import { ShieldIcon } from "@/components/worker/icons";
@@ -34,13 +35,19 @@ function Card({ title, className, children }: { title: string; className?: strin
   );
 }
 
-/** Jane A., the sample worker. Initials until the Figma photo is exported. */
+/** Jane A., the sample worker. */
 function Worker() {
   return (
     <div className="flex items-center gap-4">
-      <span className="flex h-14 w-14 items-center justify-center rounded-pill bg-[#e8f3c8] text-body-md font-medium text-grey-800">
-        JA
-      </span>
+      <Image
+        src="/landing/jane.webp"
+        alt=""
+        width={56}
+        height={56}
+        // Served as-is: Vercel Services doesn't route /_next/image.
+        unoptimized
+        className="h-14 w-14 shrink-0 rounded-pill object-cover"
+      />
       <span className="flex flex-col">
         <span className="text-body-lg text-grey-900">Jane A.</span>
         <span className="text-xs leading-4 text-grey-600">Cleaner</span>
