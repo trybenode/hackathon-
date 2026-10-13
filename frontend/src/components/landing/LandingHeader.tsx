@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
 import { CONTAINER } from "./Section";
-import { LinkButton } from "./LinkButton";
-import { LINKS, SECTIONS } from "./links";
+import { GetStartedMenu } from "./GetStartedMenu";
+import { SECTIONS } from "./links";
 
 export function LandingHeader() {
   return (
@@ -17,10 +17,7 @@ export function LandingHeader() {
           </a>
         ))}
       </nav>
-      {/* Goes to worker sign-up until the Figma's worker/platform chooser is in. */}
-      <LinkButton href={LINKS.workerSignUp} size="sm">
-        Get Started
-      </LinkButton>
+      <GetStartedMenu />
     </header>
   );
 }
