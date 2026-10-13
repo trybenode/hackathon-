@@ -25,8 +25,8 @@ export function Problem() {
           </div>
           <ul className="grid gap-8 sm:grid-cols-3">
             {AUDIENCES.map(({ icon: Icon, title, body }) => (
-              <li key={title} className="flex flex-col gap-3 border-l border-grey-400 pl-4">
-                <Icon className="text-navy-400" width={22} height={22} />
+              <li key={title} className="flex flex-col gap-3 border-primary-400 sm:border-l sm:pl-6 sm:first:border-l-0 sm:first:pl-0">
+                <Icon className="text-primary-500" width={22} height={22} />
                 <span className="text-body-sm font-semibold text-grey-900">{title}</span>
                 <span className="text-body-sm text-grey-800">{body}</span>
               </li>
