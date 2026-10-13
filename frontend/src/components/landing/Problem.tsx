@@ -13,7 +13,7 @@ const AUDIENCES = [
 
 export function Problem() {
   return (
-    <section aria-labelledby="problem-heading" className="relative -mt-8 lg:-mt-16">
+    <section aria-labelledby="problem-heading" className="mt-10 lg:mt-16">
       <Wave edge="top" />
       <div className="bg-primary-50">
         <div className={`${CONTAINER} grid gap-10 py-10 lg:grid-cols-[minmax(0,320px)_1fr] lg:gap-16`}>
