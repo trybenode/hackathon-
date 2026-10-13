@@ -30,7 +30,7 @@ export function Hero() {
       {/* The design shows the top of the phone, blurring and fading out where
           the hero ends. The mask fades it; the overlay blurs what's under it,
           more and more towards the bottom. */}
-      <div className="relative mx-auto h-[380px] w-[260px] overflow-hidden mask-[linear-gradient(to_bottom,black_75%,transparent)] sm:h-[460px] sm:w-[320px] lg:mx-0">
+      <div className="relative mx-auto h-[420px] w-[290px] overflow-hidden mask-[linear-gradient(to_bottom,black_75%,transparent)] sm:h-[530px] sm:w-[370px] lg:mx-0">
         <Image
           src="/landing/phone.webp"
           alt="A worker's portable record: an 87% trust score, 42 completed jobs and 95% on time"
@@ -43,7 +43,7 @@ export function Hero() {
         />
         <div
           aria-hidden
-          className="absolute inset-x-0 bottom-0 h-2/5 backdrop-blur-[6px] mask-[linear-gradient(to_bottom,transparent,black)]"
+          className="absolute inset-x-0 bottom-0 h-2/5 backdrop-blur-[3px] mask-[linear-gradient(to_bottom,transparent,black)]"
         />
       </div>
     </section>
