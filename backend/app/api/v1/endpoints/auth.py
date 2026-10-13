@@ -7,9 +7,10 @@ endpoint needing the signed-in user.
 The session is carried by an HTTP-only cookie, so page scripts cannot read it.
 """
 
+from datetime import timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from pydantic import EmailStr, Field
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,7 @@ from app.services import worker_onboarding as onboarding
 from app.services.auth import (
     SESSION_COOKIE,
     AuthError,
+    DemoUnavailableError,
     InvalidCodeError,
     ResendTooSoonError,
     EmailTakenError,
@@ -70,6 +72,8 @@ class SignedInUser(ApiModel):
     is_developer: bool = False
     #: A worker's unfinished verification step: "identity" or "liveness".
     onboarding_step: str | None = None
+    #: The live demo's worker: everything can be looked at, nothing changed.
+    is_demo: bool = False
 
 
 async def _signed_in(session: AsyncSession, user: User) -> SignedInUser:
@@ -98,6 +102,7 @@ async def _signed_in(session: AsyncSession, user: User) -> SignedInUser:
         is_developer=bool(is_developer),
         # Adding a guarantor can be skipped, so it never blocks sign-in.
         onboarding_step=step if step in ("identity", "liveness") else None,
+        is_demo=auth_service.is_demo(user),
     )
 
 
@@ -110,6 +115,8 @@ def _http_error(error: AuthError) -> HTTPException:
         return HTTPException(status_code=404, detail=str(error))
     if isinstance(error, EmailTakenError):
         return HTTPException(status_code=409, detail=str(error))
+    if isinstance(error, DemoUnavailableError):
+        return HTTPException(status_code=404, detail=str(error))
     return HTTPException(status_code=400, detail=str(error))
 
 
@@ -117,11 +124,32 @@ def _is_development() -> bool:
     return settings.environment == "development"
 
 
+def _set_session_cookie(response: Response, token: str, ttl: timedelta) -> None:
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        httponly=True,
+        samesite="lax",
+        secure=not _is_development(),
+        max_age=int(ttl.total_seconds()),
+        path="/",
+    )
+
+
+#: Methods that only read, which the demo worker may use.
+_READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
 async def current_user(
+    request: Request,
     guarantor_session: str | None = Cookie(default=None, alias=SESSION_COOKIE),
     session: AsyncSession = Depends(get_db_session),
 ) -> User:
-    """Dependency for endpoints that need a signed-in guarantor."""
+    """Dependency for endpoints that need a signed-in user.
+
+    Every signed-in endpoint comes through here, so this is where the live
+    demo's worker is kept read-only.
+    """
 
     if not guarantor_session:
         raise HTTPException(status_code=401, detail="Sign in to continue.")
@@ -129,6 +157,12 @@ async def current_user(
     user = await auth_service.resolve_session(session, guarantor_session)
     if user is None:
         raise HTTPException(status_code=401, detail="Your session has expired. Sign in again.")
+
+    if request.method not in _READ_METHODS and auth_service.is_demo(user):
+        raise HTTPException(
+            status_code=403,
+            detail="This is a demo account, so nothing can be changed. Start now to create your own.",
+        )
 
     return user
 
@@ -173,15 +207,21 @@ async def verify_code(
     if payload.sign_up == "worker":
         await onboarding.ensure_worker(session, user)
     await session.commit()
-    response.set_cookie(
-        SESSION_COOKIE,
-        token,
-        httponly=True,
-        samesite="lax",
-        secure=not _is_development(),
-        max_age=int(auth_service.SESSION_TTL.total_seconds()),
-        path="/",
-    )
+    _set_session_cookie(response, token, auth_service.SESSION_TTL)
+    return await _signed_in(session, user)
+
+
+@router.post("/demo", response_model=SignedInUser, summary="Explore the demo worker account")
+async def start_demo(response: Response, session: AsyncSession = Depends(get_db_session)) -> SignedInUser:
+    """Sign in as the read-only demo worker, for the landing page's live demo."""
+
+    try:
+        user, token = await auth_service.start_demo_session(session)
+    except AuthError as error:
+        raise _http_error(error) from error
+
+    await session.commit()
+    _set_session_cookie(response, token, auth_service.DEMO_SESSION_TTL)
     return await _signed_in(session, user)
 
 
