@@ -1,5 +1,8 @@
+import { Audience } from "@/components/landing/Audience";
+import { Capabilities } from "@/components/landing/Capabilities";
 import { Comparison } from "@/components/landing/Comparison";
 import { Hero } from "@/components/landing/Hero";
+import { HowItWorks } from "@/components/landing/HowItWorks";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { Problem } from "@/components/landing/Problem";
 
@@ -11,6 +14,9 @@ export default function Home() {
         <Hero />
         <Problem />
         <Comparison />
+        <HowItWorks />
+        <Capabilities />
+        <Audience />
       </main>
     </div>
   );
