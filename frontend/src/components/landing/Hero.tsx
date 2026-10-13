@@ -21,7 +21,7 @@ export function Hero() {
           <LinkButton href={LINKS.workerSignUp}>
             View live demo <ArrowRightIcon />
           </LinkButton>
-          <LinkButton href="#how-it-works" variant="outline" className="border-primary-400 text-primary-500">
+          <LinkButton href="#how-it-works" variant="outline">
             How it works
           </LinkButton>
         </div>

@@ -4,7 +4,7 @@ import { cn } from "@/lib/cn";
 
 const variants = {
   fill: "bg-primary-500 text-white hover:bg-primary-400",
-  outline: "border border-navy-500 bg-white text-grey-900 hover:bg-grey-50",
+  outline: "border border-primary-400 bg-white text-primary-500 hover:bg-primary-25",
   // On the call-to-action banner's blue.
   light: "bg-primary-400 text-white hover:bg-primary-300",
   text: "text-white hover:underline",
