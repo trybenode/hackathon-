@@ -4,6 +4,9 @@ import { cn } from "@/lib/cn";
 /** The landing page's content width. */
 export const CONTAINER = "mx-auto w-full max-w-[1232px] px-4 sm:px-6";
 
+/** The pale cyan behind How it works and Who it's for, edge to edge. */
+export const TINTED = "bg-primary-50/40";
+
 /** The small cyan label above a section heading ("THE PROBLEM"). */
 export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
   return (
