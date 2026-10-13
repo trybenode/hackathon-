@@ -12,7 +12,12 @@ import { ScoreRing } from "@/components/worker/ScoreRing";
 import { TrustBandBadge } from "@/components/worker/TrustBandBadge";
 import { RecordGate } from "@/components/worker/RecordGate";
 import { useWorkerRecord } from "@/components/worker/useWorkerRecord";
+import { cn } from "@/lib/cn";
 import { initialsOf } from "@/lib/workerFormat";
+
+/** A row of the menu under the trust card: white, with a soft line under it. */
+const MENU_ROW =
+  "flex min-h-16 items-center gap-5 rounded-lg bg-white px-4 py-3 shadow-[0_1.5px_0_rgb(0_0_0/0.1)]";
 
 export function Profile() {
   const router = useRouter();
@@ -65,9 +70,9 @@ export function Profile() {
         <div className="flex flex-col">
           <Link
             href="/worker/profile/record"
-            className="flex items-center gap-4 rounded-lg border-b border-stroke bg-white px-4 py-4 shadow-1"
+            className={MENU_ROW}
           >
-            <RecordIcon className="shrink-0 text-grey-800" />
+            <RecordIcon width={26} height={26} className="shrink-0 text-grey-800" />
             <span className="flex flex-1 flex-col gap-0.5">
               <span className="text-body-md font-medium text-grey-900">Portable Record</span>
               <span className="text-body-sm text-grey-600">Your verified work history</span>
@@ -77,10 +82,10 @@ export function Profile() {
           <button
             type="button"
             onClick={() => setLoggingOut(true)}
-            className="flex items-center gap-4 rounded-lg border-b border-stroke bg-white px-4 py-5 text-left shadow-1"
+            className={cn(MENU_ROW, "text-left")}
           >
-            <SignOutIcon width={24} height={24} className="shrink-0 text-error-mid" />
-            <span className="text-body-md text-error-mid">Log out</span>
+            <SignOutIcon width={26} height={26} className="shrink-0 text-error-mid" />
+            <span className="text-body-md font-medium text-error-mid">Log out</span>
           </button>
         </div>
       </div>
