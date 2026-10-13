@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";
-import { CONTAINER } from "./Section";
+import { CONTAINER, DEEP_BLUE } from "./Section";
 import { InstagramIcon } from "./icons";
 import { CONTACT, SECTIONS } from "./links";
 
@@ -22,8 +22,7 @@ export function LandingFooter() {
 
   return (
     <footer>
-      {/* The footer's blue is read off the design; it isn't in the style guide. */}
-      <div className="bg-[#0a84b3]">
+      <div className={DEEP_BLUE}>
         <div className={`${CONTAINER} grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr_1fr]`}>
           <Logo tone="light" />
           <Column title="Quick Links">

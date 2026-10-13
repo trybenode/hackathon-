@@ -1,4 +1,5 @@
-import { CONTAINER, Eyebrow, SectionHeading, TINTED } from "./Section";
+import { cn } from "@/lib/cn";
+import { CONTAINER, DEEP_BLUE, Eyebrow, SectionHeading, TINTED } from "./Section";
 
 const STEPS = [
   { title: "Verify", body: "A platform or individual checks the worker's trust profile." },
@@ -29,14 +30,20 @@ export function HowItWorks() {
             return (
               <li key={step.title} className="flex flex-col items-center gap-3 text-center lg:items-start lg:text-left">
                 <div className="flex w-full items-center justify-center lg:justify-start">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-pill bg-primary-500 text-xs font-semibold text-white">
+                  <span
+                    className={cn(
+                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-pill text-body-sm text-white",
+                      DEEP_BLUE,
+                    )}
+                  >
                     {index + 1}
                   </span>
-                  {!last && <span aria-hidden className="hidden h-px flex-1 bg-primary-500 lg:block" />}
+                  {/* Stops short of the next number, as in the design. */}
+                  {!last && <span aria-hidden className={cn("mr-6 hidden h-0.5 flex-1 lg:block", DEEP_BLUE)} />}
                 </div>
                 <span className="text-body-sm font-semibold text-grey-900">{step.title}</span>
                 <span className="max-w-[220px] text-body-sm text-grey-800 lg:max-w-[200px]">{step.body}</span>
-                {!last && <span aria-hidden className="mb-3 h-10 w-px bg-primary-500 lg:hidden" />}
+                {!last && <span aria-hidden className={cn("mb-3 h-10 w-0.5 lg:hidden", DEEP_BLUE)} />}
               </li>
             );
           })}
