@@ -18,7 +18,7 @@ export function LandingHeader() {
         ))}
       </nav>
       {/* Goes to worker sign-up until the Figma's worker/platform chooser is in. */}
-      <LinkButton href={LINKS.workerSignUp} className="h-10 px-5">
+      <LinkButton href={LINKS.workerSignUp} size="sm">
         Get Started
       </LinkButton>
     </header>
