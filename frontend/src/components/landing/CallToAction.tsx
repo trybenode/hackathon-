@@ -16,7 +16,7 @@ export function CallToAction() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
-          <LinkButton href={LINKS.workerSignUp} variant="light">
+          <LinkButton href={LINKS.liveDemo} variant="light">
             View live demo <ArrowRightIcon />
           </LinkButton>
           <LinkButton href={LINKS.technicalDocs} variant="text">

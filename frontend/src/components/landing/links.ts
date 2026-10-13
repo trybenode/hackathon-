@@ -1,6 +1,7 @@
 /** Where the landing page's calls to action lead. */
 export const LINKS = {
   workerSignUp: "/join",
+  liveDemo: "/demo",
   developerSignUp: "/developers",
   technicalDocs: "/developer/docs",
 } as const;

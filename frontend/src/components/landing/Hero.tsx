@@ -18,7 +18,7 @@ export function Hero() {
           portable reputation for gig workers
         </p>
         <div className="flex flex-wrap gap-4 pt-2">
-          <LinkButton href={LINKS.workerSignUp}>
+          <LinkButton href={LINKS.liveDemo}>
             View live demo <ArrowRightIcon />
           </LinkButton>
           <LinkButton href="#how-it-works" variant="outline">
