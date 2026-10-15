@@ -6,6 +6,7 @@ import { DisputeDialog } from "@/components/jobs/DisputeDialog";
 import { ESCROW_CODE_LENGTH, EscrowCodeInput } from "@/components/jobs/EscrowCodeInput";
 import { jobProgress } from "@/components/jobs/jobProgress";
 import { ReportIssueDialog } from "@/components/jobs/ReportIssueDialog";
+import { Logo } from "@/components/brand/Logo";
 import { StarRating } from "@/components/jobs/StarRating";
 import { ShieldIcon } from "@/components/worker/icons";
 import { ScoreRing } from "@/components/worker/ScoreRing";
@@ -13,7 +14,6 @@ import { Timeline } from "@/components/worker/Timeline";
 import { TrustBandBadge } from "@/components/worker/TrustBandBadge";
 import { WorkerDialog } from "@/components/worker/WorkerDialog";
 import { BellIcon, Button, DotIcon, Input, NigeriaFlagIcon } from "@/components/ui";
-import { BRAND_NAME } from "@/lib/brand";
 import { cn } from "@/lib/cn";
 import {
   CUSTOMER_ISSUE_REASONS,
@@ -43,7 +43,7 @@ const STATUS: Record<Job["stage"], { label: string; dot: string }> = {
 function Header({ token }: { token: string }) {
   return (
     <header className="flex items-center justify-between border-b border-stroke px-6 pt-8 pb-5">
-      <span className="text-body-lg font-semibold text-grey-900">{BRAND_NAME}</span>
+      <Logo className="h-7" />
       <Link href={`/j/${token}/notifications`} aria-label="Notifications" className="text-grey-900">
         <BellIcon width={22} height={22} />
       </Link>
