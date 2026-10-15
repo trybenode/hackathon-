@@ -19,6 +19,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import get_settings
 from app.db.base import Base
 from app.models.domain import User, Worker
 from app.services import document_store as document_store_module
@@ -54,6 +55,13 @@ def never_move_real_money(monkeypatch: pytest.MonkeyPatch) -> StubEscrowProvider
     stub = StubEscrowProvider()
     monkeypatch.setattr(escrow_provider_module, "default_escrow_provider", stub)
     return stub
+
+
+@pytest.fixture
+def stand_in_checks_are_sandbox(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Label stand-in KYC passes "sandbox", as once a real provider is wired up."""
+
+    monkeypatch.setattr(get_settings(), "stand_in_checks_verify", False)
 
 
 @pytest_asyncio.fixture

@@ -117,6 +117,7 @@ async def test_record_counts_and_history(
     assert record.score is not None and 0 <= record.score <= 1
 
 
+@pytest.mark.usefixtures("stand_in_checks_are_sandbox")
 async def test_credentials_come_from_checks_and_guarantees(
     session: AsyncSession, worker: Worker
 ) -> None:
@@ -245,6 +246,7 @@ async def test_completed_preview_is_bounded(session, worker, source):
     assert record.band == "Building History"
 
 
+@pytest.mark.usefixtures("stand_in_checks_are_sandbox")
 async def test_active_guarantor_requires_both_checks_for_public_support(session, worker):
     from app.services.portability import summary_from_record
     person = User(email="sandbox-guarantor@example.com", display_name="Support")
@@ -261,6 +263,23 @@ async def test_active_guarantor_requires_both_checks_for_public_support(session,
     await session.flush()
     summary = summary_from_record(await service.load_record(session, user))
     assert summary.active_guarantor and summary.guarantor_sandbox
+
+
+async def test_stand_in_checks_count_as_verified_until_kyc_is_live(
+    session: AsyncSession, worker: Worker
+) -> None:
+    user = await session.get(User, worker.user_id)
+    session.add(
+        IdentityVerification(
+            user_id=user.id, provider="stub", provider_reference="REF", status="verified", check_type="identity"
+        )
+    )
+    await session.flush()
+
+    record = await service.load_record(session, user)
+
+    assert record.identity is not None and record.identity.status == "verified"
+    assert record.identity_verified
 
 
 async def test_every_completed_outcome_can_be_paged(session, worker, source):

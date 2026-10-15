@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.domain import AgreementStatus, GuarantorAgreement, IdentityVerification, Job, JobConfirmation, JobStatus, NormalizedOutcome, OutcomeStatus, TrustAssessment, User, Worker
+from app.services.identity_provider import is_sandbox_pass
 from app.services.trust_scoring.assessment import assess_worker
 from app.services.trust_scoring.evidence import scoring_inputs
 from app.services.trust_scoring.scoring import starting_rating
@@ -112,7 +113,7 @@ def check_status(check: IdentityVerification | None) -> str:
     """Distinguish actual provider verification from successful sandbox checks."""
     if check is None or check.status != "verified":
         return "not_verified"
-    return "sandbox" if check.provider == "stub" else "verified"
+    return "sandbox" if is_sandbox_pass(check.provider) else "verified"
 
 
 async def _identity(session: AsyncSession, user_id: UUID) -> IdentityCredential | None:

@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
 
+from app.core.config import get_settings
+
 
 @dataclass(frozen=True)
 class IdentitySubmission:
@@ -145,6 +147,13 @@ class DojahLivenessProvider:
         raise NotImplementedError(
             "Dojah liveness is not wired up yet: add credentials and implement the call."
         )
+
+
+def is_sandbox_pass(provider: str) -> bool:
+    """Whether a passed check came from the stand-in provider and should be
+    labelled sandbox rather than verified (see STAND_IN_CHECKS_VERIFY)."""
+
+    return provider == StubIdentityProvider.name and not get_settings().stand_in_checks_verify
 
 
 def fingerprint(value: str) -> str:

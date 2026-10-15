@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     #: The platform's own address, told when a dispute opens or a platform asks
     #: to attest. Optional.
     ops_email: str = Field("", alias="OPS_EMAIL")
+    #: There's no live KYC provider yet, so identity (NIN/BVN) and liveness
+    #: checks that pass the stand-in provider count as verified. Turn it off
+    #: once a real provider is wired up, to label stand-in passes "sandbox".
+    stand_in_checks_verify: bool = Field(True, alias="STAND_IN_CHECKS_VERIFY")
 
     @property
     def escrow_enabled(self) -> bool:
