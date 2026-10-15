@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Dynamic Trust Infrastructure API",
+    "title": "trybetrust API",
     "description": "Trust scoring and portable work verification infrastructure.",
     "version": "0.1.0"
   },

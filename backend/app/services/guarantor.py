@@ -205,7 +205,7 @@ class InvalidTransitionError(GuarantorError):
 REQUEST_WINDOW = timedelta(days=7)
 
 #: What a worker's own invite covers; the onboarding form asks for no terms.
-INVITE_SCOPE = "The worker's jobs on Credly"
+INVITE_SCOPE = "The worker's jobs on trybetrust"
 INVITE_CONDITIONS = "Covers no-show and property damage claims on the worker's jobs."
 
 

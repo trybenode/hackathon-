@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     #: Transactional email. Without a key, login codes are logged instead.
     resend_api_key: str = Field("", alias="RESEND_API_KEY")
     #: Resend only accepts a verified domain, or its shared onboarding sender.
-    resend_from: str = Field("Trust Infrastructure <onboarding@resend.dev>", alias="RESEND_FROM")
+    resend_from: str = Field("trybetrust <onboarding@resend.dev>", alias="RESEND_FROM")
     credential_signing_secret: str = Field("", alias="CREDENTIAL_SIGNING_SECRET")
     platform_api_key: str = Field("", alias="PLATFORM_API_KEY")
     #: Payscrow escrow. Without a key, a local stand-in holds the money.
