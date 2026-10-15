@@ -739,7 +739,9 @@ def job_stage(job: Job, escrow: EscrowTransaction | None) -> str:
     """Where the job stands, in the terms both screens use."""
 
     if escrow is None:
-        return "awaiting_customer"
+        # Finished work recorded without escrow (seeded or carried-over
+        # history) is done, not waiting for a customer.
+        return "released" if job.status is JobStatus.RELEASED else "awaiting_customer"
     if escrow.status is EscrowStatus.PENDING:
         return "awaiting_payment"
     if escrow.in_dispute or job.status is JobStatus.DISPUTED:

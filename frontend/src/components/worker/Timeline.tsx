@@ -6,6 +6,8 @@ export type TimelineStep = {
   label: string;
   /** Done steps carry when they happened; pending ones show a dash. */
   at?: string | null;
+  /** A line under the time saying what happened, as the landing page shows. */
+  note?: string;
   state: "done" | "current" | "pending";
 };
 
@@ -76,6 +78,7 @@ export function Timeline({ steps }: { steps: TimelineStep[] }) {
               >
                 {step.at ?? "· —"}
               </span>
+              {step.note && <span className="text-xs leading-4 text-navy-300">{step.note}</span>}
             </div>
           </li>
         );

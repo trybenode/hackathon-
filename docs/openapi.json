@@ -922,6 +922,28 @@
         }
       }
     },
+    "/api/v1/auth/demo": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Explore the demo worker account",
+        "description": "Sign in as the read-only demo worker, for the landing page's live demo.",
+        "operationId": "start_demo_api_v1_auth_demo_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedInUser"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/email-change/code": {
       "post": {
         "tags": [
@@ -17363,6 +17385,11 @@
               }
             ],
             "title": "Onboarding Step"
+          },
+          "is_demo": {
+            "type": "boolean",
+            "title": "Is Demo",
+            "default": false
           }
         },
         "additionalProperties": false,

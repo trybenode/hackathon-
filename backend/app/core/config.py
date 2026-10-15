@@ -90,6 +90,10 @@ class Settings(BaseSettings):
     #: The platform's own address, told when a dispute opens or a platform asks
     #: to attest. Optional.
     ops_email: str = Field("", alias="OPS_EMAIL")
+    #: The read-only worker the landing page's live demo signs visitors in
+    #: as. Seed it with scripts/seed_worker_record.py and seed_worker_jobs.py.
+    #: example.com can't receive mail, so nobody can sign in to it by code.
+    demo_worker_email: str = Field("demo.worker@example.com", alias="DEMO_WORKER_EMAIL")
 
     @property
     def escrow_enabled(self) -> bool:

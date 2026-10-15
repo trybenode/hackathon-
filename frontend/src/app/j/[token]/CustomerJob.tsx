@@ -13,6 +13,7 @@ import { Timeline } from "@/components/worker/Timeline";
 import { TrustBandBadge } from "@/components/worker/TrustBandBadge";
 import { WorkerDialog } from "@/components/worker/WorkerDialog";
 import { BellIcon, Button, DotIcon, Input, NigeriaFlagIcon } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 import { cn } from "@/lib/cn";
 import {
   CUSTOMER_ISSUE_REASONS,
@@ -42,7 +43,7 @@ const STATUS: Record<Job["stage"], { label: string; dot: string }> = {
 function Header({ token }: { token: string }) {
   return (
     <header className="flex items-center justify-between border-b border-stroke px-6 pt-8 pb-5">
-      <span className="text-body-lg font-semibold text-grey-900">Credly</span>
+      <span className="text-body-lg font-semibold text-grey-900">{BRAND_NAME}</span>
       <Link href={`/j/${token}/notifications`} aria-label="Notifications" className="text-grey-900">
         <BellIcon width={22} height={22} />
       </Link>
