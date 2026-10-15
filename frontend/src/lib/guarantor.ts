@@ -281,6 +281,8 @@ export type SignedInUser = {
   is_developer: boolean;
   /** A worker's unfinished verification step. */
   onboarding_step: "identity" | "liveness" | null;
+  /** The live demo's read-only worker. */
+  is_demo: boolean;
 };
 
 /**
@@ -322,6 +324,11 @@ export function verifyLoginCode(email: string, code: string, signUp?: "worker" |
     method: "POST",
     body: JSON.stringify({ email, code, sign_up: signUp ?? null }),
   });
+}
+
+/** Signs in as the read-only demo worker, for the landing page's live demo. */
+export function startDemo() {
+  return request<SignedInUser>("/auth/demo", { method: "POST" });
 }
 
 export type Profile = {

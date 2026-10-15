@@ -16,6 +16,8 @@ import { getSignedInUser, landingPathFor, type SignedInUser } from "@/lib/guaran
 export type SkipTo = "landing" | "worker" | "developer";
 
 function destination(to: SkipTo, user: SignedInUser, next?: string): string | null {
+  // Someone exploring the demo hasn't signed in as themselves.
+  if (user.is_demo) return null;
   if (to === "landing") return next ?? landingPathFor(user);
   if (to === "worker") {
     if (!user.is_worker) return null;
