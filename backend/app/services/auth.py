@@ -21,7 +21,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.domain import LoginCode, User, UserSession
+from app.core.config import get_settings
+from app.models.domain import LoginCode, User, UserSession, Worker
 from app.services import email_sender as email_sender_module
 from app.services.email_sender import EmailMessage, EmailSender
 from app.services.email_templates import login_code_html, login_code_subject, login_code_text
@@ -31,6 +32,8 @@ CODE_LENGTH = 6
 CODE_TTL = timedelta(minutes=10)
 #: How long a guarantor stays signed in.
 SESSION_TTL = timedelta(days=30)
+#: A live demo visit is short; it needn't outlive the day.
+DEMO_SESSION_TTL = timedelta(hours=12)
 #: A new code cannot be requested until this has passed.
 RESEND_COOLDOWN = timedelta(seconds=60)
 #: Wrong guesses allowed before a code is burned.
@@ -57,6 +60,10 @@ class UnknownAccountError(AuthError):
 
 class EmailTakenError(AuthError):
     """The new address is already the user's, or another account's."""
+
+
+class DemoUnavailableError(AuthError):
+    """The demo worker hasn't been seeded."""
 
 
 def _hash(value: str) -> str:
@@ -183,15 +190,42 @@ async def verify_login_code(
         )
 
     record.consumed_at = moment
+    return user, open_session(session, user, now=moment)
+
+
+def open_session(
+    session: AsyncSession, user: User, *, ttl: timedelta = SESSION_TTL, now: datetime | None = None
+) -> str:
+    """Start a session for `user`, returning its token. Only the hash is stored."""
+
     token = secrets.token_urlsafe(32)
     session.add(
-        UserSession(
-            user_id=user.id,
-            token_hash=_hash(token),
-            expires_at=moment + SESSION_TTL,
-        )
+        UserSession(user_id=user.id, token_hash=_hash(token), expires_at=(now or _now()) + ttl)
     )
-    return user, token
+    return token
+
+
+def is_demo(user: User) -> bool:
+    """Whether this is the live demo's worker, which nobody may change."""
+
+    demo = get_settings().demo_worker_email
+    return bool(demo) and user.email == normalise_email(demo)
+
+
+async def start_demo_session(session: AsyncSession, *, now: datetime | None = None) -> tuple[User, str]:
+    """Sign a visitor in as the demo worker, for a short visit."""
+
+    demo = get_settings().demo_worker_email
+    user = (
+        await session.scalar(
+            select(User).join(Worker, Worker.user_id == User.id).where(User.email == normalise_email(demo))
+        )
+        if demo
+        else None
+    )
+    if user is None:
+        raise DemoUnavailableError("The demo isn't available right now.")
+    return user, open_session(session, user, ttl=DEMO_SESSION_TTL, now=now)
 
 
 async def _check_code(session: AsyncSession, address: str, code: str, moment: datetime) -> LoginCode:
