@@ -104,7 +104,8 @@ export function WorkerIdentityForm() {
           min="1900-01-01"
           max={today()}
           onClick={(event) => event.currentTarget.showPicker?.()}
-          className="[&::-webkit-calendar-picker-indicator]:hidden"
+          // Empty and required is :invalid; grey it like a placeholder.
+          className="invalid:text-grey-400 [&::-webkit-calendar-picker-indicator]:hidden"
           trailingIcon={
             <button
               type="button"
