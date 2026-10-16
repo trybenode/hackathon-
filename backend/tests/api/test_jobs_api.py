@@ -5,6 +5,7 @@ Used by: the backend test suite and CI. Uses the stub provider throughout.
 """
 
 import json
+from decimal import Decimal
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -13,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.db.session import get_db_session
 from app.main import app
-from app.models.domain import Worker
+from app.models.domain import Job, JobStatus, JobType, Organization, OrganizationType, Worker
 from app.services.escrow_provider import sign_webhook
 from tests.conftest import give_guarantor
 
@@ -227,3 +228,26 @@ def test_bare_webhook_host_gets_the_route(monkeypatch: pytest.MonkeyPatch) -> No
     assert settings.payscrow_webhook_endpoint == "https://abc.trycloudflare.com/api/v1/webhooks/payscrow"
     monkeypatch.setattr(settings, "payscrow_webhook_url", "https://abc.example.com/hooks/payscrow")
     assert settings.payscrow_webhook_endpoint == "https://abc.example.com/hooks/payscrow"
+
+
+async def test_a_released_job_without_escrow_names_its_customer(session: AsyncSession, worker: Worker) -> None:
+    # Finished history recorded without escrow, as the seed scripts make it.
+    organization = Organization(name="History", organization_type=OrganizationType.EMPLOYER)
+    session.add(organization)
+    await session.flush()
+    session.add(
+        Job(
+            worker_id=worker.id, organization_id=organization.id, job_type=JobType.INDEPENDENT,
+            status=JobStatus.RELEASED, title="Home cleaning", agreed_amount=Decimal("15000.00"),
+            client_name="Peter James",
+        )
+    )
+    await session.flush()
+
+    async with client_for(session) as client:
+        await sign_in(client, "worker@example.com")
+        [job] = (await client.get("/api/v1/me/jobs")).json()
+        assert job["stage"] == "released"
+        assert job["client_name"] == "Peter James"
+
+    app.dependency_overrides.clear()

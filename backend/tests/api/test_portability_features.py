@@ -106,6 +106,7 @@ async def test_claims_are_not_verification_and_tenants_are_isolated(api, session
     assert record["starting_rating"] <= .65
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("stand_in_checks_are_sandbox")
 async def test_summary_privacy_live_status_and_expiry(api, session):
     client, actor = api
     grant = (await client.post("/api/v1/me/worker/shares")).json()

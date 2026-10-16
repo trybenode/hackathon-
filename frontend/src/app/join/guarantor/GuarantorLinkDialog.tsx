@@ -6,6 +6,7 @@ import { Button, DotIcon, Input, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { RELATIONSHIPS, type GuarantorRelationship } from "@/lib/guarantor";
 import type { GuarantorInvite } from "@/lib/onboarding";
+import { onThisSite } from "@/lib/siteLink";
 
 export type GuarantorDraft = { firstName: string; lastName: string; relationship: GuarantorRelationship };
 
@@ -56,7 +57,7 @@ export function GuarantorLinkDialog({
   async function copy() {
     if (!invite) return;
     try {
-      await navigator.clipboard.writeText(invite.link);
+      await navigator.clipboard.writeText(onThisSite(invite.link));
       setCopied(true);
     } catch {
       // Clipboard access can be refused; the link is still there to select.
@@ -84,7 +85,7 @@ export function GuarantorLinkDialog({
                 <CopyIcon />
               </button>
               <p className="min-h-24 rounded-lg bg-grey-50 px-4 py-3 text-body-md break-all text-grey-900 select-all">
-                {invite.link}
+                {onThisSite(invite.link)}
               </p>
             </div>
             <p className="text-body-sm text-grey-900">

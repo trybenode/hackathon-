@@ -10,6 +10,7 @@ from app.models.domain import Dispute, DisputeStatus, EscrowStatus, EscrowTransa
 from app.models.portability import Review
 from app.schemas.portability import ReviewEligibility, ReviewRequest, ReviewResponse
 from app.schemas.portability import CustomerJobPage
+from app.services.identity_provider import is_sandbox_pass
 from app.services.portability import FeatureError, audit, aware, digest, now
 from app.services.trust_scoring.assessment import assess_worker
 
@@ -57,7 +58,7 @@ async def eligibility(session: AsyncSession, user: User, job_id: UUID) -> tuple[
         reasons.append("This job has not reached completed status.")
     identity = await session.scalar(select(IdentityVerification).where(IdentityVerification.user_id == user.id,
         IdentityVerification.check_type == "identity").order_by(IdentityVerification.created_at.desc(), IdentityVerification.id.desc()).limit(1))
-    sandbox = identity is not None and identity.provider == "stub"
+    sandbox = identity is not None and is_sandbox_pass(identity.provider)
     if identity is None or identity.status != "verified" or (sandbox and get_settings().environment != "development"):
         reasons.append("A successful hiring-customer identity check is required.")
     worker = await session.get(Worker, job.worker_id)

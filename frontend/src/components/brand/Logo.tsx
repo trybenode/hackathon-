@@ -1,20 +1,21 @@
+import Image from "next/image";
 import { cn } from "@/lib/cn";
 import { BRAND_NAME } from "@/lib/brand";
 
 /**
- * The wordmark. A styled stand-in for the Figma's script logo until the
- * final name and logo arrive; swap the inside for the exported SVG then.
+ * The trybetrust wordmark. "light" swaps its black lettering for white, for
+ * dark backgrounds; the cyan badge is the same in both. Size it by height.
  */
 export function Logo({ tone = "dark", className }: { tone?: "dark" | "light"; className?: string }) {
   return (
-    <span
-      className={cn(
-        "font-serif text-h3 font-bold tracking-tight italic",
-        tone === "dark" ? "text-grey-900" : "text-white",
-        className,
-      )}
-    >
-      {BRAND_NAME}
-    </span>
+    <Image
+      src={tone === "dark" ? "/brand/logo.png" : "/brand/logo-light.png"}
+      alt={BRAND_NAME}
+      width={453}
+      height={135}
+      // Served as-is: Vercel Services doesn't route /_next/image.
+      unoptimized
+      className={cn("h-9 w-auto", className)}
+    />
   );
 }

@@ -69,7 +69,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     lifespan=lifespan,
-    title="Dynamic Trust Infrastructure API",
+    title="trybetrust API",
     version="0.1.0",
     description="Trust scoring and portable work verification infrastructure.",
 )

@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui";
+import { onThisSite } from "@/lib/siteLink";
 
 /** The job link in a grey box, with a Copy button that says when it worked. */
-export function CopyLinkButton({ link, onCancel }: { link: string; onCancel?: () => void }) {
+export function CopyLinkButton({ link: apiLink, onCancel }: { link: string; onCancel?: () => void }) {
   const [copied, setCopied] = useState(false);
+  const link = onThisSite(apiLink);
 
   async function copy() {
     try {

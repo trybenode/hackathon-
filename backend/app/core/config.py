@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     #: Transactional email. Without a key, login codes are logged instead.
     resend_api_key: str = Field("", alias="RESEND_API_KEY")
     #: Resend only accepts a verified domain, or its shared onboarding sender.
-    resend_from: str = Field("Trust Infrastructure <onboarding@resend.dev>", alias="RESEND_FROM")
+    resend_from: str = Field("trybetrust <onboarding@resend.dev>", alias="RESEND_FROM")
     credential_signing_secret: str = Field("", alias="CREDENTIAL_SIGNING_SECRET")
     platform_api_key: str = Field("", alias="PLATFORM_API_KEY")
     #: Payscrow escrow. Without a key, a local stand-in holds the money.
@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     #: as. Seed it with scripts/seed_worker_record.py and seed_worker_jobs.py.
     #: example.com can't receive mail, so nobody can sign in to it by code.
     demo_worker_email: str = Field("demo.worker@example.com", alias="DEMO_WORKER_EMAIL")
+    #: There's no live KYC provider yet, so identity (NIN/BVN) and liveness
+    #: checks that pass the stand-in provider count as verified. Turn it off
+    #: once a real provider is wired up, to label stand-in passes "sandbox".
+    stand_in_checks_verify: bool = Field(True, alias="STAND_IN_CHECKS_VERIFY")
 
     @property
     def escrow_enabled(self) -> bool:

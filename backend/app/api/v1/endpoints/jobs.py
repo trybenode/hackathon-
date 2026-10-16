@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.endpoints.auth import current_user
 from app.core.config import get_settings
 from app.db.session import get_db_session
-from app.models.domain import AuditEvent, EscrowTransaction, Job, User, Worker
+from app.models.domain import AuditEvent, EscrowTransaction, Job, JobStatus, User, Worker
 from app.schemas.api import ApiModel
 from app.services import document_store as document_store_module
 from app.services import escrow as escrow_service
@@ -230,7 +230,9 @@ async def _dispute_view(session: AsyncSession, job: Job, escrow: EscrowTransacti
 
 
 async def _job_view(session: AsyncSession, job: Job, escrow: EscrowTransaction | None) -> JobView:
-    paid = escrow is not None and escrow.funded_at is not None
+    # A released job was paid for, escrow or not: finished work recorded
+    # without escrow (seeded or carried-over history) shows its customer too.
+    paid = (escrow is not None and escrow.funded_at is not None) or job.status is JobStatus.RELEASED
     return JobView(
         id=job.id,
         title=job.title,

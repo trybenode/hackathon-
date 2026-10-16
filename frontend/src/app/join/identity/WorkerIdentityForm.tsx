@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { OnboardingHero } from "@/components/verification/OnboardingHero";
 import { UtilityBillInput } from "@/components/verification/UtilityBillInput";
 import { stepPath, useOnboarding } from "@/components/verification/useOnboarding";
@@ -12,15 +12,11 @@ import { submitWorkerIdentity } from "@/lib/onboarding";
 /** Nigerian NIN and BVN are both 11 digits. */
 const ID_LENGTH = 11;
 
-/** "DD/MM/YYYY" as typed, to "YYYY-MM-DD"; null when it is not a real past date. */
-function parseBirthDate(value: string) {
-  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
-  if (!match) return null;
-  const [, day, month, year] = match.map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  const real = date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
-  if (!real || date >= new Date()) return null;
-  return date.toISOString().slice(0, 10);
+/** Today as "YYYY-MM-DD" in the visitor's own time zone, the date picker's format. */
+function today() {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 /** "Identity Information": the worker's details, sent to the identity provider. */
@@ -31,6 +27,7 @@ export function WorkerIdentityForm() {
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const birthDateRef = useRef<HTMLInputElement>(null);
 
   // The email is the one they signed up with.
   useEffect(() => {
@@ -47,10 +44,11 @@ export function WorkerIdentityForm() {
     const field = (name: string) => String(data.get(name) ?? "").trim();
     const nin = field("nin");
     const bvn = field("bvn");
-    const birthDate = parseBirthDate(field("date_of_birth"));
+    // The picker gives "YYYY-MM-DD"; a typed-in future date is still possible.
+    const birthDate = field("date_of_birth");
 
-    if (!birthDate) {
-      setError("Enter your date of birth as DD/MM/YYYY.");
+    if (!birthDate || birthDate >= today()) {
+      setError("Choose your date of birth.");
       return;
     }
     if (nin.length !== ID_LENGTH || bvn.length !== ID_LENGTH) {
@@ -94,13 +92,30 @@ export function WorkerIdentityForm() {
         <Input name="first_name" label="First Name" placeholder="Input text" autoComplete="given-name" required />
         <Input name="last_name" label="Last Name" placeholder="Input text" autoComplete="family-name" required />
         <Input name="email" type="email" label="Email" placeholder="Input text" value={email} readOnly />
+        {/* A calendar picker rather than typing. The browser's own icon is
+            hidden in favour of the design's, and both it and the field open
+            the picker. */}
         <Input
+          ref={birthDateRef}
           name="date_of_birth"
+          type="date"
           label="Date of birth"
-          placeholder="DD/MM/YYYY"
-          inputMode="numeric"
           autoComplete="bday"
-          trailingIcon={<CalendarIcon />}
+          min="1900-01-01"
+          max={today()}
+          onClick={(event) => event.currentTarget.showPicker?.()}
+          // Empty and required is :invalid; grey it like a placeholder.
+          className="invalid:text-grey-400 [&::-webkit-calendar-picker-indicator]:hidden"
+          trailingIcon={
+            <button
+              type="button"
+              aria-label="Open calendar"
+              onClick={() => birthDateRef.current?.showPicker?.()}
+              className="text-inherit"
+            >
+              <CalendarIcon />
+            </button>
+          }
           required
         />
         <Input
