@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     history_ai_base_url: str = ""
     history_ai_api_key: str = ""
     history_ai_enabled: bool = False
+    history_external_worker: bool = False
+    history_audio_storage: Literal["local", "s3"] = "local"
+    history_audio_bucket: str = ""
     history_audio_dir: str = ""
     history_speech_provider: str = "gateway"
     history_speech_voices: str = ""

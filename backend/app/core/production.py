@@ -12,8 +12,8 @@ def validate_production_settings(cfg: Settings) -> None:
         return
     errors: list[str] = []
     if cfg.deployment_mode == 'serverless':
-        if cfg.run_history_worker or cfg.history_ai_enabled or cfg.history_speech_enabled:
-            errors.append('Serverless requires RUN_HISTORY_WORKER/HISTORY_AI_ENABLED/HISTORY_SPEECH_ENABLED=false')
+        if cfg.run_history_worker or cfg.history_speech_enabled or (cfg.history_ai_enabled and not (cfg.history_external_worker and cfg.history_audio_storage == "s3" and cfg.history_audio_bucket)):
+            errors.append('Serverless requires no local worker/speech; AI requires external worker and private S3 audio')
         if cfg.expiry_sweep_seconds != 0:
             errors.append('Serverless requires EXPIRY_SWEEP_SECONDS=0; schedule maintenance separately')
     if cfg.environment not in {'production', 'staging', 'test'}:
@@ -61,7 +61,13 @@ def validate_production_settings(cfg: Settings) -> None:
             valid = False
         if not valid or not requested or not requested <= {'en', 'yo', 'ha', 'ig'} or not requested <= reviewed:
             errors.append('HISTORY_SPEECH configuration/reviewed languages')
-    if (cfg.history_ai_enabled or cfg.history_speech_enabled) and (not cfg.run_history_worker or not cfg.history_audio_dir):
+    if cfg.history_ai_enabled and cfg.history_external_worker and (cfg.history_audio_storage != "s3" or not cfg.history_audio_bucket):
+        errors.append("External voice worker requires HISTORY_AUDIO_STORAGE=s3 and HISTORY_AUDIO_BUCKET")
+    if cfg.history_audio_storage == "s3" and cfg.aws_endpoint_url_s3 and not cfg.aws_endpoint_url_s3.startswith("https://"):
+        errors.append("Private audio storage requires HTTPS")
+    if cfg.history_speech_enabled and (not cfg.run_history_worker or not cfg.history_audio_dir):
         errors.append('RUN_HISTORY_WORKER/HISTORY_AUDIO_DIR')
+    if cfg.history_ai_enabled and not cfg.history_external_worker and (not cfg.run_history_worker or not cfg.history_audio_dir):
+        errors.append("RUN_HISTORY_WORKER/HISTORY_AUDIO_DIR")
     if errors:
         raise RuntimeError('Invalid production configuration: ' + ', '.join(errors))

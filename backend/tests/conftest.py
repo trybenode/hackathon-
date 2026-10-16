@@ -139,3 +139,13 @@ async def give_guarantor(session: AsyncSession, worker: Worker) -> None:
         )
     )
     await session.flush()
+
+
+@pytest.fixture(autouse=True)
+def never_access_real_history_audio(monkeypatch):
+    """A test must explicitly supply a fake private audio bucket before S3 access."""
+    from app.services import history_audio_store
+    from app.services.feature_common import FeatureError
+    def unavailable():
+        raise FeatureError(503, "AUDIO_STORAGE_UNAVAILABLE", "Test audio storage is not configured.")
+    monkeypatch.setattr(history_audio_store, "_client", unavailable)
