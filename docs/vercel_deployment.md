@@ -120,3 +120,9 @@ cannot establish cloud routing or successful Vercel builds.
 
 See [Services](https://vercel.com/docs/services) and
 [bindings](https://vercel.com/docs/services/bindings).
+
+
+Optional live AI architecture: [private S3 and external N-ATLAS jobs](natlas_deployment.md).
+Keep the default flags off until that infrastructure passes acceptance. The
+serverless API can now enable AI with explicit private-storage/external-worker
+configuration; local workers and speech remain blocked in this profile.
