@@ -13,7 +13,7 @@ from app.core.config import get_settings
 from app.models.domain import User, Job, JobStatus
 from app.models.history import HistoryDraft, HistoryClaim
 from app.schemas.history import ClaimCreate, ClaimView, DraftApproval, DraftView, Language
-from app.services import history
+from app.services import history, history_audio_store
 from app.services.history_ai import HistoryModelGateway
 from app.services.feature_common import FeatureError, aware, now, digest
 
@@ -38,6 +38,9 @@ def _write_audio(data: bytes) -> Path:
 
 async def delete_audio(value: str | None) -> None:
     """Delete only files in this application's spool, avoiding arbitrary paths."""
+    if value and value.startswith("s3://"):
+        await history_audio_store.delete(value)
+        return
     if value:
         path = Path(value)
         if path.parent.resolve() == spool().resolve():
@@ -64,8 +67,9 @@ async def owned_draft(session: AsyncSession, user: User, draft_id: UUID, *, lock
 
 async def enqueue(session: AsyncSession, user: User, data: bytes, language: Language, job_id: UUID | None, operation: UUID) -> DraftView:
     """Bound uploads and persist an idempotent processing task before returning."""
-    if not data or len(data) > 5 * 1024 * 1024:
-        raise FeatureError(422, "AUDIO_SIZE_INVALID", "Choose audio up to 5 MB.")
+    maximum = 3 if get_settings().deployment_mode == "serverless" else 5
+    if not data or len(data) > maximum * 1024 * 1024:
+        raise FeatureError(422, "AUDIO_SIZE_INVALID", f"Choose audio up to {maximum} MB.")
     worker = await history.lock_worker(session, user)
     fingerprint = hashlib.sha256(data + json.dumps({"language": language, "job_id": str(job_id)}, sort_keys=True).encode()).hexdigest()
     previous = await session.scalar(select(HistoryDraft).where(HistoryDraft.worker_id == worker.id, HistoryDraft.operation_id == operation))
@@ -88,7 +92,7 @@ async def enqueue(session: AsyncSession, user: User, data: bytes, language: Lang
     if len(daily) >= 20:
         raise FeatureError(429, "AUDIO_DAILY_LIMIT", "Daily recording limit reached.", 3600)
     HistoryModelGateway()  # Never retain new audio without a processing provider.
-    path = await asyncio.to_thread(_write_audio, data)
+    path = await history_audio_store.upload(data) if get_settings().history_audio_storage == "s3" else await asyncio.to_thread(_write_audio, data)
     row = HistoryDraft(worker_id=worker.id, job_id=job_id, operation_id=operation, payload_hash=fingerprint, language=language, audio_path=str(path), expires_at=now()+timedelta(hours=24))
     session.add(row)
     try:
@@ -168,8 +172,12 @@ async def process_one(factory: async_sessionmaker[AsyncSession]) -> bool:
         draft_id, language, original, attempt = row.id, row.language, row.audio_path, row.attempts
         await session.commit()
     normalized = None
+    downloaded = None
     try:
-        normalized = await normalize_audio(Path(original))
+        if not original:
+            raise FeatureError(422, "AUDIO_MISSING", "The recording is unavailable.")
+        downloaded = await history_audio_store.download(original, spool()) if original.startswith("s3://") else None
+        normalized = await normalize_audio(downloaded or Path(original))
         gateway = HistoryModelGateway()
         transcript, metadata = await gateway.transcribe(normalized, language)
         details = await gateway.extract(transcript, language)
@@ -192,4 +200,6 @@ async def process_one(factory: async_sessionmaker[AsyncSession]) -> bool:
     finally:
         if normalized:
             await delete_audio(str(normalized))
+        if downloaded:
+            await delete_audio(str(downloaded))
     return True

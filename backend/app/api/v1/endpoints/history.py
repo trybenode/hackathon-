@@ -33,7 +33,14 @@ async def optional_customer(guarantor_session: str | None = Cookie(None), sessio
 @router.get("/me/history-capabilities", response_model=HistoryCapabilities)
 async def capabilities(user: User = Depends(current_user)) -> HistoryCapabilities:
     cfg = get_settings()
-    return HistoryCapabilities(**{"voice_configured": bool(cfg.history_ai_enabled and cfg.history_ai_base_url and shutil.which("ffmpeg") and shutil.which("ffprobe")), "translation_configured": bool(cfg.history_ai_enabled and cfg.history_ai_base_url), "sms_sandbox": cfg.sms_provider == "stub", "live_chat_enabled": False, "translation_review": "pending", "spoken_prompt_review": "pending"})
+    external_audio = bool(cfg.history_external_worker and cfg.history_audio_storage == "s3" and cfg.history_audio_bucket)
+    local_audio = bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
+    return HistoryCapabilities(
+        voice_configured=bool(cfg.history_ai_enabled and cfg.history_ai_base_url and (external_audio or local_audio)),
+        audio_max_bytes=(3 if cfg.deployment_mode == "serverless" else 5) * 1024 * 1024,
+        translation_configured=bool(cfg.history_ai_enabled and cfg.history_ai_base_url),
+        sms_sandbox=cfg.sms_provider == "stub",
+    )
 
 
 @router.get("/me/history-claims/{claim_id}/messages", response_model=MessagePage)

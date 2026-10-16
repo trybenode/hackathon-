@@ -28,7 +28,7 @@ class HistoryModelGateway:
         self.headers = {"Authorization": f"Bearer {cfg.history_ai_api_key}"}
 
     async def _call(self, path: str, **kwargs: Any) -> dict[str, Any]:
-        async with httpx.AsyncClient(timeout=90) as client:
+        async with httpx.AsyncClient(timeout=kwargs.pop("timeout", 90)) as client:
             try:
                 response = await client.post(f"{self.base}/{path}", headers=self.headers, **kwargs)
                 if response.status_code != 200:
@@ -69,7 +69,7 @@ class HistoryModelGateway:
         """Return a derivative translation, preserving numeric and identifier tokens."""
         if source == target:
             return text
-        body = await self._call("translate", json={"text": text, "source": source, "target": target, "model": LLM_MODEL})
+        body = await self._call("translate", timeout=45, json={"text": text, "source": source, "target": target, "model": LLM_MODEL})
         self.translation_revision = str(body["revision"])[:160] if body.get("revision") else None
         translated = body.get("text")
         if body.get("model") != LLM_MODEL or not isinstance(translated, str) or not translated.strip() or len(translated) > 8000:

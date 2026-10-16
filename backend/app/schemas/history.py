@@ -182,6 +182,7 @@ class MessagePage(ApiModel):
 
 class HistoryCapabilities(ApiModel):
     voice_configured: bool
+    audio_max_bytes: int = 5 * 1024 * 1024
     translation_configured: bool
     sms_sandbox: bool
     live_chat_enabled: Literal[False] = False
