@@ -203,3 +203,10 @@ MODEL and VERSION identify our managed-provider/configuration revision, not a ve
 Configure the translation gateway too, then run `make dev-voice` from the repository root. Translate a thread message, choose Listen and refresh processing status. Real credentials, delivery/latency/cost checks and native-language pronunciation review remain external gates; mocked tests establish no real-provider success. Static page copy continues to use dictionaries.
 
 Sources: [speech API](https://docs.spitch.app/features/speech), [voice roster](https://docs.spitch.app/concepts/voices).
+
+
+## Live N-ATLAS deployment
+
+See [GPU gateway, Vercel storage and external jobs](natlas_deployment.md) for
+actual inference setup and live acceptance. The code supports private S3 audio
+handoff to external workers; no GPU host or live benchmark is claimed.

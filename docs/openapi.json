@@ -12618,7 +12618,7 @@
         "properties": {
           "frame": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Frame"
           }
         },
@@ -12702,7 +12702,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "binary"
+                "contentMediaType": "application/octet-stream"
               },
               {
                 "type": "null"
@@ -12748,7 +12748,7 @@
           },
           "document": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Document"
           }
         },
@@ -12833,7 +12833,7 @@
           },
           "document": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Document"
           }
         },
@@ -12890,7 +12890,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "binary"
+                "contentMediaType": "application/octet-stream"
               },
               {
                 "type": "null"
@@ -12910,38 +12910,6 @@
           "bvn"
         ],
         "title": "Body_submit_identity_api_v1_me_worker_identity_post"
-      },
-      "CredentialView": {
-        "properties": {
-          "key_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Key Id"
-          },
-          "environment": {
-            "type": "string",
-            "title": "Environment"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "key_id",
-          "environment",
-          "created_at"
-        ],
-        "title": "CredentialView"
       },
       "Body_voice_draft_api_v1_me_history_drafts_post": {
         "properties": {
@@ -13242,6 +13210,38 @@
         ],
         "title": "CodeCheck"
       },
+      "CredentialView": {
+        "properties": {
+          "key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Id"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key_id",
+          "environment",
+          "created_at"
+        ],
+        "title": "CredentialView"
+      },
       "CredentialsExportResponse": {
         "properties": {
           "worker_id": {
@@ -13511,6 +13511,53 @@
         ],
         "title": "DashboardResponse"
       },
+      "DescriptionTranslation": {
+        "properties": {
+          "model_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Revision"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "target": {
+            "type": "string",
+            "enum": [
+              "en",
+              "yo",
+              "ha",
+              "ig"
+            ],
+            "title": "Target"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "machine_translation": {
+            "type": "boolean",
+            "const": true,
+            "title": "Machine Translation",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "target",
+          "model"
+        ],
+        "title": "DescriptionTranslation"
+      },
       "DeveloperDashboard": {
         "properties": {
           "email": {
@@ -13615,53 +13662,6 @@
         ],
         "title": "DeveloperDashboard"
       },
-      "DescriptionTranslation": {
-        "properties": {
-          "model_revision": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Revision"
-          },
-          "text": {
-            "type": "string",
-            "title": "Text"
-          },
-          "target": {
-            "type": "string",
-            "enum": [
-              "en",
-              "yo",
-              "ha",
-              "ig"
-            ],
-            "title": "Target"
-          },
-          "model": {
-            "type": "string",
-            "title": "Model"
-          },
-          "machine_translation": {
-            "type": "boolean",
-            "const": true,
-            "title": "Machine Translation",
-            "default": true
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "text",
-          "target",
-          "model"
-        ],
-        "title": "DescriptionTranslation"
-      },
       "DisputeStep": {
         "properties": {
           "stage": {
@@ -13740,43 +13740,6 @@
           "submitted_at"
         ],
         "title": "DisputeView"
-      },
-      "EmailChangeConfirm": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email"
-          },
-          "code": {
-            "type": "string",
-            "maxLength": 8,
-            "minLength": 4,
-            "title": "Code"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "email",
-          "code"
-        ],
-        "title": "EmailChangeConfirm"
-      },
-      "EmailChangeRequest": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "email"
-        ],
-        "title": "EmailChangeRequest"
       },
       "DraftApproval": {
         "properties": {
@@ -13900,6 +13863,43 @@
           "claim_id"
         ],
         "title": "DraftView"
+      },
+      "EmailChangeConfirm": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 4,
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email",
+          "code"
+        ],
+        "title": "EmailChangeConfirm"
+      },
+      "EmailChangeRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "EmailChangeRequest"
       },
       "EvidenceAssessment": {
         "properties": {
@@ -15018,6 +15018,11 @@
             "type": "boolean",
             "title": "Voice Configured"
           },
+          "audio_max_bytes": {
+            "type": "integer",
+            "title": "Audio Max Bytes",
+            "default": 5242880
+          },
           "translation_configured": {
             "type": "boolean",
             "title": "Translation Configured"
@@ -15791,25 +15796,6 @@
         ],
         "title": "LogPageView"
       },
-      "NameChangeView": {
-        "properties": {
-          "new_name": {
-            "type": "string",
-            "title": "New Name"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "new_name",
-          "status"
-        ],
-        "title": "NameChangeView"
-      },
       "MessageCreate": {
         "properties": {
           "text": {
@@ -15929,6 +15915,25 @@
           "created_at"
         ],
         "title": "MessageView"
+      },
+      "NameChangeView": {
+        "properties": {
+          "new_name": {
+            "type": "string",
+            "title": "New Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "new_name",
+          "status"
+        ],
+        "title": "NameChangeView"
       },
       "NotificationItem": {
         "properties": {

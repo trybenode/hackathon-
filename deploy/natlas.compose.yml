@@ -1,0 +1,25 @@
+# Run on a separately provisioned NVIDIA host. No resources are provisioned by this file.
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile.natlas
+    env_file: ../.env.natlas-gateway
+    ports:
+      - "127.0.0.1:8091:8091"
+    volumes:
+      - model-cache:/models
+    gpus: all
+    restart: unless-stopped
+  worker:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    env_file: ../.env.natlas-worker
+    command: ["python", "-m", "scripts.history_worker"]
+    volumes:
+      - private-spool:/var/lib/trust
+    restart: unless-stopped
+volumes:
+  model-cache:
+  private-spool:

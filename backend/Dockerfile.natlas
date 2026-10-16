@@ -1,0 +1,14 @@
+# Dedicated NVIDIA GPU inference; no model weights or credentials in the image.
+FROM python:3.12-slim-bookworm
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 HF_HOME=/models HISTORY_MODEL_DEVICE=cuda
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends libsndfile1 ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --uid 10001 --create-home inference \
+    && mkdir /models && chown inference:inference /models
+COPY backend/requirements-history-models.txt ./requirements-history-models.txt
+RUN pip install --no-cache-dir -r requirements-history-models.txt
+COPY --chown=inference:inference backend/scripts/history_model_gateway.py ./scripts/history_model_gateway.py
+USER inference
+EXPOSE 8091
+CMD ["uvicorn", "scripts.history_model_gateway:app", "--host", "0.0.0.0", "--port", "8091", "--workers", "1", "--no-access-log"]

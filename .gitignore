@@ -35,3 +35,6 @@ htmlcov/
 backend/local_dev.db
 frontend/public/mediapipe/
 !deploy/production.env.example
+
+# Non-secret N-ATLAS deployment templates
+!deploy/natlas.*.env.example

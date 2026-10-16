@@ -153,3 +153,7 @@ separate from scoring. See [setup and API flows](docs/history_and_language.md),
 [request examples](docs/history_examples.http), [iteration plans](docs/iterations/01-customer-attribution.md)
 and [validation and release gates](docs/history_validation.md). SMS and official-model
 processing require provider configuration; non-English copy awaits native review.
+
+
+For real N-ATLAS inference with Vercel and an external GPU/worker, see
+[the deployment and live verification guide](docs/natlas_deployment.md).
