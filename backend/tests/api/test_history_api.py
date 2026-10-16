@@ -208,3 +208,19 @@ async def test_private_audio_requires_contact_and_blocks_revoked_request(history
     assert response.headers['content-type'] == 'audio/mpeg'
     assert (await client.delete(f"/api/v1/me/confirmation-requests/{request['id']}")).status_code == 204
     assert (await client.get(path)).status_code == 410
+
+
+async def test_serverless_external_voice_capabilities(history_api, monkeypatch):
+    cfg = get_settings()
+    monkeypatch.setattr(cfg, "deployment_mode", "serverless")
+    monkeypatch.setattr(cfg, "history_ai_enabled", True)
+    monkeypatch.setattr(cfg, "history_ai_base_url", "https://model.test")
+    monkeypatch.setattr(cfg, "history_external_worker", True)
+    monkeypatch.setattr(cfg, "history_audio_storage", "s3")
+    monkeypatch.setattr(cfg, "history_audio_bucket", "private-audio")
+    import app.api.v1.endpoints.history as endpoint
+    monkeypatch.setattr(endpoint.shutil, "which", lambda name: None)
+    response = await history_api.get("/api/v1/me/history-capabilities")
+    assert response.status_code == 200
+    assert response.json()["voice_configured"] is True
+    assert response.json()["audio_max_bytes"] == 3 * 1024 * 1024

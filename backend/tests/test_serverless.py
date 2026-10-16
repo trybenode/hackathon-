@@ -53,3 +53,19 @@ async def test_serverless_lifespan_does_not_start_timer(monkeypatch):
     async with main.lifespan(main.app):
         pass
     sweep.assert_not_called()
+
+
+def test_serverless_allows_private_external_voice_worker():
+    validate_production_settings(serverless_settings(history_ai_enabled=True,
+        history_external_worker=True, history_audio_storage="s3", history_audio_bucket="private-audio",
+        history_ai_base_url="https://models.example.com", history_ai_api_key="key-"*16))
+
+
+@pytest.mark.parametrize("change", [dict(history_audio_storage="local"), dict(history_audio_bucket="")])
+def test_external_worker_requires_private_storage(change):
+    values = dict(history_ai_enabled=True, history_external_worker=True,
+                  history_audio_storage="s3", history_audio_bucket="private-audio",
+                  history_ai_base_url="https://models.example.com", history_ai_api_key="key-"*16)
+    values.update(change)
+    with pytest.raises(RuntimeError):
+        validate_production_settings(serverless_settings(**values))
