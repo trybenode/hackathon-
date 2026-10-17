@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { VerificationNotice } from "@/components/admission/VerificationHub";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { ArrowLeftIcon, ArrowRightIcon, BriefcaseIcon } from "@/components/worker/icons";
@@ -95,6 +96,8 @@ export function PortableRecord() {
       <RecordGate loading={loading} error={error} onRetry={refresh} hasData={!!record}>
       {record && (
       <div className="flex flex-col gap-6 px-6 pt-4">
+        <VerificationNotice onboarding={record.onboarding}/>
+        <Link href="/worker/profile/record/verification" className="underline">Additional verification and unsigned history</Link>
         <section className="flex flex-col gap-4">
           <p className="text-xs leading-4 text-grey-900">Your verified work history</p>
 

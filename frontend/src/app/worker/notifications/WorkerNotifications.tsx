@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { NotificationList } from "@/components/jobs/NotificationList";
@@ -22,6 +23,7 @@ export function WorkerNotifications() {
         </button>
         <h1 className="text-body-lg font-semibold text-grey-900">Notifications</h1>
       </header>
+      <Link className="px-6 pt-4 underline" href="/worker/profile/record/verification">Verification and document review updates</Link>
       <RecordGate loading={loading} error={error}>
         {data && (
           <div className="px-6 pt-6 pb-6">

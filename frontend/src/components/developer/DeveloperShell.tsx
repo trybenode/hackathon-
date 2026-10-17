@@ -25,6 +25,7 @@ const NAV = [
   { href: "/developer/keys", label: "API keys", icon: KeyIcon },
   { href: "/developer/activity", label: "Activity", icon: ActivityIcon },
   { href: "/developer/verify", label: "Verification", icon: ShieldCheckIcon },
+  { href: "/developer/reviews", label: "Onboarding reviews", icon: ShieldCheckIcon },
   { href: "/developer/docs", label: "Docs", icon: BookIcon },
   { href: "/developer/profile", label: "Profile", icon: UserIcon },
 ];

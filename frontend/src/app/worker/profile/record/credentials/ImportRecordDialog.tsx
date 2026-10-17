@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useReviewCopy } from "@/components/admission/ReviewLanguage";
 import { useState } from "react";
 import { WorkerDialog } from "@/components/worker/WorkerDialog";
 import { Button, FileDropzone, FileItem, Switch } from "@/components/ui";
@@ -21,6 +23,7 @@ export function ImportRecordDialog({
   onClose: () => void;
   onImported: () => Promise<void> | void;
 }) {
+  const { t } = useReviewCopy();
   const [file, setFile] = useState<File | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -70,7 +73,8 @@ export function ImportRecordDialog({
   return (
     <WorkerDialog open={open} onClose={close} label="Import Record">
       <div className="flex flex-col gap-5">
-        <h2 className="text-body-md font-semibold text-grey-900">Import Record</h2>
+        <h2 className="text-body-md font-semibold text-grey-900">{t("signed")}</h2>
+        <Link className="underline" href="/worker/profile/record/verification">{t("unsigned")}</Link>
 
         {done ? (
           <>
