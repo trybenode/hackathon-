@@ -89,7 +89,11 @@ class WorkerVerification(ApiModel):
     guarantor_valid_until: datetime | None = None
 
 
+from app.schemas.admission import OnboardingView
+
+
 class TrustQueryResponse(ApiModel):
+    onboarding: OnboardingView | None = None
     worker_id: UUID
     decision: bool
     confidence: float = Field(ge=0, le=1)

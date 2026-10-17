@@ -52,7 +52,12 @@ class HistoryItem(ApiModel):
     available_signals: list[str] | None
 
 
+from app.schemas.admission import OnboardingView, ProvisionalView
+
+
 class WorkerRecord(VerificationSummary):
+    onboarding: OnboardingView | None = None
+    provisional_history: ProvisionalView | None = None
     worker_id: UUID
     outcomes: list[HistoryItem]
     total_outcomes: int
