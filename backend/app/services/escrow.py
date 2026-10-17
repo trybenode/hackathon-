@@ -162,6 +162,8 @@ async def create_job_link(
     worker = await session.scalar(select(Worker).where(Worker.user_id == user.id))
     if worker is None:
         raise JobNotFoundError("This account has no worker profile.")
+    from app.services.admission import enforce_job
+    await enforce_job(session, worker.id, price)
     if not await onboarding.has_active_guarantor(session, worker):
         raise EscrowStateError("Job creation opens once your guarantor is active.")
     # Payscrow requires the merchant's phone, whatever its docs say; better to
@@ -215,6 +217,9 @@ async def start_payment(
     """
 
     job, escrow = await job_by_token(session, token)
+    if escrow is None or escrow.status is EscrowStatus.PENDING:
+        from app.services.admission import enforce_job
+        await enforce_job(session, job.worker_id, job.agreed_amount, exclude_job_id=job.id)
     if escrow is not None:
         if escrow.status is EscrowStatus.PENDING:
             return escrow

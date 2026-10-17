@@ -1,6 +1,6 @@
 """Worker-owned records and expiring public/platform consent grants."""
-from datetime import UTC, datetime, timedelta
-from hashlib import sha256
+from app.services.feature_common import FeatureError, now, aware, digest, audit
+from datetime import timedelta
 from math import ceil
 import secrets
 import json
@@ -10,33 +10,11 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.domain import AuditEvent, NormalizedOutcome, Organization, User, Worker
+from app.models.domain import NormalizedOutcome, Organization, User, Worker
 from app.services.worker_record import WorkerRecord as RecordSnapshot, load_record, completion_labels
 from app.services.trust_scoring.evidence import scoring_inputs
 from app.models.portability import PlatformGrant, PlatformKey, ShareGrant
 from app.schemas.portability import EvidenceAssessment, GrantList, GrantResponse, HistoryItem, HistoryPage, IdentitySummary, VerificationSummary, WorkerRecord
-
-
-class FeatureError(Exception):
-    """Expected domain failure with a stable HTTP-facing code."""
-    def __init__(self, status: int, code: str, detail: str, retry_after: int | None = None) -> None:
-        self.status, self.code, self.detail, self.retry_after = status, code, detail, retry_after
-        super().__init__(detail)
-
-
-def now() -> datetime:
-    """Return the clock used by expiring grants and review windows."""
-    return datetime.now(UTC)
-
-
-def aware(value: datetime) -> datetime:
-    """Normalize SQLite timestamps without changing Postgres timestamps."""
-    return value if value.tzinfo else value.replace(tzinfo=UTC)
-
-
-def digest(value: str) -> str:
-    """Hash random bearer credentials before persistence."""
-    return sha256(value.encode()).hexdigest()
 
 
 def general_area(location: str | None) -> str | None:
@@ -55,9 +33,6 @@ def general_area(location: str | None) -> str | None:
     return None
 
 
-def audit(session: AsyncSession, actor_id: UUID | None, entity_type: str, entity_id: UUID, action: str, metadata: dict | None = None) -> None:
-    """Record meaningful changes without bearer tokens or private comments."""
-    session.add(AuditEvent(actor_id=actor_id, entity_type=entity_type, entity_id=entity_id, action=action, event_metadata=metadata or {}))
 
 
 async def own_worker(session: AsyncSession, user: User) -> Worker:
@@ -109,7 +84,14 @@ async def worker_record(session: AsyncSession, worker: Worker, *, page: int = 1,
     user = await session.get(User, worker.user_id)
     snapshot = await load_record(session, user, include_history=False)
     rows = list((await session.scalars(select(NormalizedOutcome).where(NormalizedOutcome.worker_id == worker.id).order_by(NormalizedOutcome.occurred_at.desc(), NormalizedOutcome.id).offset((page-1)*size).limit(size))).all())
-    return WorkerRecord(**summary_from_record(snapshot).model_dump(), worker_id=worker.id, outcomes=await history_items(session, rows), total_outcomes=snapshot.total_outcomes, starting_rating=snapshot.starting_rating, starting_rating_label=snapshot.starting_rating_label)
+    from app.services.admission import evaluate
+    from app.services.ownership_imports import provisional
+    from app.core.config import get_settings
+    onboarding = await evaluate(session, worker.id)
+    initial = await provisional(session, worker.id) if get_settings().unsigned_imports_enabled else None
+    return WorkerRecord(**summary_from_record(snapshot).model_dump(), worker_id=worker.id, outcomes=await history_items(session, rows), total_outcomes=snapshot.total_outcomes,
+        starting_rating=initial.rating if initial else snapshot.starting_rating, starting_rating_label=initial.label if initial and initial.count else None if initial else snapshot.starting_rating_label,
+        onboarding=onboarding, provisional_history=initial)
 
 
 async def issue_grant(session: AsyncSession, user: User, *, organization_id: UUID | None = None, permissions: list[str] | None = None, operation_id: UUID | None = None) -> GrantResponse:
