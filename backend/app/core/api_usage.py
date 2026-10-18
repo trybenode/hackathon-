@@ -17,6 +17,7 @@ from starlette.responses import Response
 from sqlalchemy import func, update
 
 from app.db.session import get_db_session
+from app.core.config import get_settings
 from app.models.developer import ApiRequestLog
 from app.models.portability import PlatformKey
 
@@ -36,13 +37,19 @@ class ApiUsageMiddleware(BaseHTTPMiddleware):
         marked = getattr(request.state, "platform_call", None)
         if marked is not None:
             route = request.scope.get("route")
+            # FastAPI lazy included routers can expose a prefix-free route template.
+            # Never fall back to a raw URL containing worker identifiers or tokens.
+            path = getattr(route, "path", "/unmatched")
+            prefix = get_settings().api_v1_prefix.rstrip("/")
+            if not path.startswith(prefix + "/"):
+                path = prefix + path
             await self._record(
                 request,
                 ApiRequestLog(
                     platform_key_id=marked[0],
                     organization_id=marked[1],
                     method=request.method,
-                    path=getattr(route, "path", request.url.path)[:300],
+                    path=path[:300],
                     status_code=response.status_code,
                     duration_ms=int((time.perf_counter() - started) * 1000),
                 ),

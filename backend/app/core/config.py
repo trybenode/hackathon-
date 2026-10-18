@@ -24,6 +24,9 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    unsigned_imports_enabled: bool = False
+    additional_verification_enabled: bool = False
+    ownership_storage_dir: str = ""
     environment: str = "development"
     api_v1_prefix: str = "/api/v1"
     database_url: str = Field(
