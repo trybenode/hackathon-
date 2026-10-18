@@ -53,8 +53,11 @@ async def query_trust(
         raise HTTPException(status_code=404, detail="Worker not found") from error
 
     checks = await verification_for_id(session, result.worker_id)
+    from app.services.admission import evaluate
+    onboarding = await evaluate(session, result.worker_id, str(principal.organization_id), principal.environment, payload.platform_type.value, result) if principal else None
     await session.commit()
     return TrustQueryResponse(
+        onboarding=onboarding,
         worker_id=result.worker_id,
         decision=result.decision,
         confidence=result.confidence,

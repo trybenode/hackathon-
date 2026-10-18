@@ -107,7 +107,12 @@ class RecordCredentials(ApiModel):
     imported_record: ImportedRecordItem | None = None
 
 
+from app.schemas.admission import OnboardingView, ProvisionalView
+
+
 class WorkerRecordResponse(ApiModel):
+    onboarding: OnboardingView | None = None
+    provisional_history: ProvisionalView | None = None
     worker_id: UUID
     name: str
     role: str | None = None
@@ -138,10 +143,20 @@ async def worker_record(
     except record_service.NotAWorkerError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
+    from app.services.admission import evaluate
+    from app.services.ownership_imports import provisional
+    from app.core.config import get_settings
+    onboarding = await evaluate(session, record.worker_id)
+    provisional_history = await provisional(session, record.worker_id) if get_settings().unsigned_imports_enabled else None
+    if provisional_history is not None:
+        from dataclasses import replace
+        record = replace(record, starting_rating=provisional_history.rating, starting_rating_label=provisional_history.label if provisional_history.count else None)
+
     # Assessing stores (or reuses) the worker's assessment.
     await session.commit()
 
     return WorkerRecordResponse(
+        onboarding=onboarding, provisional_history=provisional_history,
         worker_id=record.worker_id,
         name=record.name,
         role=record.role,
