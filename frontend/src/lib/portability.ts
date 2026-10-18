@@ -114,7 +114,7 @@ export async function featureRequest<T>(
       cache: "no-store",
       signal: controller.signal,
       headers: {
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...(init.body && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
         ...init.headers,
       },
     });

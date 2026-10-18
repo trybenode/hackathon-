@@ -75,6 +75,8 @@ export type Credentials = {
 };
 
 export type WorkerRecord = {
+  onboarding?: import("./admission").Onboarding | null;
+  provisional_history?: import("./admission").Provisional | null;
   worker_id: string;
   name: string;
   role: string | null;
