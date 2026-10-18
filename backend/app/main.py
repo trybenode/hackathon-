@@ -8,6 +8,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+from app.api.v1.endpoints.admission import router as admission_router, platform_router as admission_platform_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -104,3 +105,6 @@ app.include_router(webhook_router, prefix=settings.api_v1_prefix)
 # Transactions opened while PAYSCROW_WEBHOOK_URL was a bare host point at "/",
 # so the same signed handler answers there too.
 app.add_api_route("/", payscrow_webhook, methods=["POST"], include_in_schema=False)
+
+app.include_router(admission_router, prefix=settings.api_v1_prefix)
+app.include_router(admission_platform_router, prefix=settings.api_v1_prefix)

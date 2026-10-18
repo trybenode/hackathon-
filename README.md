@@ -123,3 +123,16 @@ The web app is available at `http://localhost:3000`.
 ## Team database workflow
 
 Alembic migrations target the shared Neon database through `DATABASE_URL`. Coordinate migration changes, review them before applying, and never put credentials in source control.
+
+
+## Additional verification and ownership-reviewed imports
+
+The optional pilot separates onboarding permissions from verified trust scoring.
+Unsigned CSV + supporting PDF/image uploads require operations ownership review;
+they contribute only to a separate provisional rating capped at 0.65. Building
+History workers need genuine identity/liveness checks and human review. First-party
+limited access enforces one active job, NGN25,000 per job and a 30-day approval.
+
+Both flags default off. Start with the [setup, API examples and release checklist](docs/additional-verification.md).
+Worker screen: `/worker/profile/record/verification`. Explicit-role reviewer queues:
+`/review` and `/developer/reviews`. Authentication and normalization are unchanged.
