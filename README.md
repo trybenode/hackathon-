@@ -55,7 +55,6 @@ hotfix/escrow-status-bug
 * Keep branches small and focused (ideally < 5 days of work)
 * Delete the branch after merge
 * Never commit directly to main
-* 
 
 **PR rules Required for every change:**
 
